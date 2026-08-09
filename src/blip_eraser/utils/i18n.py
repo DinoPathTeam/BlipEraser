@@ -1,0 +1,266 @@
+"""Internacionalización (i18n) — lógica pura, sin PyQt6.
+
+Prioridad de idioma:
+  1. Preferencia guardada por el usuario (~/.config/blip-eraser/settings.json).
+  2. Idioma del sistema operativo (detección vía `locale`).
+  3. Fallback: inglés (idioma más universal).
+
+`locale.getdefaultlocale()` está deprecado en Python 3.11 y fue eliminado
+en 3.13, así que se usa `locale.getlocale()`, que no está deprecado.
+
+Toda la lógica es testable con pytest: la ruta del archivo de config se
+expone como `SETTINGS_FILE` (monkeypachable) y `locale.getlocale()` se
+mockea igual que `subprocess.run` en test_pacman.py.
+"""
+
+from __future__ import annotations
+
+import json
+import locale
+from pathlib import Path
+
+SUPPORTED_LANGUAGES = ("es", "en")
+
+TRANSLATIONS: dict[str, dict[str, str]] = {
+    "es": {
+        # Ventana principal
+        "window_title": "BlipEraser — Desinstalador de CachyOS",
+        "tab_packages": "Paquetes (pacman)",
+        "tab_manual_scan": "Escaneo manual",
+        # Pestaña pacman
+        "pacman_tab_info": (
+            "Paquetes instalados explícitamente (pacman -Qe). Selecciona uno o "
+            "varios y pulsa 'Desinstalar seleccionados'."
+        ),
+        "col_package": "Paquete",
+        "col_version": "Versión",
+        "refresh_button": "Actualizar lista",
+        "uninstall_button": "Desinstalar seleccionados",
+        "error_title": "Error",
+        "pacman_not_found": (
+            "No se encontró el comando 'pacman'. ¿Estás en una distro basada en Arch?"
+        ),
+        "pacman_list_failed": "Fallo al listar paquetes:\n{error}",
+        "nothing_selected_title": "Nada seleccionado",
+        "pacman_nothing_selected": "Selecciona al menos un paquete.",
+        "uninstall_confirm_title": "Confirmar desinstalación",
+        "uninstall_confirm_body": (
+            "Vas a desinstalar:\n\n{packages}\n\n"
+            "Esto usará 'pkexec pacman -Rns'. ¿Continuar?"
+        ),
+        "uninstall_failed": "Fallo al desinstalar:\n{error}",
+        "done_title": "Listo",
+        "packages_uninstalled_ok": "Paquetes desinstalados correctamente.",
+        # Pestaña escaneo manual
+        "manual_tab_info": (
+            "Carpetas de nivel superior encontradas en ubicaciones típicas "
+            "(AppImages, juegos manuales, etc.). Revisa antes de borrar."
+        ),
+        "col_path": "Ruta",
+        "col_size": "Tamaño",
+        "scan_button": "Escanear carpetas",
+        "delete_button": "Eliminar seleccionados",
+        "manual_nothing_selected": "Selecciona al menos una carpeta o archivo.",
+        "delete_confirm_title": "Confirmar eliminación",
+        "delete_confirm_body": (
+            "Vas a eliminar PERMANENTEMENTE:\n\n{paths}\n\n¿Continuar?"
+        ),
+        "some_errors_title": "Algunos errores",
+        "items_deleted_ok": "Elementos eliminados correctamente.",
+        # Verificación de dependencias (MainWindow)
+        "missing_deps_title": "Faltan dependencias",
+        "missing_deps_intro": (
+            "BlipEraser no instala nada por ti — algunas secciones no "
+            "funcionarán porque faltan estas herramientas:\n\n{lines}"
+        ),
+        "dep_line_template": "• {binary}: {why}.\n    {remediation}",
+        # Textos localizados de dependencias (banner y diálogo Nivel 2)
+        "dep_pacman_why": (
+            "necesario para listar y desinstalar paquetes del sistema "
+            "(pestaña 'Paquetes (pacman)')"
+        ),
+        "dep_pkexec_why": (
+            "necesario para desinstalar paquetes con privilegios vía polkit"
+        ),
+        "dep_install_command": "Instala con: {command}",
+        "dep_pacman_incompatible": (
+            "BlipEraser está diseñado para distribuciones basadas en Arch "
+            "(como CachyOS). Si no estás en una de estas distros, la pestaña "
+            "'Paquetes (pacman)' no estará disponible, pero el escaneo manual "
+            "seguirá funcionando."
+        ),
+        "dep_no_remediation": "No hay remedio automático disponible.",
+        "dep_banner_line": "⚠ {binary} no encontrado — {why}. {remediation}",
+        # Idioma (diálogo de primer arranque y menú)
+        "lang_name_es": "Español",
+        "lang_name_en": "English",
+        "menu_label": "Idioma",
+        "language_first_run_title": "Elige tu idioma",
+        "language_first_run_text": (
+            "¿En qué idioma prefieres usar BlipEraser?"
+        ),
+    },
+    "en": {
+        # Main window
+        "window_title": "BlipEraser — CachyOS Uninstaller",
+        "tab_packages": "Packages (pacman)",
+        "tab_manual_scan": "Manual scan",
+        # pacman tab
+        "pacman_tab_info": (
+            "Explicitly installed packages (pacman -Qe). Select one or more "
+            "and press 'Uninstall selected'."
+        ),
+        "col_package": "Package",
+        "col_version": "Version",
+        "refresh_button": "Refresh list",
+        "uninstall_button": "Uninstall selected",
+        "error_title": "Error",
+        "pacman_not_found": (
+            "'pacman' command not found. Are you on an Arch-based distro?"
+        ),
+        "pacman_list_failed": "Failed to list packages:\n{error}",
+        "nothing_selected_title": "Nothing selected",
+        "pacman_nothing_selected": "Select at least one package.",
+        "uninstall_confirm_title": "Confirm uninstall",
+        "uninstall_confirm_body": (
+            "You are about to uninstall:\n\n{packages}\n\n"
+            "This uses 'pkexec pacman -Rns'. Continue?"
+        ),
+        "uninstall_failed": "Uninstall failed:\n{error}",
+        "done_title": "Done",
+        "packages_uninstalled_ok": "Packages uninstalled successfully.",
+        # Manual scan tab
+        "manual_tab_info": (
+            "Top-level folders found in typical locations (AppImages, manually "
+            "installed games, etc.). Review before deleting."
+        ),
+        "col_path": "Path",
+        "col_size": "Size",
+        "scan_button": "Scan folders",
+        "delete_button": "Delete selected",
+        "manual_nothing_selected": "Select at least one folder or file.",
+        "delete_confirm_title": "Confirm deletion",
+        "delete_confirm_body": (
+            "You are about to delete PERMANENTLY:\n\n{paths}\n\nContinue?"
+        ),
+        "some_errors_title": "Some errors",
+        "items_deleted_ok": "Items deleted successfully.",
+        # Dependency checking (MainWindow)
+        "missing_deps_title": "Missing dependencies",
+        "missing_deps_intro": (
+            "BlipEraser never installs anything for you — some sections won't "
+            "work because these tools are missing:\n\n{lines}"
+        ),
+        "dep_line_template": "• {binary}: {why}.\n    {remediation}",
+        # Localized dependency text (banner and Level 2 dialog)
+        "dep_pacman_why": (
+            "needed to list and uninstall system packages "
+            "(the 'Packages (pacman)' tab)"
+        ),
+        "dep_pkexec_why": (
+            "needed to uninstall packages with elevated privileges via polkit"
+        ),
+        "dep_install_command": "Install with: {command}",
+        "dep_pacman_incompatible": (
+            "BlipEraser is designed for Arch-based distributions (such as "
+            "CachyOS). If you are not on one of these distros, the 'Packages "
+            "(pacman)' tab won't be available, but the manual scan will still "
+            "work."
+        ),
+        "dep_no_remediation": "No automatic fix available.",
+        "dep_banner_line": "⚠ {binary} not found — {why}. {remediation}",
+        # Language (first-run dialog and menu)
+        "lang_name_es": "Español",
+        "lang_name_en": "English",
+        "menu_label": "Language",
+        "language_first_run_title": "Choose your language",
+        "language_first_run_text": (
+            "Which language would you prefer BlipEraser to use?"
+        ),
+    },
+}
+
+CONFIG_DIR = Path.home() / ".config" / "blip-eraser"
+SETTINGS_FILE = CONFIG_DIR / "settings.json"
+
+_current_language: str | None = None
+
+
+# ----------------------------------------------------------------------
+# Detección de idioma del sistema
+# ----------------------------------------------------------------------
+def detect_system_language() -> str:
+    """'es' si el idioma del sistema empieza por 'es'; en cualquier otro
+    caso (incluyendo detección fallida/None) devuelve 'en'."""
+    try:
+        lang_code, _encoding = locale.getlocale()
+    except (locale.Error, TypeError):
+        return "en"
+    if lang_code and lang_code.lower().startswith("es"):
+        return "es"
+    return "en"
+
+
+# ----------------------------------------------------------------------
+# Preferencia guardada
+# ----------------------------------------------------------------------
+def load_saved_language() -> str | None:
+    """Lee la preferencia guardada; None si no existe o el archivo está corrupto."""
+    try:
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+
+    language = data.get("language") if isinstance(data, dict) else None
+    return language if isinstance(language, str) else None
+
+
+def set_language(language: str) -> None:
+    """Establece el idioma activo y lo persiste en el archivo de config.
+
+    Si el idioma no está soportado, cae a 'en'. La persistencia es
+    best-effort: un fallo al escribir a disco no rompe la app.
+    """
+    global _current_language
+    if language not in SUPPORTED_LANGUAGES:
+        language = "en"
+    _current_language = language
+
+    try:
+        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS_FILE.write_text(
+            json.dumps({"language": language}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def get_current_language() -> str:
+    """Idioma activo, resolviendo en memoria o con la lógica de prioridad."""
+    global _current_language
+    if _current_language is None:
+        saved = load_saved_language()
+        if saved in SUPPORTED_LANGUAGES:
+            _current_language = saved
+        else:
+            _current_language = detect_system_language()
+    return _current_language
+
+
+# ----------------------------------------------------------------------
+# Traducción
+# ----------------------------------------------------------------------
+def tr(key: str) -> str:
+    """Devuelve la cadena `key` en el idioma activo.
+
+    Fallback a inglés si la clave falta en el idioma activo, y a '[clave]'
+    si falta en ambos (visible en desarrollo, sin romper la app).
+    """
+    language = get_current_language()
+    table = TRANSLATIONS.get(language, TRANSLATIONS["en"])
+    if key in table:
+        return table[key]
+    if key in TRANSLATIONS["en"]:
+        return TRANSLATIONS["en"][key]
+    return f"[{key}]"

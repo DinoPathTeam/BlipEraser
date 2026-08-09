@@ -1,0 +1,1 @@
+"""Tests de BlipEraser (lógica pura, sin PyQt6)."""

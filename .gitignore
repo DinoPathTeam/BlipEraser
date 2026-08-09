@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.so
+
+# Entornos virtuales
+.venv/
+.venv*/
+venv/
+env/
+.conda/
+
+# Herramientas de testeo/lint
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.ruff_cache/
+.mypy_cache/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Paquetes / entradas del sistema
+*.pacnew
+*.pacorig

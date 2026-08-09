@@ -1,0 +1,10 @@
+# --- Entorno de desarrollo / testeo -----------------------------------------
+# En Arch/CachyOS NO instales PyQt6 por pip. Usa el gestor del sistema:
+#
+#     sudo pacman -S python-pyqt6
+#
+# Aquí solo declaramos lo necesario para desarrollar y correr los tests.
+pytest>=7.0
+
+# Para otras distros (o si realmente quieres pip) puedes descomentar:
+# PyQt6>=6.4
