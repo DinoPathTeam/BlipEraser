@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser.utils.i18n import tr
+from blip_eraser.utils.pacman import list_explicit_packages, uninstall_packages
 from blip_eraser.utils.ui_text import localized_missing_banner
 
 
