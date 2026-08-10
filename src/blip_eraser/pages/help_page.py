@@ -4,12 +4,12 @@ Solo texto informativo; no ejecuta nada. Las secciones se construyen a
 partir de un esquema de claves i18n y se refrescan con retranslate().
 """
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QFormLayout,
     QFrame,
     QLabel,
     QVBoxLayout,
-    QWidget,
 )
 
 from blip_eraser.pages.base import BasePage
@@ -57,7 +57,7 @@ class HelpPage(BasePage):
         body_label = QLabel()
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(
-            body_label.textInteractionFlags() | 0x10  # SelectableByMouse
+            body_label.textInteractionFlags() | Qt.TextInteractionFlag.TextSelectableByMouse
         )
         form.addRow(title_label, body_label)
         self._group_labels.append((title_label, body_label))
