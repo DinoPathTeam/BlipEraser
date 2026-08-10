@@ -12,7 +12,6 @@ que el sistema operativo ya le reporta a cualquier aplicación Qt.
 import sys
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
 
 
 def main() -> int:
