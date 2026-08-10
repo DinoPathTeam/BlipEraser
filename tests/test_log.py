@@ -58,3 +58,27 @@ class TestLogBuffer:
         ts, msg = buf.entries()[0]
         assert re.fullmatch(r"\d{2}:\d{2}:\d{2}", ts)
         assert msg == "x"
+
+    def test_consecutive_duplicates_are_deduped(self):
+        buf = LogBuffer()
+        for _ in range(3):
+            buf.add("mismo evento")
+        msgs = [msg for _ts, msg in buf.entries()]
+        assert msgs == ["mismo evento"]
+
+    def test_duplicate_refreshes_timestamp(self):
+        buf = LogBuffer()
+        buf.add("x")
+        first_ts = buf.entries()[0][0]
+        buf.add("x")
+        ts, msg = buf.entries()[0]
+        assert msg == "x"
+        assert ts >= first_ts
+        assert len(buf.entries()) == 1
+
+    def test_non_consecutive_duplicates_are_kept(self):
+        buf = LogBuffer()
+        buf.add("a")
+        buf.add("b")
+        buf.add("a")
+        assert [msg for _ts, msg in buf.entries()] == ["a", "b", "a"]

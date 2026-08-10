@@ -65,24 +65,42 @@ def parse_pacman_size(text: str) -> int | None:
     return max(0, int(round(value * multiplier)))
 
 
+def pacman_installed_info() -> dict[str, dict]:
+    """{paquete: {"size": bytes, "date": str}} de todos los instalados.
+
+    Una sola consulta `pacman -Qi`: tamaño instalado y fecha de instalación
+    por paquete. Los bloques de paquetes están separados por líneas en blanco.
+    """
+    out = _run(["pacman", "-Qi"])
+    result: dict[str, dict] = {}
+    for block in out.split("\n\n"):
+        block = block.strip()
+        if not block:
+            continue
+        name: str | None = None
+        info = {"size": 0, "date": ""}
+        for line in block.splitlines():
+            if ":" not in line:
+                continue
+            key, _, value = line.partition(":")
+            key = key.strip()
+            value = value.strip()
+            if key == "Name":
+                name = value
+            elif key == "Installed Size":
+                size = parse_pacman_size(value)
+                if size is not None:
+                    info["size"] = size
+            elif key == "Install Date":
+                info["date"] = value
+        if name:
+            result[name] = info
+    return result
+
+
 def pacman_installed_sizes() -> dict[str, int]:
     """{nombre_paquete: bytes} de todos los paquetes instalados (pacman -Qi)."""
-    out = _run(["pacman", "-Qi"])
-    result: dict[str, int] = {}
-    current_name: str | None = None
-    for line in out.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("Name"):
-            current_name = stripped.split(":", 1)[-1].strip()
-        elif stripped.startswith("Installed Size"):
-            if current_name:
-                size = parse_pacman_size(stripped.split(":", 1)[-1])
-                if size is not None:
-                    result[current_name] = size
-            current_name = None
-    return result
+    return {name: info["size"] for name, info in pacman_installed_info().items()}
 
 
 def orphan_packages() -> list[str]:

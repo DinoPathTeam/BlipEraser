@@ -1,8 +1,9 @@
 """Gauge radial de salud del sistema — dibujado con QPainter.
 
 Dibuja un anillo con barrer rojo (valor) sobre pista oscura, el porcentaje
-en el centro, y encima un título ("SYSTEM HEALTH:") y debajo el estado
-("GOOD" en verde). El valor (0-100) lo proporciona utils.apps.health_score.
+en el centro (ligeramente por encima) y el estado debajo ("GOOD" en verde).
+El valor (0-100) lo proporciona utils.apps.health_score. El título queda en
+manos de la página (Overview), no se pinta dentro del círculo.
 """
 
 from PyQt6.QtCore import QRectF, Qt
@@ -19,7 +20,6 @@ class HealthGauge(QWidget):
         self._value = 0
         self._status = "—"
         self._accent = "#E53935"
-        self._title = ""
         self.setMinimumSize(240, 210)
 
     def set_value(self, value: int) -> None:
@@ -32,10 +32,6 @@ class HealthGauge(QWidget):
 
     def set_status(self, status: str) -> None:
         self._status = status
-        self.update()
-
-    def set_title(self, title: str) -> None:
-        self._title = title
         self.update()
 
     def paintEvent(self, _event):
@@ -63,32 +59,19 @@ class HealthGauge(QWidget):
         span = int(_ARC_SPAN * self._value / 100)
         painter.drawArc(rect, _ARC_START * 16, -span * 16)
 
-        # Título
-        if self._title:
-            painter.setPen(QColor(235, 235, 235))
-            title_font = QFont(self.font())
-            title_font.setPointSize(10)
-            title_font.setBold(True)
-            painter.setFont(title_font)
-            painter.drawText(
-                rect.adjusted(0, -28, 0, 0),
-                Qt.AlignmentFlag.AlignCenter,
-                self._title,
-            )
-
-        # Porcentaje central
+        # Porcentaje central (ligeramente por encima del centro)
         painter.setPen(QColor(245, 245, 245))
         percent_font = QFont(self.font())
-        percent_font.setPointSize(30)
+        percent_font.setPointSize(28)
         percent_font.setBold(True)
         painter.setFont(percent_font)
         painter.drawText(
-            rect,
+            rect.adjusted(0, -20, 0, 0),
             Qt.AlignmentFlag.AlignCenter,
             f"{self._value}%",
         )
 
-        # Estado debajo del porcentaje
+        # Estado debajo del porcentaje (separación mínima de ~10px)
         if self._status:
             painter.setPen(QColor(60, 220, 120))
             status_font = QFont(self.font())
@@ -96,7 +79,7 @@ class HealthGauge(QWidget):
             status_font.setBold(True)
             painter.setFont(status_font)
             painter.drawText(
-                rect.adjusted(0, 34, 0, 0),
+                rect.adjusted(0, 38, 0, 0),
                 Qt.AlignmentFlag.AlignCenter,
                 self._status,
             )

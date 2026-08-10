@@ -8,6 +8,7 @@ no importa PyQt6, no toca pacman, no depende del sistema operativo
 from __future__ import annotations
 
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 DEFAULT_SCAN_PATHS = (
@@ -53,6 +54,14 @@ def path_size_for_display(path: Path) -> int:
         return path.stat().st_size
     except (OSError, PermissionError):
         return 0
+
+
+def path_mod_date(path: Path) -> str:
+    """Fecha de última modificación (YYYY-MM-DD) de un Path; "" si falla."""
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+    except (OSError, PermissionError):
+        return ""
 
 
 def scan_manual_entries(

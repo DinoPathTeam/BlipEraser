@@ -77,6 +77,66 @@ class TestListInstalledApps:
         assert [a.name for a in result] == ["keep"]
 
 
+class TestAppKinds:
+    def test_classifies_kinds_and_sizes(self, monkeypatch):
+        monkeypatch.setattr(
+            apps, "list_explicit_packages", lambda: [("firefox", "1.0")]
+        )
+        monkeypatch.setattr(
+            apps, "list_dependency_packages", lambda: [("libfoo", "2.0")]
+        )
+        monkeypatch.setattr(
+            apps,
+            "scan_manual_entries",
+            lambda paths, ignore: [Path("/x/MyApp.AppImage")],
+        )
+        monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
+        monkeypatch.setattr(
+            apps,
+            "pacman_installed_info",
+            lambda: {
+                "firefox": {"size": 1024, "date": "2024-01-01"},
+                "libfoo": {"size": 2048, "date": "2024-02-02"},
+            },
+        )
+
+        result = apps.list_installed_apps()
+        by_name = {a.name: a for a in result}
+
+        assert by_name["firefox"].kind == "app"
+        assert by_name["firefox"].source == "pacman"
+        assert by_name["firefox"].size_bytes == 1024
+        assert by_name["firefox"].install_date == "2024-01-01"
+
+        assert by_name["libfoo"].kind == "dependency"
+        assert by_name["libfoo"].source == "pacman"
+        assert by_name["libfoo"].size_bytes == 2048
+        assert by_name["libfoo"].install_date == "2024-02-02"
+
+        assert by_name["MyApp.AppImage"].kind == "folder"
+        assert by_name["MyApp.AppImage"].source == "manual"
+
+    def test_dependency_duplicate_with_explicit_skipped(self, monkeypatch):
+        monkeypatch.setattr(
+            apps, "list_explicit_packages", lambda: [("firefox", "1.0")]
+        )
+        monkeypatch.setattr(
+            apps, "list_dependency_packages", lambda: [("Firefox", "2.0")]
+        )
+        monkeypatch.setattr(apps, "scan_manual_entries", lambda paths, ignore: [])
+        monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
+
+        result = apps.list_installed_apps()
+        assert len(result) == 1
+        assert result[0].kind == "app"
+
+    def test_kind_label_keys(self):
+        assert apps.kind_label_key("app") == "kind_app"
+        assert apps.kind_label_key("dependency") == "kind_dependency"
+        assert apps.kind_label_key("folder") == "kind_folder"
+        assert apps.kind_label_key("desconocido") == "kind_folder"
+
+
 class TestHealthScore:
     def test_all_three_sources(self):
         assert apps.health_score(20, 30, 40) == 100 - 30

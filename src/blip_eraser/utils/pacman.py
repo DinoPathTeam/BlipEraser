@@ -9,14 +9,14 @@ from __future__ import annotations
 import subprocess
 
 
-def list_explicit_packages() -> list[tuple[str, str]]:
-    """Devuelve [(nombre, versión), ...] desde `pacman -Qe`.
+def _query_packages(flag: str) -> list[tuple[str, str]]:
+    """[(nombre, versión), ...] desde `pacman <flag>`.
 
     Lanza FileNotFoundError si pacman no existe y CalledProcessError
     si el comando falla. La GUI se encarga de mostrar el mensaje.
     """
     result = subprocess.run(
-        ["pacman", "-Qe"],
+        ["pacman", flag],
         capture_output=True,
         text=True,
         check=True,
@@ -31,6 +31,22 @@ def list_explicit_packages() -> list[tuple[str, str]]:
         version = parts[1] if len(parts) > 1 else ""
         packages.append((name, version))
     return packages
+
+
+def list_explicit_packages() -> list[tuple[str, str]]:
+    """Devuelve [(nombre, versión), ...] desde `pacman -Qe`.
+    Paquetes instalados explícitamente (las 'aplicaciones').
+    """
+    return _query_packages("-Qe")
+
+
+def list_dependency_packages() -> list[tuple[str, str]]:
+    """Devuelve [(nombre, versión), ...] desde `pacman -Qd`.
+
+    Paquetes instalados como dependencia de otros (no explícitos).
+    Mismo formato de salida que `pacman -Qe`.
+    """
+    return _query_packages("-Qd")
 
 
 def uninstall_packages(

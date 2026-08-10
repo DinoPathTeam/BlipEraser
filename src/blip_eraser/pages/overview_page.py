@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser.utils import theme as theme_mod
-from blip_eraser.utils.apps import health_score, list_installed_apps
+from blip_eraser.utils.apps import health_score, kind_label_key, list_installed_apps
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
@@ -98,7 +98,6 @@ class OverviewPage(QWidget):
 
         self.gauge = HealthGauge()
         self.gauge.set_accent(self._accent)
-        self.gauge.set_title(tr("overview_health_title") + ":")
         left_layout.addWidget(self.gauge)
 
         # Métricas dentro del gauge (estilo imagen)
@@ -274,7 +273,25 @@ class OverviewPage(QWidget):
 
             meta = QVBoxLayout()
             meta.setSpacing(0)
+
+            name_row = QHBoxLayout()
+            name_row.setSpacing(6)
             name_label = QLabel(app.name)
+            name_row.addWidget(name_label)
+
+            # Etiqueta del tipo: aplicación / dependencia / carpeta suelta
+            kind_key = kind_label_key(app.kind)
+            kind_obj = {
+                "app": "KindTagApp",
+                "dependency": "KindTagDep",
+                "folder": "KindTagFolder",
+            }.get(app.kind, "KindTagFolder")
+            kind_tag = QLabel(tr(kind_key))
+            kind_tag.setObjectName(kind_obj)
+            name_row.addWidget(kind_tag)
+            name_row.addStretch(1)
+            meta.addLayout(name_row)
+
             sub_label = QLabel(
                 f"{app.detail}  |  {human_size(app.size_bytes)}"
                 if app.size_bytes
@@ -282,7 +299,6 @@ class OverviewPage(QWidget):
             )
             sub_label.setObjectName("SubText")
             sub_label.setWordWrap(True)
-            meta.addWidget(name_label)
             meta.addWidget(sub_label)
             row_layout.addLayout(meta, 1)
 
@@ -337,7 +353,6 @@ class OverviewPage(QWidget):
     def retranslate(self):
         self.section_header.setText(tr("nav_overview"))
         self.health_title.setText(tr("overview_health_title"))
-        self.gauge.set_title(tr("overview_health_title") + ":")
         self.scan_btn.set_texts(
             tr("overview_scanning") if self._scanning else tr("overview_erase_button"),
             tr("overview_erase_subtitle"),
@@ -346,6 +361,8 @@ class OverviewPage(QWidget):
         self.activity_title.setText(tr("recent_activity_title"))
         self.apps_title.setText(tr("installed_apps_title"))
         self.cleanup_title.setText(tr("cleanup_recommended_title"))
+        if self._apps:
+            self._rebuild_apps()
         self.refresh()
 
     def set_accent(self, color: str):

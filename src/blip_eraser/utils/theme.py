@@ -121,6 +121,10 @@ def build_qss(theme_key: str) -> str:
     return f"""
 QWidget {{ background-color: {p['bg']}; color: {p['text']}; }}
 QMainWindow {{ background-color: {p['bg']}; }}
+QLabel {{ background: transparent; }}
+QToolButton#HelpIcon {{ background: transparent; color: {p['subtext']}; border: 1px solid {p['subtext']}; border-radius: 8px; min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px; font-weight: bold; }}
+QToolButton#HelpIcon:hover {{ color: {accent}; border-color: {accent}; }}
+QToolButton#HelpIcon:focus {{ outline: none; }}
 QWidget#HeaderBar {{ background-color: {p['panel']}; border-bottom: 1px solid {p['border']}; }}
 QWidget#SidebarWrap {{ background-color: {p['sidebar']}; border-right: 1px solid {p['border']}; }}
 QListWidget#Sidebar {{ background-color: transparent; border: none; outline: 0; }}
@@ -152,4 +156,7 @@ QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color
 QComboBox, QListWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; padding: 4px; }}
 QLabel#SubText {{ color: {p['subtext']}; }}
 QLabel#PanelTitle {{ color: {p['subtext']}; font-size: 11px; font-weight: bold; }}
+QLabel#KindTagApp {{ color: #4CAF50; border: 1px solid #4CAF50; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}
+QLabel#KindTagDep {{ color: #FFB300; border: 1px solid #FFB300; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}
+QLabel#KindTagFolder {{ color: #42A5F5; border: 1px solid #42A5F5; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}
 """.strip()

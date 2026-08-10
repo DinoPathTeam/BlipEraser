@@ -1,4 +1,4 @@
-"""Página 'Herramientas': alberga Personalización, Ajustes y Ayuda.
+"""Página 'Configuración': alberga Personalización, Ajustes y Ayuda.
 
 Una sola sección de la barra lateral que agrupa las utilidades auxiliares
 en pestañas internas (QTabWidget), para no poblar la navegación principal.

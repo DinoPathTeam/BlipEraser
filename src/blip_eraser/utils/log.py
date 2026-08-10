@@ -20,9 +20,15 @@ class LogBuffer:
 
     def add(self, message: str) -> None:
         now = datetime.now().strftime("%H:%M:%S")
-        self._entries.append((now, message))
-        if len(self._entries) > self._max_entries:
-            self._entries = self._entries[-self._max_entries:]
+        # Dedupe: un evento repetido consecutivamente (p. ej. cambiar varias
+        # veces la misma preferencia) solo refresca el timestamp en lugar de
+        # acumular ruido en "Actividad reciente".
+        if self._entries and self._entries[-1][1] == message:
+            self._entries[-1] = (now, message)
+        else:
+            self._entries.append((now, message))
+            if len(self._entries) > self._max_entries:
+                self._entries = self._entries[-self._max_entries:]
         self._notify()
 
     def clear(self) -> None:

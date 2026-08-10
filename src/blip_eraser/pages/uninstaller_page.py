@@ -20,11 +20,17 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser.pages.base import BasePage
-from blip_eraser.utils.apps import InstalledApp, list_installed_apps
-from blip_eraser.utils.file_utils import delete_path
+from blip_eraser.utils.apps import (
+    InstalledApp,
+    kind_label_key,
+    list_installed_apps,
+)
+from blip_eraser.utils.file_utils import delete_path, human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.pacman import uninstall_packages
+
+_COLUMNS = 5  # Nombre | Tipo | Detalle | Peso | Fecha
 
 
 class UninstallerPage(BasePage):
@@ -42,13 +48,16 @@ class UninstallerPage(BasePage):
         self.info_label = QLabel(tr("uninstaller_info"))
         layout.addWidget(self.info_label)
 
-        self.table = QTableWidget(0, 3)
+        self.table = QTableWidget(0, _COLUMNS)
         self.table.setHorizontalHeaderLabels(
-            [tr("col_name"), tr("col_source"), tr("col_detail")]
+            [tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
-        self.table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.Stretch
-        )
+        header = self.table.horizontalHeader()
+        # Columnas redimensionables arrastrando el borde (Interactive).
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        header.setStretchLastSection(False)
+        for idx, width in ((0, 200), (1, 130), (2, 320), (3, 90), (4, 130)):
+            self.table.setColumnWidth(idx, width)
         self.table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
@@ -76,8 +85,10 @@ class UninstallerPage(BasePage):
         self.refresh_btn.setText(tr("refresh_button"))
         self.uninstall_btn.setText(tr("uninstall_button"))
         self.table.setHorizontalHeaderLabels(
-            [tr("col_name"), tr("col_source"), tr("col_detail")]
+            [tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
+        # Refresca el texto de la columna de tipo si ya hay datos cargados.
+        self._render()
 
     def set_search_filter(self, text: str):
         self._filter = text.strip().lower()
@@ -101,8 +112,12 @@ class UninstallerPage(BasePage):
         self.table.setRowCount(len(self._visible))
         for row, app in enumerate(self._visible):
             self.table.setItem(row, 0, QTableWidgetItem(app.name))
-            self.table.setItem(row, 1, QTableWidgetItem(app.source))
+            self.table.setItem(row, 1, QTableWidgetItem(tr(kind_label_key(app.kind))))
             self.table.setItem(row, 2, QTableWidgetItem(app.detail))
+            self.table.setItem(
+                row, 3, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
+            )
+            self.table.setItem(row, 4, QTableWidgetItem(app.install_date))
 
     # ------------------------------------------------------------------
     # Acciones

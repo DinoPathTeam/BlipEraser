@@ -110,7 +110,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav_uninstaller": "Desinstalador",
         "nav_system_cleaner": "Limpiador del sistema",
         "nav_performance": "Ajustes de rendimiento",
-        "nav_tools": "Herramientas",
+        "nav_tools": "Configuración",
         # Overview
         "overview_health_title": "SALUD DEL SISTEMA",
         "overview_erase_button": "SCAN NOW",
@@ -153,10 +153,29 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_compress_ram": "Comprimir memoria en uso (zswap)",
         "perf_mirror_sort": "Sincronizar y ordenar los espejos de pacman",
         "perf_disable_wp": "Reducir el quota de escritura de plymouth",
-        "tools_title": "Herramientas",
+        "perf_trim_mounts_help": (
+            "Programa fstrim para recortar automáticamente las unidades SSD "
+            "y prolongar su vida útil."
+        ),
+        "perf_compress_ram_help": (
+            "Habilita zswap para comprimir en RAM los datos poco usados "
+            "y reducir el intercambio a disco."
+        ),
+        "perf_mirror_sort_help": (
+            "Sincroniza los listados de los espejos de pacman y los ordena "
+            "por velocidad para acelerar las descargas."
+        ),
+        "perf_disable_wp_help": (
+            "Reduce la cuota de escritura de plymouth para acelerar el "
+            "arranque en equipos con discos lentos."
+        ),
+        "perf_effect_disk": "Disco",
+        "perf_effect_ram": "RAM",
+        "perf_effect_network": "Red",
+        "tools_title": "Configuración",
         "tools_hint": (
-            "Utilidades auxiliares: gestión de preferencias, ayuda y "
-            "documentación."
+            "Configuración y utilidades auxiliares: personalización, tema "
+            "y documentación."
         ),
         # Encabezado, búsqueda y registro
         "search_placeholder": "Buscar paquetes y funciones…",
@@ -165,6 +184,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_name": "Nombre",
         "col_source": "Fuente",
         "col_detail": "Detalle",
+        "col_type": "Tipo",
+        "col_weight": "Peso",
+        "col_date": "Fecha",
+        # Tipos de aplicación
+        "kind_app": "Aplicación",
+        "kind_dependency": "Dependencia",
+        "kind_folder": "Carpeta suelta",
         "save_button": "Guardar cambios",
         "uninstall_short": "Desinstalar",
         # Estado del sistema
@@ -237,6 +263,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Toda acción destructiva pide confirmación explícita y los "
             "privilegios se solicitan por acción con pkexec. BlipEraser nunca "
             "instala nada automáticamente."
+        ),
+        "help_about_body": (
+            "BlipEraser {version} — Desinstalador y limpiador del sistema "
+            "para CachyOS / Arch Linux. Licencia MIT."
         ),
         # Registro (log)
         "log_started": "BlipEraser iniciado",
@@ -337,7 +367,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav_uninstaller": "Uninstaller",
         "nav_system_cleaner": "System Cleaner",
         "nav_performance": "Performance Tweaks",
-        "nav_tools": "Tools",
+        "nav_tools": "Settings",
         # Overview
         "overview_health_title": "SYSTEM HEALTH",
         "overview_erase_button": "SCAN NOW",
@@ -380,9 +410,28 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_compress_ram": "Compress memory in use (zswap)",
         "perf_mirror_sort": "Sync and sort pacman mirrors",
         "perf_disable_wp": "Reduce plymouth write quota",
-        "tools_title": "Tools",
+        "perf_trim_mounts_help": (
+            "Schedules fstrim to automatically trim SSD drives and extend "
+            "their lifespan."
+        ),
+        "perf_compress_ram_help": (
+            "Enables zswap to compress rarely used data in RAM and reduce "
+            "swapping to disk."
+        ),
+        "perf_mirror_sort_help": (
+            "Syncs the pacman mirror lists and sorts them by speed to speed "
+            "up downloads."
+        ),
+        "perf_disable_wp_help": (
+            "Lowers plymouth's write quota to speed up boot on slower disks."
+        ),
+        "perf_effect_disk": "Disk",
+        "perf_effect_ram": "RAM",
+        "perf_effect_network": "Network",
+        "tools_title": "Settings",
         "tools_hint": (
-            "Utility helpers: preference management, help and documentation."
+            "App configuration and utilities: personalization, appearance "
+            "and documentation."
         ),
         # Header, search and log
         "search_placeholder": "Search packages and features…",
@@ -391,6 +440,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_name": "Name",
         "col_source": "Source",
         "col_detail": "Detail",
+        "col_type": "Type",
+        "col_weight": "Weight",
+        "col_date": "Date",
+        # App types
+        "kind_app": "Application",
+        "kind_dependency": "Dependency",
+        "kind_folder": "Loose folder",
         "save_button": "Save changes",
         "uninstall_short": "Uninstall",
         # System status
@@ -462,6 +518,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Every destructive action asks for explicit confirmation and "
             "privileges are requested per action with pkexec. BlipEraser "
             "never installs anything automatically."
+        ),
+        "help_about_body": (
+            "BlipEraser {version} — Uninstaller and system cleaner for "
+            "CachyOS / Arch Linux. MIT License."
         ),
         # Logging
         "log_started": "BlipEraser started",

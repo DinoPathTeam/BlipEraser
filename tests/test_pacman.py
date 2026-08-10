@@ -51,6 +51,23 @@ class TestListExplicitPackages:
             pacman.list_explicit_packages()
 
 
+class TestListDependencyPackages:
+    def test_uses_Qd_flag(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return FakeResult(stdout="libfoo 1.2-1\ndefault-lib 3.0-1\n")
+
+        monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+
+        assert pacman.list_dependency_packages() == [
+            ("libfoo", "1.2-1"),
+            ("default-lib", "3.0-1"),
+        ]
+        assert calls == [["pacman", "-Qd"]]
+
+
 class TestUninstallPackages:
     def test_builds_command_with_noconfirm(self, monkeypatch):
         calls = []
