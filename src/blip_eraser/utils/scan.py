@@ -8,9 +8,11 @@ mockeable en tests.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from blip_eraser.utils.file_utils import get_dir_size
@@ -28,11 +30,17 @@ _SIZE_UNITS = {
 }
 
 
-def _run(cmd: list[str], timeout: int = 8) -> str:
+# Con locale C, `pacman -Qi` imprime "Install Date" siempre en inglés y con
+# un formato fijo, sin depender del LANG/LC_TIME del usuario.
+_C_LOCALE_ENV = {**os.environ, "LANG": "C", "LC_ALL": "C"}
+
+
+def _run(cmd: list[str], timeout: int = 8, env: dict | None = None) -> str:
     """Ejecuta un comando de solo lectura y devuelve su stdout.
 
     Nunca lanza: cualquier fallo (comando ausente, timeout, error) se
-    traduce en cadena vacía.
+    traduce en cadena vacía. `env` permite fijar el entorno del proceso
+    hijo (por ejemplo, forzar el locale).
     """
     try:
         proc = subprocess.run(
@@ -42,6 +50,7 @@ def _run(cmd: list[str], timeout: int = 8) -> str:
             check=False,
             timeout=timeout,
             errors="replace",
+            env=env,
         )
         return proc.stdout or ""
     except (OSError, subprocess.SubprocessError):
@@ -65,13 +74,30 @@ def parse_pacman_size(text: str) -> int | None:
     return max(0, int(round(value * multiplier)))
 
 
+def normalize_pacman_date(value: str) -> str:
+    """Normaliza 'Install Date' (locale C, inglés) a 'YYYY-MM-DD'.
+
+    Con pacman en un locale forzado la fecha sale siempre como
+    'Tue 11 Jun 2024 08:15:00 AM UTC'. Si el parseo falla por cualquier
+    razón (formato inesperado, valor vacío), devuelve el valor crudo en
+    vez de romper.
+    """
+    if not value:
+        return value
+    try:
+        return datetime.strptime(value, "%a %d %b %Y %I:%M:%S %p %Z").strftime("%Y-%m-%d")
+    except ValueError:
+        return value
+
+
 def pacman_installed_info() -> dict[str, dict]:
     """{paquete: {"size": bytes, "date": str}} de todos los instalados.
 
     Una sola consulta `pacman -Qi`: tamaño instalado y fecha de instalación
-    por paquete. Los bloques de paquetes están separados por líneas en blanco.
+    (normalizada a YYYY-MM-DD; valor crudo si no se puede parsear) por
+    paquete. Los bloques de paquetes están separados por líneas en blanco.
     """
-    out = _run(["pacman", "-Qi"])
+    out = _run(["pacman", "-Qi"], env=_C_LOCALE_ENV)
     result: dict[str, dict] = {}
     for block in out.split("\n\n"):
         block = block.strip()
@@ -92,7 +118,7 @@ def pacman_installed_info() -> dict[str, dict]:
                 if size is not None:
                     info["size"] = size
             elif key == "Install Date":
-                info["date"] = value
+                info["date"] = normalize_pacman_date(value)
         if name:
             result[name] = info
     return result

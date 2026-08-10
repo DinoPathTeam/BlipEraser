@@ -10,19 +10,19 @@ class TestOrphanPackages:
         monkeypatch.setattr(
             scan,
             "_run",
-            lambda cmd, timeout=8: "orphan-pkg 1.0-1\nother-pkg 2.0-1\n",
+            lambda cmd, timeout=8, env=None: "orphan-pkg 1.0-1\nother-pkg 2.0-1\n",
         )
         assert scan.orphan_packages() == ["orphan-pkg", "other-pkg"]
 
     def test_empty_output_returns_empty_list(self, monkeypatch):
-        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8: "")
+        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8, env=None: "")
         assert scan.orphan_packages() == []
 
     def test_ignores_blank_lines(self, monkeypatch):
         monkeypatch.setattr(
             scan,
             "_run",
-            lambda cmd, timeout=8: "pkg-a 1.0\n\n\npkg-b 2.0\n",
+            lambda cmd, timeout=8, env=None: "pkg-a 1.0\n\n\npkg-b 2.0\n",
         )
         assert scan.orphan_packages() == ["pkg-a", "pkg-b"]
 
@@ -73,23 +73,60 @@ class TestPacmanInstalledInfo:
             "Install Date    : Wed 12 Jun 2024 10:00:00 AM UTC\n"
             "Installed Size  : 10.00 MiB\n"
         )
-        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8: output)
+        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8, env=None: output)
 
         info = scan.pacman_installed_info()
         assert info["firefox"]["size"] == int(round(543.21 * 1024**2))
-        assert "11 Jun 2024" in info["firefox"]["date"]
+        assert info["firefox"]["date"] == "2024-06-11"
         assert info["libfoo"]["size"] == 10 * 1024**2
-        assert "12 Jun 2024" in info["libfoo"]["date"]
+        assert info["libfoo"]["date"] == "2024-06-12"
 
     def test_missing_fields_default_to_zero_empty(self, monkeypatch):
-        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8: "Name : pkg\n")
+        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8, env=None: "Name : pkg\n")
         assert scan.pacman_installed_info() == {"pkg": {"size": 0, "date": ""}}
 
     def test_empty_output_returns_empty_dict(self, monkeypatch):
-        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8: "")
+        monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8, env=None: "")
         assert scan.pacman_installed_info() == {}
 
     def test_sizes_wraps_info(self, monkeypatch):
         info = {"a": {"size": 10, "date": "x"}, "b": {"size": 20, "date": ""}}
         monkeypatch.setattr(scan, "pacman_installed_info", lambda: info)
         assert scan.pacman_installed_sizes() == {"a": 10, "b": 20}
+
+    def test_forces_c_locale_env(self, monkeypatch):
+        captured = {}
+
+        def fake_run(cmd, timeout=8, env=None):
+            captured["env"] = env
+            return ""
+
+        monkeypatch.setattr(scan, "_run", fake_run)
+        scan.pacman_installed_info()
+        assert captured["env"]["LANG"] == "C"
+        assert captured["env"]["LC_ALL"] == "C"
+
+
+class TestNormalizePacmanDate:
+    def test_english_c_locale_format_am(self):
+        assert (
+            scan.normalize_pacman_date("Tue 11 Jun 2024 08:15:00 AM UTC")
+            == "2024-06-11"
+        )
+
+    def test_english_c_locale_format_pm(self):
+        assert (
+            scan.normalize_pacman_date("Wed 12 Jun 2024 10:00:00 PM UTC")
+            == "2024-06-12"
+        )
+
+    def test_unparseable_falls_back_to_raw(self):
+        raw = "lun 11 jun 2024 08:15:00 a. m. UTC"
+        assert scan.normalize_pacman_date(raw) == raw
+
+    def test_garbage_falls_back_to_raw(self):
+        raw = "not a date at all"
+        assert scan.normalize_pacman_date(raw) == raw
+
+    def test_empty_stays_empty(self):
+        assert scan.normalize_pacman_date("") == ""
