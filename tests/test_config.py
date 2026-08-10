@@ -79,3 +79,18 @@ class TestScanPaths:
         result = config.get_scan_paths()
         result.append("mutado")
         assert config.get_scan_paths() == ["/a"]
+
+
+class TestScanIgnore:
+    def test_get_returns_defaults(self):
+        assert config.get_scan_ignore() == config.PREFS_DEFAULTS["scan_ignore"]
+
+    def test_set_and_get(self):
+        config.set_scan_ignore(["cache", "tmp"])
+        assert config.get_scan_ignore() == ["cache", "tmp"]
+
+    def test_set_returns_list_copy(self):
+        config.set_scan_ignore(["cache"])
+        result = config.get_scan_ignore()
+        result.append("mutado")
+        assert config.get_scan_ignore() == ["cache"]

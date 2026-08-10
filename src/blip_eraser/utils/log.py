@@ -15,7 +15,7 @@ Listener = Callable[[list[tuple[str, str]]], None]
 class LogBuffer:
     def __init__(self, max_entries: int = 500):
         self._entries: list[tuple[str, str]] = []
-        self._max_entries = max_entries
+        self._max_entries = max(1, max_entries)
         self._listeners: list[Listener] = []
 
     def add(self, message: str) -> None:
@@ -40,7 +40,7 @@ class LogBuffer:
         return self._entries[-1][1] if self._entries else None
 
     def _notify(self) -> None:
-        snapshot = self._entries
+        snapshot = list(self._entries)
         for listener in self._listeners:
             listener(snapshot)
 

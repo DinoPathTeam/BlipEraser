@@ -86,9 +86,20 @@ def pacman_installed_sizes() -> dict[str, int]:
 
 
 def orphan_packages() -> list[str]:
-    """Paquetes huérfanos (instalados como dependencia y ya no necesarios)."""
+    """Paquetes huérfanos (instalados como dependencia y ya no necesarios).
+
+    `pacman -Qdt` devuelve líneas "nombre versión", igual que `-Qe`.
+    Aquí se extrae solo el nombre para que el resultado pueda pasarse
+    directamente a comandos como `pacman -Rns`.
+    """
     out = _run(["pacman", "-Qdt"])
-    return [line for line in out.splitlines() if line.strip()]
+    names = []
+    for line in out.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        names.append(stripped.split(None, 1)[0])
+    return names
 
 
 def best_effort_dir_size(path: Path) -> int:

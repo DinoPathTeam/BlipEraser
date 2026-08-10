@@ -90,7 +90,6 @@ class TestReadLines:
         assert stats._read_lines(file) == ["a", "b"]
 
     def test_missing_file(self):
-        assert stats._read_lines(stats._CPU_STAT) is None or True
         assert stats._read_lines(stats._CPU_STAT.parent / "no-tale") is None
 
 

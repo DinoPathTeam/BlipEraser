@@ -30,7 +30,7 @@ def _read_raw() -> dict:
     try:
         data = json.loads(PREFS_FILE.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError):
         return {}
 
 
@@ -64,3 +64,11 @@ def get_scan_paths() -> list[str]:
 
 def set_scan_paths(paths: list[str]) -> None:
     save_prefs({"scan_paths": paths})
+
+
+def get_scan_ignore() -> list[str]:
+    return list(load_prefs().get("scan_ignore", PREFS_DEFAULTS["scan_ignore"]))
+
+
+def set_scan_ignore(names: list[str]) -> None:
+    save_prefs({"scan_ignore": names})

@@ -15,7 +15,7 @@ class TestListInstalledApps:
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
-            lambda paths: [Path("/x/MyApp.AppImage"), Path("/x/LooseFolder")],
+            lambda paths, ignore: [Path("/x/MyApp.AppImage"), Path("/x/LooseFolder")],
         )
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
 
@@ -34,7 +34,7 @@ class TestListInstalledApps:
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
-            lambda paths: [Path("/x/Firefox")],  # mismo nombre en minúsculas
+            lambda paths, ignore: [Path("/x/Firefox")],  # mismo nombre en minúsculas
         )
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
 
@@ -49,7 +49,7 @@ class TestListInstalledApps:
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
-            lambda paths: [Path("/x/OnlyMe.AppImage")],
+            lambda paths, ignore: [Path("/x/OnlyMe.AppImage")],
         )
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
 
@@ -61,9 +61,20 @@ class TestListInstalledApps:
         monkeypatch.setattr(
             apps, "list_explicit_packages", lambda: (_ for _ in ()).throw(OSError())
         )
-        monkeypatch.setattr(apps, "scan_manual_entries", lambda paths: [])
+        monkeypatch.setattr(apps, "scan_manual_entries", lambda paths, ignore: [])
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
         assert apps.list_installed_apps() == []
+
+    def test_manual_scan_respects_custom_ignore(self, monkeypatch, tmp_path):
+        base = tmp_path / "scan"
+        (base / "keep").mkdir(parents=True)
+        (base / "junk").mkdir()
+        monkeypatch.setattr(apps, "list_explicit_packages", lambda: [])
+        monkeypatch.setattr(apps, "get_scan_paths", lambda: [str(base)])
+        monkeypatch.setattr(apps, "get_scan_ignore", lambda: ["junk"])
+
+        result = apps.list_installed_apps()
+        assert [a.name for a in result] == ["keep"]
 
 
 class TestHealthScore:

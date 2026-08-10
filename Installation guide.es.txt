@@ -108,7 +108,7 @@ resulte más fácil.
 
 OPCIÓN A: DESCARGAR EL ARCHIVO ZIP DEL NAVEGADOR (LA MÁS FÁCIL)
 
-1. Abre tu navegador e entra en la página de BlipEraser en GitHub.
+1. Abre tu navegador y entra en la página de BlipEraser (https://github.com/DinoPathTeam/BlipEraser) en GitHub.
 2. Busca el botón verde que dice "Code".
 3. Haz clic en ese botón y después en "Download ZIP".
 4. El navegador descargará un archivo llamado algo así como
@@ -125,14 +125,12 @@ OPCIÓN A: DESCARGAR EL ARCHIVO ZIP DEL NAVEGADOR (LA MÁS FÁCIL)
 
 OPCIÓN B: DESCARGAR CON GIT DESDE LA TERMINAL (LA MÁS SENCILLA PARA SEGUIR)
 
-Copia y pega esta línea en la terminal — sustituye "PON_AQUI_LA_URL" por
-la dirección real del repositorio de BlipEraser en GitHub
-(https://github.com/TU_USUARIO/blipEraser) y pulsa Enter:
+Copia y pega esta línea en la terminal y pulsa Enter:
 
-    git clone https://github.com/TU_USUARIO/blipEraser
+    git clone https://github.com/DinoPathTeam/BlipEraser
 
-Esto creará una carpeta llamada "blipEraser" dentro de tu carpeta
-personal (por ejemplo "/home/tu-usuario/blipEraser").
+Esto creará una carpeta llamada "BlipEraser" dentro de tu carpeta
+personal (por ejemplo "/home/tu-usuario/BlipEraser").
 
 --------------------------------------------------------------------------------
 PASO 5: ENTRAR EN LA CARPETA DEL PROGRAMA
@@ -155,7 +153,7 @@ Si el nombre de la carpeta es distinto, ponlo tal cual aparece.)
 
 Si elegiste la Opción B (git clone), escribe:
 
-    cd ~/blipEraser
+    cd ~/BlipEraser
 
 PISTA: en lugar de escribir a mano la ruta, puedes escribir "cd " y
 arrastrar la carpeta del programa hasta la ventana de la terminal y
@@ -265,7 +263,7 @@ Si un día quieres quitar BlipEraser:
 Luego puedes borrar la carpeta del programa desde el navegador de
 archivos o con:
 
-    rm -rf ~/blipEraser
+    rm -rf ~/BlipEraser
 
 (¡OJO! Asegúrate de teclear bien la ruta antes de borrar nada.)
 

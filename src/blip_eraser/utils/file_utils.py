@@ -57,7 +57,7 @@ def path_size_for_display(path: Path) -> int:
 
 def scan_manual_entries(
     scan_paths: tuple[str, ...] = DEFAULT_SCAN_PATHS,
-    ignore_names: set[str] = DEFAULT_IGNORE_NAMES,
+    ignore_names: set[str] | None = None,
 ) -> list[Path]:
     """Recorre los directorios base y devuelve carpetas/AppImages de nivel superior.
 
@@ -65,6 +65,8 @@ def scan_manual_entries(
     directorios base que no existen o no se pueden leer se omiten
     silenciosamente. No borra nada: solo localiza candidatos.
     """
+    if ignore_names is None:
+        ignore_names = DEFAULT_IGNORE_NAMES
     found: list[Path] = []
     for base in scan_paths:
         base_path = Path(base).expanduser()

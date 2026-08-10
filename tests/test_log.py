@@ -44,9 +44,11 @@ class TestLogBuffer:
         assert [msg for _ts, msg in received[-1]] == ["uno"]
 
     def test_max_entries_cannot_be_zero(self):
-        buf = LogBuffer(max_entries=1)
+        buf = LogBuffer(max_entries=0)
         buf.add("keep")
-        assert buf.entries() != []
+        buf.add("overflow")
+        assert len(buf.entries()) == 1  # clampeado a 1: nunca se queda "sin límite"
+        assert buf.latest() == "overflow"
 
     def test_timestamp_format(self):
         import re

@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from blip_eraser.utils.config import get_scan_paths
-from blip_eraser.utils.file_utils import scan_manual_entries
+from blip_eraser.utils.config import get_scan_ignore, get_scan_paths
+from blip_eraser.utils.file_utils import (
+    path_size_for_display,
+    scan_manual_entries,
+)
 from blip_eraser.utils.pacman import list_explicit_packages
 from blip_eraser.utils.scan import pacman_installed_sizes
 
@@ -52,11 +55,12 @@ def list_installed_apps(include_sizes: bool = True) -> list[InstalledApp]:
         pass  # pacman ausente: solo contribuye el escaneo manual
 
     try:
-        for path in scan_manual_entries(tuple(get_scan_paths())):
+        for path in scan_manual_entries(
+            tuple(get_scan_paths()), set(get_scan_ignore())
+        ):
             low = path.name.lower()
             if low in seen:
                 continue
-            from blip_eraser.utils.file_utils import path_size_for_display
 
             apps.append(
                 InstalledApp(

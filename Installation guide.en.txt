@@ -108,7 +108,7 @@ easiest for you.
 
 OPTION A: DOWNLOAD THE ZIP FILE FROM YOUR BROWSER (EASIEST)
 
-1. Open your browser and go to the BlipEraser page on GitHub.
+1. Open your browser and go to the BlipEraser page on GitHub (https://github.com/DinoPathTeam/BlipEraser).
 2. Look for the green button that says "Code".
 3. Click that button, then click "Download ZIP".
 4. Your browser will download a file named something like
@@ -123,14 +123,12 @@ OPTION A: DOWNLOAD THE ZIP FILE FROM YOUR BROWSER (EASIEST)
 
 OPTION B: DOWNLOAD WITH GIT FROM THE TERMINAL (EASY TO FOLLOW)
 
-Copy and paste this line into the terminal — replace "PUT_URL_HERE" with
-the real address of the BlipEraser repository on GitHub
-(https://github.com/YOUR_USER/blipEraser) and press Enter:
+Copy and paste this line into the terminal and press Enter:
 
-    git clone https://github.com/YOUR_USER/blipEraser
+    git clone https://github.com/DinoPathTeam/BlipEraser
 
-This creates a folder named "blipEraser" inside your home folder (for
-example "/home/your-user/blipEraser").
+This creates a folder named "BlipEraser" inside your home folder (for
+example "/home/your-user/BlipEraser").
 
 --------------------------------------------------------------------------------
 STEP 5: GO INTO THE PROGRAM'S FOLDER
@@ -146,7 +144,7 @@ If you chose Option A (ZIP) and your folder is in Downloads, type:
 
 If you chose Option B (git clone), type:
 
-    cd ~/blipEraser
+    cd ~/BlipEraser
 
 TIP: instead of typing the path by hand, you can type "cd " and then drag
 the program's folder into the terminal window and drop it; the path will
@@ -254,7 +252,7 @@ If someday you want to remove BlipEraser:
 
 Then you can delete the program's folder from your file manager or with:
 
-    rm -rf ~/blipEraser
+    rm -rf ~/BlipEraser
 
 (CAUTION! Make sure you type the path correctly before deleting
 anything.)

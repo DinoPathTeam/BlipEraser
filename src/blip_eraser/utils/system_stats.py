@@ -19,7 +19,7 @@ _CPUINFO = Path("/proc/cpuinfo")
 def _read_lines(path: Path) -> list[str] | None:
     try:
         return path.read_text(encoding="utf-8").splitlines()
-    except (OSError, FileNotFoundError):
+    except OSError:
         return None
 
 
