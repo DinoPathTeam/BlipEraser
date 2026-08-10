@@ -36,6 +36,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_version": "Versión",
         "refresh_button": "Actualizar lista",
         "uninstall_button": "Desinstalar seleccionados",
+        "uninstall_button_count": "Desinstalar seleccionados ({n})",
         "error_title": "Error",
         "pacman_not_found": (
             "No se encontró el comando 'pacman'. ¿Estás en una distro basada en Arch?"
@@ -113,7 +114,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav_tools": "Configuración",
         # Overview
         "overview_health_title": "SALUD DEL SISTEMA",
-        "overview_erase_button": "SCAN NOW",
+        "overview_erase_button": "Escanear ahora",
         "overview_erase_subtitle": "Iniciar análisis profundo del sistema",
         "overview_scanning": "ESCANEANDO…",
         "overview_status_good": "BUENA",
@@ -187,6 +188,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_type": "Tipo",
         "col_weight": "Peso",
         "col_date": "Fecha",
+        "select_all_tooltip": "Seleccionar o desmarcar todas las filas",
         # Tipos de aplicación
         "kind_app": "Aplicación",
         "kind_dependency": "Dependencia",
@@ -293,6 +295,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_version": "Version",
         "refresh_button": "Refresh list",
         "uninstall_button": "Uninstall selected",
+        "uninstall_button_count": "Uninstall selected ({n})",
         "error_title": "Error",
         "pacman_not_found": (
             "'pacman' command not found. Are you on an Arch-based distro?"
@@ -370,7 +373,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav_tools": "Settings",
         # Overview
         "overview_health_title": "SYSTEM HEALTH",
-        "overview_erase_button": "SCAN NOW",
+        "overview_erase_button": "Scan now",
         "overview_erase_subtitle": "Initiate Deep System Analysis",
         "overview_scanning": "SCANNING…",
         "overview_status_good": "GOOD",
@@ -443,6 +446,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_type": "Type",
         "col_weight": "Weight",
         "col_date": "Date",
+        "select_all_tooltip": "Check or uncheck all rows",
         # App types
         "kind_app": "Application",
         "kind_dependency": "Dependency",

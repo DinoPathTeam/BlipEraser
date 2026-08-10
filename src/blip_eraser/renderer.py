@@ -239,6 +239,17 @@ class MainWindow(QMainWindow):
         self._apply_appearance()
 
     def _apply_appearance(self):
+        """Aplica tema + fuente a toda la app.
+
+        Verificación manual del caso 'dos cambios seguidos sin pausa':
+        1. Abre Ajustes → fuente. Cambia a Roboto y, al instante, a Lato
+           (sin pausa entre ambos).
+        2. Todo el texto debe quedar ya en Lato (sin cambiar de página,
+           sin redimensionar).
+        3. Repite Roboto → Lato → Montserrat y comprueba el mismo resultado.
+        4. Cambiar de página / redimensionar la ventana NO debe ser
+           necesario para ver la fuente nueva.
+        """
         prefs = load_prefs()
         theme_key = prefs.get("theme")
         if theme_key not in theme_mod.THEMES:
@@ -255,7 +266,17 @@ class MainWindow(QMainWindow):
 
         family = theme_mod.font_family(prefs.get("font", "system"))
         font = QFont(family) if family else QFont()
-        QApplication.instance().setFont(font)
+        app = QApplication.instance()
+        app.setFont(font)
+        # QApplication.setFont no re-pule los widgets ya creados: la QSS
+        # (QStyleSheetStyle) cachea la fuente resuelta por widget, así que
+        # el segundo cambio seguido no se refleja hasta un evento externo
+        # (show/resize que fuerza el re-polish). Forzamos polish + repaint.
+        style = app.style()
+        for widget in app.allWidgets():
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
 
     # ------------------------------------------------------------------
     # Idioma

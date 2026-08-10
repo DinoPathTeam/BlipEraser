@@ -73,6 +73,29 @@ class TestTr:
         set_language("en")
         assert tr("refresh_button") == "Refresh list"
 
+    def test_scan_now_button_is_localized(self):
+        # Bug: antes 'overview_erase_button' era "SCAN NOW" en ambos idiomas.
+        set_language("es")
+        assert tr("overview_erase_button") == "Escanear ahora"
+        set_language("en")
+        assert tr("overview_erase_button") == "Scan now"
+
+    def test_uninstall_button_count_key(self):
+        set_language("es")
+        assert (
+            tr("uninstall_button_count").format(n=0)
+            == "Desinstalar seleccionados (0)"
+        )
+        assert (
+            tr("uninstall_button_count").format(n=3)
+            == "Desinstalar seleccionados (3)"
+        )
+        set_language("en")
+        assert (
+            tr("uninstall_button_count").format(n=3)
+            == "Uninstall selected (3)"
+        )
+
     def test_missing_key_returns_brackets(self):
         set_language("es")
         assert tr("clave_inexistente") == "[clave_inexistente]"
