@@ -19,6 +19,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -28,10 +29,15 @@ from PyQt6.QtWidgets import (
 from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.apps import health_score, kind_label_key, list_installed_apps
 from blip_eraser.utils.config import load_prefs
-from blip_eraser.utils.file_utils import human_size
+from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
+from blip_eraser.utils.file_utils import delete_path, human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
-from blip_eraser.utils.scan import scan_cleanup
+from blip_eraser.utils.scan import (
+    CLEANUP_CATEGORY_LABEL_KEYS,
+    scan_cleanup,
+    scan_cleanup_items,
+)
 from blip_eraser.utils.system_stats import (
     cpu_model,
     cpu_usage_percent,
@@ -42,6 +48,7 @@ from blip_eraser.utils.system_stats import (
     ram_total_bytes,
     read_cpu_sample,
 )
+from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.health_gauge import HealthGauge
 from blip_eraser.widgets.scan_button import ScanNowButton
 
@@ -51,6 +58,7 @@ _ICON_FALLBACK = "application-x-executable"
 class OverviewPage(QWidget):
     uninstall_requested = pyqtSignal(str, str, str)  # (nombre, fuente, detalle)
     _scan_result = pyqtSignal(dict)
+    _cleanup_items_ready = pyqtSignal(list)  # entries de scan_cleanup_items()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -59,6 +67,7 @@ class OverviewPage(QWidget):
         self._accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._apps: list = []
         self._scan_result.connect(self._on_scan_done)
+        self._cleanup_items_ready.connect(self._on_cleanup_items_ready)
         self._build_ui()
 
         self._timer = QTimer(self)
@@ -188,6 +197,12 @@ class OverviewPage(QWidget):
         for label in (self.cleanup_junk_label, self.cleanup_cache_label, self.cleanup_logs_label):
             label.setStyleSheet("color: #ff5555; font-weight: bold;")
             right_layout.addWidget(label)
+
+        # Acción real conectada al resumen: limpia basura + caché + registros
+        # con el mismo flujo (confirmación y borrado) que el Limpiador.
+        self.cleanup_btn = QPushButton(tr("cleanup_run_button"))
+        self.cleanup_btn.clicked.connect(self._cleanup_now)
+        right_layout.addWidget(self.cleanup_btn)
         right_layout.addStretch(0)
 
         layout.addWidget(left, 3)
@@ -212,6 +227,38 @@ class OverviewPage(QWidget):
         apps = list_installed_apps()
         cleanup = scan_cleanup()
         self._scan_result.emit({"apps": apps, "cleanup": cleanup})
+
+    def _cleanup_now(self):
+        """Botón del resumen: limpia basura + caché + registros (fondo, no bloquea)."""
+        if self._scanning:
+            return
+        self.cleanup_btn.setEnabled(False)
+        threading.Thread(target=self._cleanup_worker, daemon=True).start()
+
+    def _cleanup_worker(self):
+        self._cleanup_items_ready.emit(scan_cleanup_items())
+
+    def _on_cleanup_items_ready(self, entries: list):
+        self.cleanup_btn.setEnabled(True)
+        if not entries:
+            QMessageBox.information(self, tr("done_title"), tr("cleanup_list_empty"))
+            return
+
+        items = [
+            ConfirmItem(
+                label=str(path),
+                category_label=tr(
+                    CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")
+                ),
+                size_bytes=size,
+                remove=lambda p=path: delete_path(p),
+            )
+            for cat_key, path, size in entries
+        ]
+        # Mismo flujo compartido que la sección "Limpieza recomendada".
+        run_destructive_action(
+            self, build_confirmation_plan(items), tr("cleanup_confirm_title")
+        )
 
     def _on_scan_done(self, result: dict):
         self._scanning = False

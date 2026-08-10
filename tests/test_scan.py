@@ -146,3 +146,33 @@ class TestNormalizePacmanDate:
 
     def test_empty_stays_empty(self):
         assert scan.normalize_pacman_date("") == ""
+
+
+class TestScanCleanupItems:
+    def test_enumerates_entries_per_category(self, tmp_path):
+        junk, cache, logs = tmp_path / "cache", tmp_path / "pkg", tmp_path / "log"
+        for base in (junk, cache, logs):
+            base.mkdir()
+        (junk / "a").write_text("x" * 10)
+        (cache / "b.pkg").write_text("y" * 20)
+        (logs / "c").mkdir()
+        (logs / "c" / "f").write_text("z" * 30)
+
+        items = scan.scan_cleanup_items(
+            [("junk", junk), ("cache", cache), ("logs", logs)]
+        )
+        entries = {path.name: (cat, size) for cat, path, size in items}
+        assert entries["a"] == ("junk", 10)
+        assert entries["b.pkg"] == ("cache", 20)
+        assert entries["c"] == ("logs", 30)
+
+    def test_missing_category_is_skipped(self, tmp_path):
+        assert scan.scan_cleanup_items([("cache", tmp_path / "nope")]) == []
+
+    def test_default_categories_return_triplets(self):
+        items = scan.scan_cleanup_items()
+        assert isinstance(items, list)
+        assert all(len(entry) == 3 for entry in items)
+
+    def test_category_label_keys_match_default_categories(self):
+        assert set(scan.CLEANUP_CATEGORY_LABEL_KEYS) == {"junk", "cache", "logs"}

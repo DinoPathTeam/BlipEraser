@@ -27,7 +27,7 @@ class LogPanel(QWidget):
         header = QHBoxLayout()
         self.title = QLabel(tr("log_toggle"))
         self.title.setObjectName("SubText")
-        self.clear_btn = QPushButton(tr("log_clear"))
+        self.clear_btn = QPushButton(tr("log_clear_activity"))
         self.clear_btn.clicked.connect(self._clear)
         header.addWidget(self.title)
         header.addStretch(1)
@@ -43,7 +43,7 @@ class LogPanel(QWidget):
 
     def retranslate(self) -> None:
         self.title.setText(tr("log_toggle"))
-        self.clear_btn.setText(tr("log_clear"))
+        self.clear_btn.setText(tr("log_clear_activity"))
 
     def _on_log(self, entries: list[tuple[str, str]]) -> None:
         lines = [f"[{ts}] {msg}" for ts, msg in entries]

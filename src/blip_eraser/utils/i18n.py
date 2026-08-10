@@ -145,6 +145,28 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Aplicaciones detectadas (paquetes de pacman y AppImages/carpetas "
             "sueltas). Selecciona lo que quieras eliminar."
         ),
+        # Limpiador del sistema (dos secciones independientes)
+        "cleaner_info": (
+            "Limpieza del sistema: basura, caché de pacman, registros y carpetas "
+            "sueltas. Revisa cada sección antes de eliminar."
+        ),
+        "cleanup_rec_section": "Limpieza recomendada",
+        "cleanup_manual_section": "Aplicaciones instaladas (manual)",
+        "col_category": "Categoría",
+        "cleanup_nothing_selected": "Selecciona al menos un elemento de limpieza.",
+        "cleanup_confirm_title": "Confirmar limpieza",
+        "cleanup_run_button": "Limpiar ahora",
+        "cleanup_list_empty": "No hay nada que limpiar en las categorías seleccionadas.",
+        "log_cleanup_scanned": "Limpieza del sistema escaneada: {count} elementos",
+        "log_destructive_removed": "{count} elementos eliminados",
+        # Confirmación compartida de acciones destructivas
+        "confirm_summary_intro": "Se eliminará lo siguiente:",
+        "confirm_total": "Total a liberar",
+        "confirm_large_size": "Eliminación de gran tamaño",
+        "confirm_large_warning": (
+            "Esta operación libera una gran cantidad de espacio. Comprueba la "
+            "selección antes de continuar."
+        ),
         "performance_title": "Ajustes de rendimiento",
         "performance_hint": (
             "Optimizaciones seguras y probadas para Arch/CachyOS. Cada cambio "
@@ -180,8 +202,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         # Encabezado, búsqueda y registro
         "search_placeholder": "Buscar paquetes y funciones…",
-        "log_toggle": "Registro",
-        "log_clear": "Limpiar registro",
+        "log_toggle": "Actividad de la app",
+        "log_clear_activity": "Borrar historial de actividad",
         "col_name": "Nombre",
         "col_source": "Fuente",
         "col_detail": "Detalle",
@@ -404,6 +426,28 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Detected applications (pacman packages and loose AppImages/"
             "folders). Select the ones you want to remove."
         ),
+        # System Cleaner (two independent sections)
+        "cleaner_info": (
+            "System cleanup: junk, pacman cache, logs and loose folders. "
+            "Review each section before deleting."
+        ),
+        "cleanup_rec_section": "Recommended cleanup",
+        "cleanup_manual_section": "Installed applications (manual)",
+        "col_category": "Category",
+        "cleanup_nothing_selected": "Select at least one cleanup item.",
+        "cleanup_confirm_title": "Confirm cleanup",
+        "cleanup_run_button": "Clean now",
+        "cleanup_list_empty": "Nothing to clean in the selected categories.",
+        "log_cleanup_scanned": "System cleanup scanned: {count} items",
+        "log_destructive_removed": "{count} items removed",
+        # Shared destructive-action confirmation
+        "confirm_summary_intro": "The following will be removed:",
+        "confirm_total": "Total to free",
+        "confirm_large_size": "Large deletion",
+        "confirm_large_warning": (
+            "This operation frees a large amount of space. Check the "
+            "selection before continuing."
+        ),
         "performance_title": "Performance Tweaks",
         "performance_hint": (
             "Safe, tested optimizations for Arch/CachyOS. Every change is "
@@ -438,8 +482,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         # Header, search and log
         "search_placeholder": "Search packages and features…",
-        "log_toggle": "Log",
-        "log_clear": "Clear log",
+        "log_toggle": "App activity",
+        "log_clear_activity": "Clear activity history",
         "col_name": "Name",
         "col_source": "Source",
         "col_detail": "Detail",

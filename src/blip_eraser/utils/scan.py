@@ -15,7 +15,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from blip_eraser.utils.file_utils import get_dir_size
+from blip_eraser.utils.file_utils import get_dir_size, path_size_for_display
 
 _CACHE_DIR = Path("~").expanduser() / ".cache"
 _PACMAN_CACHE = Path("/var/cache/pacman/pkg")
@@ -27,6 +27,13 @@ _SIZE_UNITS = {
     "MIB": 1024**2,
     "GIB": 1024**3,
     "TIB": 1024**4,
+}
+
+# Claves i18n de las etiquetas mostradas por categoría de limpieza.
+CLEANUP_CATEGORY_LABEL_KEYS = {
+    "junk": "cleanup_junk",
+    "cache": "cleanup_cache",
+    "logs": "cleanup_logs",
 }
 
 
@@ -168,6 +175,36 @@ def scan_cleanup() -> dict:
         "logs_bytes": best_effort_dir_size(_LOG_DIR),
         "orphan_count": len(orphan_packages()),
     }
+
+
+def scan_cleanup_items(
+    categories: list[tuple[str, Path]] | None = None,
+) -> list[tuple[str, Path, int]]:
+    """Enumerates los elementos concretos de cada categoría de limpieza.
+
+    Devuelve (clave_de_categoría, ruta, tamaño) por cada entrada de nivel
+    superior de ~/.cache, /var/cache/pacman/pkg y /var/log, para que la UI
+    muestre QUÉ archivos/carpetas componen cada categoría (no solo el total)
+    y pueda borrarlos individualmente con la misma `delete_path`.
+    Solo lectura y a prueba de fallos: categorías inexistentes o sin permiso
+    se omiten sin lanzar.
+    """
+    if categories is None:
+        categories = [
+            ("junk", _CACHE_DIR),
+            ("cache", _PACMAN_CACHE),
+            ("logs", _LOG_DIR),
+        ]
+    items: list[tuple[str, Path, int]] = []
+    for cat_key, base in categories:
+        if not base.exists():
+            continue
+        try:
+            for entry in base.iterdir():
+                items.append((cat_key, entry, path_size_for_display(entry)))
+        except (OSError, PermissionError):
+            continue
+    return items
 
 
 def total_disk_space(path: str = "/") -> int | None:

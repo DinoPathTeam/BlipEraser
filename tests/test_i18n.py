@@ -96,6 +96,28 @@ class TestTr:
             == "Uninstall selected (3)"
         )
 
+    def test_clear_log_is_named_activity_history(self):
+        # Bug: "Limpiar registro" se confundía con limpiar archivos del sistema.
+        set_language("es")
+        assert tr("log_clear_activity") == "Borrar historial de actividad"
+        set_language("en")
+        assert tr("log_clear_activity") == "Clear activity history"
+
+    def test_system_cleaner_new_keys_in_both_languages(self):
+        for key in (
+            "cleaner_info",
+            "cleanup_rec_section",
+            "cleanup_manual_section",
+            "cleanup_confirm_title",
+            "cleanup_run_button",
+            "cleanup_list_empty",
+            "confirm_total",
+            "confirm_large_size",
+            "confirm_summary_intro",
+        ):
+            assert key in TRANSLATIONS["es"]
+            assert key in TRANSLATIONS["en"]
+
     def test_missing_key_returns_brackets(self):
         set_language("es")
         assert tr("clave_inexistente") == "[clave_inexistente]"
