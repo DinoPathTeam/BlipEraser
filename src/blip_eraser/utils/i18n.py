@@ -99,6 +99,155 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "language_first_run_text": (
             "¿En qué idioma prefieres usar BlipEraser?"
         ),
+        # Navegación lateral
+        "nav_packages": "Gestor de paquetes",
+        "nav_cleaner": "Limpiador del sistema",
+        "nav_personalize": "Personalización",
+        "nav_help": "Ayuda",
+        "nav_settings": "Ajustes",
+        # Navegación lateral (v2)
+        "nav_overview": "Vista general",
+        "nav_uninstaller": "Desinstalador",
+        "nav_system_cleaner": "Limpiador del sistema",
+        "nav_performance": "Ajustes de rendimiento",
+        "nav_tools": "Herramientas",
+        # Overview
+        "overview_health_title": "SALUD DEL SISTEMA",
+        "overview_erase_button": "SCAN NOW",
+        "overview_erase_subtitle": "Iniciar análisis profundo del sistema",
+        "overview_scanning": "ESCANEANDO…",
+        "overview_status_good": "BUENA",
+        "overview_status_fair": "ACEPTABLE",
+        "overview_status_poor": "CRÍTICA",
+        "metric_junk": "Archivos basura",
+        "metric_orphans": "Paquetes huérfanos",
+        "metric_loose": "Entradas sueltas",
+        "apps_count_label": "{count} apps",
+        "cleanup_junk": "Basura",
+        "cleanup_cache": "Caché",
+        "cleanup_logs": "Registros",
+        "log_scan_completed": "Escaneo completado: {count} apps, {space} usados",
+        "system_info_title": "INFORMACIÓN DEL SISTEMA",
+        "recent_activity_title": "Actividad reciente",
+        "list_empty_subtext": "Sin actividad todavía",
+        "installed_apps_title": "APLICACIONES INSTALADAS",
+        "cleanup_recommended_title": "LIMPIEZA DEL SISTEMA RECOMENDADA",
+        "gpu_label": "GPU",
+        "apps_empty": "No se encontraron aplicaciones.",
+        "uninstaller_confirm_title": "Confirmar desinstalación",
+        "uninstaller_confirm_body": (
+            "¿Desinstalar esta aplicación?\n\n{apps}\n\nSe hará con privilegios "
+            "de administrador cuando sea necesario."
+        ),
+        "log_erase_started": "Eliminación profunda del sistema iniciada",
+        "uninstaller_info": (
+            "Aplicaciones detectadas (paquetes de pacman y AppImages/carpetas "
+            "sueltas). Selecciona lo que quieras eliminar."
+        ),
+        "performance_title": "Ajustes de rendimiento",
+        "performance_hint": (
+            "Optimizaciones seguras y probadas para Arch/CachyOS. Cada cambio "
+            "se aplica al instante y se puede revertir."
+        ),
+        "perf_trim_mounts": "Activar récorte automático de SSD (fstrim)",
+        "perf_compress_ram": "Comprimir memoria en uso (zswap)",
+        "perf_mirror_sort": "Sincronizar y ordenar los espejos de pacman",
+        "perf_disable_wp": "Reducir el quota de escritura de plymouth",
+        "tools_title": "Herramientas",
+        "tools_hint": (
+            "Utilidades auxiliares: gestión de preferencias, ayuda y "
+            "documentación."
+        ),
+        # Encabezado, búsqueda y registro
+        "search_placeholder": "Buscar paquetes y funciones…",
+        "log_toggle": "Registro",
+        "log_clear": "Limpiar registro",
+        "col_name": "Nombre",
+        "col_source": "Fuente",
+        "col_detail": "Detalle",
+        "save_button": "Guardar cambios",
+        "uninstall_short": "Desinstalar",
+        # Estado del sistema
+        "status_title": "Estado del sistema",
+        "status_cpu": "CPU",
+        "status_ram": "RAM",
+        "status_disk": "Disco",
+        "status_na": "N/D",
+        # Ajustes de apariencia
+        "settings_theme_title": "Tema de color",
+        "settings_mode_title": "Modo de apariencia",
+        "settings_font_title": "Fuente de la interfaz",
+        "theme_red": "Rojo",
+        "theme_blue": "Azul",
+        "theme_green": "Verde",
+        "theme_purple": "Morado",
+        "mode_dark": "Oscuro",
+        "mode_light": "Claro",
+        "font_system": "Predeterminada del sistema",
+        "theme_hint": (
+            "Cambia el acento de color y el modo claro/oscuro de toda la "
+            "interfaz al instante."
+        ),
+        # Personalización
+        "personalize_title": "Personalización",
+        "personalize_scan_paths": "Rutas de escaneo",
+        "personalize_hint": (
+            "BlipEraser escaneará estas ubicaciones en busca de aplicaciones "
+            "instaladas manualmente (AppImages, carpetas sueltas, etc.)."
+        ),
+        "personalize_add_path": "Añadir ruta…",
+        "personalize_remove_path": "Quitar seleccionada",
+        "path_dialog_title": "Selecciona una carpeta",
+        # Ayuda
+        "help_title": "Ayuda y documentación",
+        "help_intro": (
+            "BlipEraser desinstala aplicaciones en CachyOS/Arch, incluidas las "
+            "que los gestores gráficos no detectan (AppImages, carpetas "
+            "sueltas, lanzadores de terceros)."
+        ),
+        "help_usage_title": "Uso",
+        "help_usage_body": (
+            "1. Gestor de paquetes: lista los paquetes explícitos (pacman -Qe) "
+            "para desinstalarlos.\n"
+            "2. Limpiador del sistema: encuentra AppImages y carpetas sueltas "
+            "en tus rutas de escaneo.\n"
+            "3. Personalización: ajusta las rutas que se escanean.\n"
+            "4. Ajustes: tema de color, fuente e idioma.\n"
+            "La barra de búsqueda filtra los paquetes y los resultados de "
+            "limpieza."
+        ),
+        "help_install_title": "Instalación de dependencias",
+        "help_install_body": (
+            "PyQt6 debe instalarse con el gestor del sistema, no por pip:\n"
+            "sudo pacman -S python-pyqt6"
+        ),
+        "help_fonts_title": "Fuentes",
+        "help_fonts_body": (
+            "Para usar Roboto, Lato, Montserrat u Open Sans, instálalas:\n"
+            "sudo pacman -S ttf-roboto ttf-lato ttf-montserrat ttf-opensans"
+        ),
+        "help_icons_title": "Iconos",
+        "help_icons_body": (
+            "BlipEraser usa los iconos del sistema (Breeze en KDE Plasma, "
+            "etc.). Si no los ves, instala un tema de iconos:\n"
+            "sudo pacman -S breeze-icons"
+        ),
+        "help_safety_title": "Seguridad",
+        "help_safety_body": (
+            "Toda acción destructiva pide confirmación explícita y los "
+            "privilegios se solicitan por acción con pkexec. BlipEraser nunca "
+            "instala nada automáticamente."
+        ),
+        # Registro (log)
+        "log_started": "BlipEraser iniciado",
+        "log_theme_changed": "Tema cambiado a {theme}",
+        "log_mode_changed": "Modo cambiado a {mode}",
+        "log_font_changed": "Fuente cambiada a {font}",
+        "log_language_changed": "Idioma cambiado a {language}",
+        "log_scan_finished": "Escaneo completado: {count} elemento(s)",
+        "log_deleted_items": "Eliminados: {count}",
+        "log_uninstalled_packages": "Desinstalados: {packages}",
+        "log_scan_paths_updated": "Rutas de escaneo actualizadas",
     },
     "en": {
         # Main window
@@ -177,6 +326,153 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "language_first_run_text": (
             "Which language would you prefer BlipEraser to use?"
         ),
+        # Sidebar navigation
+        "nav_packages": "Package Manager",
+        "nav_cleaner": "System Cleaner",
+        "nav_personalize": "Personalization",
+        "nav_help": "Help",
+        "nav_settings": "Settings",
+        # Sidebar navigation (v2)
+        "nav_overview": "Overview",
+        "nav_uninstaller": "Uninstaller",
+        "nav_system_cleaner": "System Cleaner",
+        "nav_performance": "Performance Tweaks",
+        "nav_tools": "Tools",
+        # Overview
+        "overview_health_title": "SYSTEM HEALTH",
+        "overview_erase_button": "SCAN NOW",
+        "overview_erase_subtitle": "Initiate Deep System Analysis",
+        "overview_scanning": "SCANNING…",
+        "overview_status_good": "GOOD",
+        "overview_status_fair": "FAIR",
+        "overview_status_poor": "POOR",
+        "metric_junk": "Junk Files",
+        "metric_orphans": "Orphan Packages",
+        "metric_loose": "Loose Entries",
+        "apps_count_label": "{count} apps",
+        "cleanup_junk": "Junk",
+        "cleanup_cache": "Cache",
+        "cleanup_logs": "Logs",
+        "log_scan_completed": "Scan completed: {count} apps, {space} used",
+        "system_info_title": "SYSTEM INFORMATION",
+        "recent_activity_title": "Recent activity",
+        "list_empty_subtext": "No activity yet",
+        "installed_apps_title": "INSTALLED APPLICATIONS",
+        "cleanup_recommended_title": "SYSTEM CLEANUP RECOMMENDED",
+        "gpu_label": "GPU",
+        "apps_empty": "No applications found.",
+        "uninstaller_confirm_title": "Confirm uninstall",
+        "uninstaller_confirm_body": (
+            "Uninstall this application?\n\n{apps}\n\nAdministrator "
+            "privileges will be requested when needed."
+        ),
+        "log_erase_started": "Deep system removal started",
+        "uninstaller_info": (
+            "Detected applications (pacman packages and loose AppImages/"
+            "folders). Select the ones you want to remove."
+        ),
+        "performance_title": "Performance Tweaks",
+        "performance_hint": (
+            "Safe, tested optimizations for Arch/CachyOS. Every change is "
+            "applied instantly and can be reverted."
+        ),
+        "perf_trim_mounts": "Enable automatic SSD trim (fstrim)",
+        "perf_compress_ram": "Compress memory in use (zswap)",
+        "perf_mirror_sort": "Sync and sort pacman mirrors",
+        "perf_disable_wp": "Reduce plymouth write quota",
+        "tools_title": "Tools",
+        "tools_hint": (
+            "Utility helpers: preference management, help and documentation."
+        ),
+        # Header, search and log
+        "search_placeholder": "Search packages and features…",
+        "log_toggle": "Log",
+        "log_clear": "Clear log",
+        "col_name": "Name",
+        "col_source": "Source",
+        "col_detail": "Detail",
+        "save_button": "Save changes",
+        "uninstall_short": "Uninstall",
+        # System status
+        "status_title": "System status",
+        "status_cpu": "CPU",
+        "status_ram": "RAM",
+        "status_disk": "Disk",
+        "status_na": "N/D",
+        # Appearance settings
+        "settings_theme_title": "Color theme",
+        "settings_mode_title": "Appearance mode",
+        "settings_font_title": "Interface font",
+        "theme_red": "Red",
+        "theme_blue": "Blue",
+        "theme_green": "Green",
+        "theme_purple": "Purple",
+        "mode_dark": "Dark",
+        "mode_light": "Light",
+        "font_system": "System default",
+        "theme_hint": (
+            "Change the accent color and light/dark mode of the whole "
+            "interface instantly."
+        ),
+        # Personalization
+        "personalize_title": "Personalization",
+        "personalize_scan_paths": "Scan paths",
+        "personalize_hint": (
+            "BlipEraser will scan these locations for manually installed "
+            "applications (AppImages, loose folders, etc.)."
+        ),
+        "personalize_add_path": "Add path…",
+        "personalize_remove_path": "Remove selected",
+        "path_dialog_title": "Select a folder",
+        # Help
+        "help_title": "Help and documentation",
+        "help_intro": (
+            "BlipEraser uninstalls applications on CachyOS/Arch, including "
+            "the ones graphical managers don't detect (AppImages, loose "
+            "folders, third-party launchers)."
+        ),
+        "help_usage_title": "Usage",
+        "help_usage_body": (
+            "1. Package Manager: lists explicit packages (pacman -Qe) so you "
+            "can uninstall them.\n"
+            "2. System Cleaner: finds AppImages and loose folders in your "
+            "scan paths.\n"
+            "3. Personalization: adjust which paths are scanned.\n"
+            "4. Settings: color theme, font and language.\n"
+            "The search bar filters packages and cleanup results."
+        ),
+        "help_install_title": "Installing dependencies",
+        "help_install_body": (
+            "PyQt6 must be installed with your system package manager, not "
+            "with pip:\nsudo pacman -S python-pyqt6"
+        ),
+        "help_fonts_title": "Fonts",
+        "help_fonts_body": (
+            "To use Roboto, Lato, Montserrat or Open Sans, install them:\n"
+            "sudo pacman -S ttf-roboto ttf-lato ttf-montserrat ttf-opensans"
+        ),
+        "help_icons_title": "Icons",
+        "help_icons_body": (
+            "BlipEraser uses your system icon theme (Breeze on KDE Plasma, "
+            "etc.). If you don't see them, install an icon theme:\n"
+            "sudo pacman -S breeze-icons"
+        ),
+        "help_safety_title": "Safety",
+        "help_safety_body": (
+            "Every destructive action asks for explicit confirmation and "
+            "privileges are requested per action with pkexec. BlipEraser "
+            "never installs anything automatically."
+        ),
+        # Logging
+        "log_started": "BlipEraser started",
+        "log_theme_changed": "Theme changed to {theme}",
+        "log_mode_changed": "Mode changed to {mode}",
+        "log_font_changed": "Font changed to {font}",
+        "log_language_changed": "Language changed to {language}",
+        "log_scan_finished": "Scan finished: {count} item(s)",
+        "log_deleted_items": "Deleted: {count}",
+        "log_uninstalled_packages": "Uninstalled: {packages}",
+        "log_scan_paths_updated": "Scan paths updated",
     },
 }
 

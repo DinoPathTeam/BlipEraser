@@ -1,0 +1,297 @@
+BlipEraser INSTALLATION GUIDE
+==============================
+
+(STEP-BY-STEP INSTRUCTIONS FOR LINUX BEGINNERS)
+
+These instructions are for people who are just getting started with Linux
+and want to install BlipEraser after downloading it from GitHub. You don't
+need to be an expert: just copy the commands you see here, paste them into
+the terminal and press Enter.
+
+--------------------------------------------------------------------------------
+WHAT YOU ARE GOING TO DO (OVERVIEW)
+--------------------------------------------------------------------------------
+
+1. Open the terminal.
+2. Update your system.
+3. Install the required programs (git, Python and the Qt libraries).
+4. Get the BlipEraser code (download from GitHub).
+5. Install BlipEraser with pip.
+6. Run the program.
+7. (Optional) Create a shortcut to open it without the terminal.
+
+Estimated time: 10-15 minutes.
+
+--------------------------------------------------------------------------------
+BEFORE YOU START: WHAT YOU NEED
+--------------------------------------------------------------------------------
+
+- A computer running CachyOS or any Arch Linux-based distribution.
+  BlipEraser needs the "pacman" package manager, which is the one used by
+  these distributions.
+- An internet connection.
+- Your administrator password (the one you use to log in).
+- Patience. :-)
+
+IMPORTANT: Do not use Windows or macOS. This guide is only for Linux
+(Arch-based).
+
+--------------------------------------------------------------------------------
+STEP 1: OPEN THE TERMINAL
+--------------------------------------------------------------------------------
+
+The terminal (also called "console") is a window where you type text to
+control your computer. It is the most important tool in Linux.
+
+- On KDE Plasma (the desktop CachyOS uses by default):
+  1. Press the "Windows" (Super) key on your keyboard to open the menu.
+  2. Type "Konsole".
+  3. Click on the "Konsole" icon that appears.
+  4. A black (or light) window with text will open. That is the terminal.
+
+On other distributions the process is similar: look for an app called
+"Terminal", "Console", "Konsole" or "XTerm".
+
+When the terminal is open, you will see something like this:
+
+    user@cachyos:~$
+
+The "$" symbol means the terminal is ready for you to type. Type your
+commands carefully and always finish by pressing Enter.
+
+TIP for copy & paste: in the terminal, use "Ctrl + Shift + V" to paste a
+command (not the normal Ctrl + V).
+
+--------------------------------------------------------------------------------
+STEP 2: UPDATE YOUR SYSTEM (RECOMMENDED)
+--------------------------------------------------------------------------------
+
+Before installing anything new it is a good idea to update your system's
+packages. Type this command in the terminal and press Enter:
+
+    sudo pacman -Syu
+
+It will ask for your password (nothing will show as you type it: that is
+normal). Then it will ask whether to proceed: type "Y" (for "Yes") and
+press Enter.
+
+If everything was already up to date, no problem: the system will tell
+you and you can continue with the next step.
+
+--------------------------------------------------------------------------------
+STEP 3: INSTALL THE REQUIRED PROGRAMS
+--------------------------------------------------------------------------------
+
+BlipEraser is written in Python and needs the Qt libraries to draw its
+window. We are going to install everything needed with the system package
+manager. Copy and paste this full line and press Enter:
+
+    sudo pacman -S python python-pip python-pyqt6 git
+
+Press "Y" when asked and wait for it to finish. This installs:
+
+- python: the language BlipEraser is written in.
+- python-pip: the tool that downloads and installs Python packages.
+- python-pyqt6: the libraries that let the program show its window.
+- git: the tool used to download the code from GitHub.
+
+VERY IMPORTANT: PyQt6 must ALWAYS be installed with pacman (the system
+package manager), NEVER with pip. Installing it with pip can break your
+system's Qt libraries.
+
+--------------------------------------------------------------------------------
+STEP 4: GET THE CODE FROM GITHUB (CHOOSE ONE OF THE TWO OPTIONS)
+--------------------------------------------------------------------------------
+
+There are two ways to get the BlipEraser code. Use the one that is
+easiest for you.
+
+OPTION A: DOWNLOAD THE ZIP FILE FROM YOUR BROWSER (EASIEST)
+
+1. Open your browser and go to the BlipEraser page on GitHub.
+2. Look for the green button that says "Code".
+3. Click that button, then click "Download ZIP".
+4. Your browser will download a file named something like
+   "blipEraser-master.zip" (usually inside the "Downloads" folder).
+5. In your file manager (Dolphin on KDE), go to the "Downloads" folder.
+6. Right-click on the ZIP file and choose "Extract Here" (or
+   "Unzip here").
+7. A new folder named "blipEraser-master" (or similar) will appear. Keep
+   the terminal open: we will use it in STEP 5.
+8. Note where that folder is (for example:
+   "/home/your-user/Downloads/blipEraser-master").
+
+OPTION B: DOWNLOAD WITH GIT FROM THE TERMINAL (EASY TO FOLLOW)
+
+Copy and paste this line into the terminal — replace "PUT_URL_HERE" with
+the real address of the BlipEraser repository on GitHub
+(https://github.com/YOUR_USER/blipEraser) and press Enter:
+
+    git clone https://github.com/YOUR_USER/blipEraser
+
+This creates a folder named "blipEraser" inside your home folder (for
+example "/home/your-user/blipEraser").
+
+--------------------------------------------------------------------------------
+STEP 5: GO INTO THE PROGRAM'S FOLDER
+--------------------------------------------------------------------------------
+
+Before you can install the program you have to "go into" its folder. In
+the terminal type cd (for "change directory"), a space, and the path of
+the folder.
+
+If you chose Option A (ZIP) and your folder is in Downloads, type:
+
+    cd ~/Downloads/blipEraser-master
+
+If you chose Option B (git clone), type:
+
+    cd ~/blipEraser
+
+TIP: instead of typing the path by hand, you can type "cd " and then drag
+the program's folder into the terminal window and drop it; the path will
+be pasted automatically.
+
+To check that you are inside the correct folder, type:
+
+    ls
+
+You should see files such as "pyproject.toml" and "src". If you see
+"src", you are in the right place!
+
+--------------------------------------------------------------------------------
+STEP 6: INSTALL THE PROGRAM (EDITABLE MODE)
+--------------------------------------------------------------------------------
+
+Now, while inside the folder, install the program. Copy and paste this
+line and press Enter:
+
+    pip install -e . --break-system-packages
+
+WHAT THIS DOES:
+
+- "pip install": tells pip to install something.
+- "-e .": installs the program "from this folder" in editable mode (it
+  means the program runs directly from the code you just downloaded).
+- "--break-system-packages": because your system is Arch, Python usually
+  warns you not to install packages outside the system ones. This option
+  tells pip that it may. This is safe in this case.
+
+You will see a lot of text scrolling by; that is normal. At the end you
+should see something similar to:
+
+    Successfully installed blip-eraser-0.1.0
+
+If you prefer to keep the system libraries isolated from the program's
+ones (a bit more advanced), you can use a virtual environment:
+
+    python -m venv --system-site-packages .venv
+    source .venv/bin/activate
+    pip install -e .
+
+This reuses the PyQt6 we already installed with pacman instead of
+downloading it again. It is not mandatory; the first method (with
+--break-system-packages) is enough.
+
+--------------------------------------------------------------------------------
+STEP 7: RUN BLIPERASER
+--------------------------------------------------------------------------------
+
+To open the program, type in the terminal:
+
+    blip-eraser
+
+If everything went well, the BlipEraser window will appear within a
+couple of seconds.
+
+TIPS if something goes wrong:
+
+- If the terminal says "blip-eraser: command not found", try running it
+  like this:
+
+      python -m blip_eraser
+
+- You may need to close the terminal and open a new one so the command is
+  recognized. If you used a virtual environment (STEP 6, second option),
+  remember that every time you want to run it you must first activate the
+  environment with:
+
+      source .venv/bin/activate
+
+--------------------------------------------------------------------------------
+STEP 8 (OPTIONAL): HOW TO UPDATE THE PROGRAM
+--------------------------------------------------------------------------------
+
+Whenever you want to update BlipEraser to a new version:
+
+1. Go into its folder (as in STEP 5).
+2. Download the new changes:
+
+       git pull
+
+   (If you downloaded the ZIP from your browser, download the new ZIP
+   again and repeat Steps 5 and 6).
+
+3. Reinstall to make sure everything is up to date:
+
+       pip install -e . --break-system-packages
+
+--------------------------------------------------------------------------------
+STEP 9 (OPTIONAL): HOW TO UNINSTALL THE PROGRAM
+--------------------------------------------------------------------------------
+
+If someday you want to remove BlipEraser:
+
+- If you installed it without a virtual environment:
+
+      pip uninstall blip-eraser
+
+- If you installed it with a virtual environment, go into its folder,
+  activate the environment and uninstall:
+
+      source .venv/bin/activate
+      pip uninstall blip-eraser
+
+Then you can delete the program's folder from your file manager or with:
+
+    rm -rf ~/blipEraser
+
+(CAUTION! Make sure you type the path correctly before deleting
+anything.)
+
+--------------------------------------------------------------------------------
+COMMON PROBLEMS AND SOLUTIONS
+--------------------------------------------------------------------------------
+
+PROBLEM: "sudo: pacman: command not found"
+  Your distribution is not Arch/CachyOS or pacman is not installed.
+  BlipEraser only works on Arch-based distributions.
+
+PROBLEM: "error: command failed to execute properly"
+  This usually happens when the system was not updated. Repeat STEP 2 and
+  go back to STEP 3.
+
+PROBLEM: The "pip" command does not exist
+  Install pip first:
+
+      sudo pacman -S python-pip
+
+PROBLEM: "externally-managed-environment" or a red warning when running pip
+  This warning is the reason for the "--break-system-packages" in STEP 6.
+  Add that option at the end of the command.
+
+PROBLEM: The window says PyQt6 is missing
+  Install it with pacman (never with pip):
+
+      sudo pacman -S python-pyqt6
+
+--------------------------------------------------------------------------------
+IF YOU STILL HAVE PROBLEMS
+--------------------------------------------------------------------------------
+
+Installing software is your own decision: the easiest way to get help is
+to ask in the CachyOS community or in the BlipEraser GitHub repository,
+mentioning which step of this guide failed and which error message you
+got.
+
+Good luck and enjoy BlipEraser!
