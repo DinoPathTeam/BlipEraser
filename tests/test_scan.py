@@ -120,6 +120,22 @@ class TestNormalizePacmanDate:
             == "2024-06-12"
         )
 
+    def test_numeric_offset_timezone_is_ignored(self):
+        assert (
+            scan.normalize_pacman_date("Tue 11 Jun 2024 08:15:00 AM -05")
+            == "2024-06-11"
+        )
+
+    def test_regional_abbrev_timezone_is_ignored(self):
+        assert (
+            scan.normalize_pacman_date("Tue 11 Jun 2024 08:15:00 AM COT")
+            == "2024-06-11"
+        )
+        assert (
+            scan.normalize_pacman_date("Wed 12 Jun 2024 10:00:00 PM CET")
+            == "2024-06-12"
+        )
+
     def test_unparseable_falls_back_to_raw(self):
         raw = "lun 11 jun 2024 08:15:00 a. m. UTC"
         assert scan.normalize_pacman_date(raw) == raw

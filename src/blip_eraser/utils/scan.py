@@ -77,15 +77,19 @@ def parse_pacman_size(text: str) -> int | None:
 def normalize_pacman_date(value: str) -> str:
     """Normaliza 'Install Date' (locale C, inglés) a 'YYYY-MM-DD'.
 
-    Con pacman en un locale forzado la fecha sale siempre como
-    'Tue 11 Jun 2024 08:15:00 AM UTC'. Si el parseo falla por cualquier
-    razón (formato inesperado, valor vacío), devuelve el valor crudo en
-    vez de romper.
+    Ignora por completo el token de zona horaria (nombre, sigla regional u
+    offset numérico como '-05') y parsea solo la parte de fecha/hora, que
+    en locale C es siempre inglés: '%a %d %b %Y %I:%M:%S %p'. Si el parseo
+    falla por cualquier razón (formato inesperado, valor vacío), devuelve
+    el valor crudo en vez de romper.
     """
     if not value:
         return value
+    # Descarta el último token (zona horaria) y parsea solo fecha/hora.
+    parts = value.rsplit(None, 1)
+    candidate = parts[0] if len(parts) == 2 else value
     try:
-        return datetime.strptime(value, "%a %d %b %Y %I:%M:%S %p %Z").strftime("%Y-%m-%d")
+        return datetime.strptime(candidate, "%a %d %b %Y %I:%M:%S %p").strftime("%Y-%m-%d")
     except ValueError:
         return value
 
