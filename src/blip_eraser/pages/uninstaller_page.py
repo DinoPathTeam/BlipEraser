@@ -28,30 +28,19 @@ from blip_eraser.utils.apps import (
     list_installed_apps,
 )
 from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
-from blip_eraser.utils.file_utils import delete_path, human_size
+from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.pacman import uninstall_packages
 from blip_eraser.widgets.check_table import CheckTable
-from blip_eraser.widgets.confirm_dialog import ask_destructive_confirmation
+from blip_eraser.widgets.confirm_dialog import run_destructive_action
 
 _COLUMNS = 6  # Sel | Nombre | Tipo | Detalle | Peso | Fecha
 
 
-def _remove_for_app(app: InstalledApp):
-    """Cierre que ejecuta el borrado real de `app` (pacman o carpeta manual)."""
-    if app.source == "pacman":
-        return lambda: uninstall_packages([app.name])
-    target = Path(app.detail) if app.detail else Path.home() / app.name
-    return lambda: delete_path(target)
-
-
-def _remove_for(source: str, name: str, detail: str):
-    """Igual que _remove_for_app pero desde nombre/fuente/detalle (Overview)."""
-    if source == "pacman":
-        return lambda: uninstall_packages([name])
-    target = Path(detail) if detail else Path.home() / name
-    return lambda: delete_path(target)
+def _manual_target(app: InstalledApp) -> Path:
+    """Ruta real a borrar para una app manual (carpeta suelta/AppImage)."""
+    return Path(app.detail) if app.detail else Path.home() / app.name
 
 
 class UninstallerPage(BasePage):
@@ -161,65 +150,66 @@ class UninstallerPage(BasePage):
             return
 
         apps = [self._visible[row] for row in rows]
-        plan = build_confirmation_plan(
-            [
+        items: list[ConfirmItem] = []
+
+        pacman_names = [a.name for a in apps if a.source == "pacman"]
+        manual_apps = [a for a in apps if a.source != "pacman"]
+
+        if pacman_names:
+            # Un solo `pkexec pacman -Rns` para todo el lote (una autenticación).
+            items.append(
+                ConfirmItem(
+                    label=", ".join(pacman_names),
+                    category_label=tr("kind_app"),
+                    size_bytes=sum(
+                        (a.size_bytes or 0) for a in apps if a.source == "pacman"
+                    ),
+                    remove=lambda: uninstall_packages(pacman_names),
+                )
+            )
+        for app in manual_apps:
+            target = _manual_target(app)
+            items.append(
                 ConfirmItem(
                     label=app.name,
                     category_label=tr(kind_label_key(app.kind)),
                     size_bytes=app.size_bytes or 0,
-                    remove=_remove_for_app(app),
+                    paths=[target],
                 )
-                for app in apps
-            ]
-        )
-        if not ask_destructive_confirmation(self, plan, tr("uninstaller_confirm_title")):
-            return
+            )
 
-        errors = []
-        for app in apps:
-            try:
-                if app.source == "pacman":
-                    uninstall_packages([app.name])
-                else:
-                    target = Path(app.detail) if app.detail else Path.home() / app.name
-                    delete_path(target)
-            except (OSError, PermissionError) as e:
-                errors.append(f"{app.name}: {e}")
-
-        if apps:
+        plan = build_confirmation_plan(items)
+        if run_destructive_action(
+            self, plan, tr("uninstaller_confirm_title")
+        ):
             log_buffer.add(
                 tr("log_uninstalled_packages").format(
                     packages=", ".join(a.name for a in apps)
                 )
             )
-        if errors:
-            QMessageBox.warning(self, tr("some_errors_title"), "\n".join(errors))
-
         self.load_apps()
 
     def request_uninstall(self, name: str, source: str, detail: str = ""):
         """Desinstala por nombre+fuente+detalle (llamado desde Overview)."""
         kind = KIND_APP if source == "pacman" else KIND_FOLDER
-        plan = build_confirmation_plan(
-            [
-                ConfirmItem(
-                    label=name,
-                    category_label=tr(kind_label_key(kind)),
-                    size_bytes=0,
-                    remove=_remove_for(source, name, detail),
-                )
-            ]
-        )
-        if not ask_destructive_confirmation(self, plan, tr("uninstaller_confirm_title")):
-            return
-        try:
-            if source == "pacman":
-                uninstall_packages([name])
-            else:
-                target = Path(detail) if detail else Path.home() / name
-                delete_path(target)
-        except (OSError, PermissionError) as e:
-            QMessageBox.warning(self, tr("some_errors_title"), f"{name}: {e}")
-            return
-        log_buffer.add(tr("log_uninstalled_packages").format(packages=name))
+
+        if source == "pacman":
+            item = ConfirmItem(
+                label=name,
+                category_label=tr(kind_label_key(kind)),
+                size_bytes=0,
+                remove=lambda: uninstall_packages([name]),
+            )
+        else:
+            target = Path(detail) if detail else Path.home() / name
+            item = ConfirmItem(
+                label=name,
+                category_label=tr(kind_label_key(kind)),
+                size_bytes=0,
+                paths=[target],
+            )
+
+        plan = build_confirmation_plan([item])
+        if run_destructive_action(self, plan, tr("uninstaller_confirm_title")):
+            log_buffer.add(tr("log_uninstalled_packages").format(packages=name))
         self.load_apps()

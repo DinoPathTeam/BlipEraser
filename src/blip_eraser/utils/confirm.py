@@ -14,7 +14,8 @@ el diálogo ni este módulo persiste ningún estado de confirmación.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 # Operaciones con un total igual o mayor a esto se destacan visualmente.
 LARGE_DELETE_THRESHOLD_BYTES: int = 5 * 1024**3  # 5 GiB
@@ -31,12 +32,17 @@ class ConfirmItem:
     - `category_label`: etiqueta localizada de la categoría a la que pertenece
       ("Carpeta suelta", "Basura", ...). Se usa para agrupar el resumen.
     - `size_bytes`: espacio que se liberaría al eliminarlo.
-    - `remove`: callable sin argumentos que ejecuta el borrado real
-      (p. ej. un cierre sobre `delete_path` o `uninstall_packages`).
+    - `paths`: rutas a borrar en disco. Si se proveen, el diálogo las borra de
+      forma agrupada (un solo `pkexec` para todo el lote de sistema) usando la
+      capa de privilegios — no pide autenticación por cada ruta suelta.
+    - `remove`: callable sin argumentos que ejecuta el borrado real (p. ej.
+      un cierre sobre `delete_path` o `uninstall_packages`). Se usa cuando la
+      eliminación no es un simple borrado de rutas (desinstalación pacman).
     """
     label: str
     category_label: str
     size_bytes: int = 0
+    paths: list[Path] = field(default_factory=list)
     remove: Callable[[], None] | None = None
 
 

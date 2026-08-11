@@ -288,6 +288,46 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "privilegios se solicitan por acción con pkexec. BlipEraser nunca "
             "instala nada automáticamente."
         ),
+        "help_security_permissions_button": "Ver permisos de BlipEraser",
+        # Aviso único de permisos (primera ejecución + Configuración/Ayuda)
+        "permissions_notice_title": "Permisos de BlipEraser",
+        "permissions_notice_intro": (
+            "BlipEraser trabaja con permisos de usuario normales y pide "
+            "autorización únicamente en el momento exacto en que hace falta."
+        ),
+        "permissions_point_scan": (
+            "• Escaneo: la Vista general, el Desinstalador y el Limpiador "
+            "del sistema analizan tu sistema con los permisos de tu usuario, "
+            "sin pedir contraseña."
+        ),
+        "permissions_point_actions": (
+            "• Acciones destructivas (eliminar la caché de pacman, los "
+            "registros del sistema o desinstalar paquetes): se necesita "
+            "autorización mediante pkexec. El sistema pedirá tu contraseña "
+            "en el momento en que confirmes una acción de este tipo — nunca "
+            "antes ni sin que tú lo solicites."
+        ),
+        "permissions_point_root": (
+            "• BlipEraser nunca se ejecuta como root de forma permanente ni "
+            "escala privilegios en silencio. Solo la operación concreta se "
+            "ejecuta con permisos de administrador."
+        ),
+        "permissions_understood": "Entendido",
+        # Errores claros de la capa de privilegios (pkexec)
+        "priv_error_cancelled": (
+            "Autorización cancelada: no se hizo ningún cambio con privilegios."
+        ),
+        "priv_error_missing": (
+            "No se encontró 'pkexec'. Revisa la sección de Ayuda para "
+            "instalar las dependencias necesarias."
+        ),
+        "priv_error_denied": (
+            "Permiso denegado al eliminar: {path}. Puede que necesites "
+            "autorización de administrador."
+        ),
+        "priv_error_failed": (
+            "No se pudo eliminar: {path}. Revisa el registro para más detalle."
+        ),
         "help_about_body": (
             "BlipEraser {version} — Desinstalador y limpiador del sistema "
             "para CachyOS / Arch Linux. Licencia MIT."
@@ -567,6 +607,46 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "privileges are requested per action with pkexec. BlipEraser "
             "never installs anything automatically."
         ),
+        "help_security_permissions_button": "View BlipEraser permissions",
+        # One-time permissions notice (first run + Settings/Help)
+        "permissions_notice_title": "BlipEraser Permissions",
+        "permissions_notice_intro": (
+            "BlipEraser runs with your normal user permissions and asks for "
+            "authorization only at the exact moment it is needed."
+        ),
+        "permissions_point_scan": (
+            "• Scanning: Overview, Uninstaller and the System Cleaner analyze "
+            "your system with your user permissions, without asking for a "
+            "password."
+        ),
+        "permissions_point_actions": (
+            "• Destructive actions (removing the pacman cache, system logs or "
+            "uninstalling packages): authorization via pkexec is required. "
+            "The system will ask for your password at the moment you confirm "
+            "such an action — never before, never without your explicit "
+            "request."
+        ),
+        "permissions_point_root": (
+            "• BlipEraser never runs as root permanently nor escalates "
+            "privileges silently. Only the specific operation runs with "
+            "administrator privileges."
+        ),
+        "permissions_understood": "Got it",
+        # Clear errors from the privileged layer (pkexec)
+        "priv_error_cancelled": (
+            "Authorization cancelled: no privileged change was made."
+        ),
+        "priv_error_missing": (
+            "'pkexec' was not found. Check the Help section to install the "
+            "required dependencies."
+        ),
+        "priv_error_denied": (
+            "Permission denied while removing {path}. Administrator "
+            "authorization may be required."
+        ),
+        "priv_error_failed": (
+            "Could not remove {path}. Check the activity log for details."
+        ),
         "help_about_body": (
             "BlipEraser {version} — Uninstaller and system cleaner for "
             "CachyOS / Arch Linux. MIT License."
@@ -623,7 +703,9 @@ def set_language(language: str) -> None:
     """Establece el idioma activo y lo persiste en el archivo de config.
 
     Si el idioma no está soportado, cae a 'en'. La persistencia es
-    best-effort: un fallo al escribir a disco no rompe la app.
+    best-effort: un fallo al escribir a disco no rompe la app. Preserva
+    cualquier otra clave del archivo (p. ej. permissions_notice_shown) para
+    no pisar configuración coexistente.
     """
     global _current_language
     if language not in SUPPORTED_LANGUAGES:
@@ -631,13 +713,24 @@ def set_language(language: str) -> None:
     _current_language = language
 
     try:
+        data = _read_settings_file()
+        data["language"] = language
         SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
         SETTINGS_FILE.write_text(
-            json.dumps({"language": language}, indent=2) + "\n",
+            json.dumps(data, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
     except OSError:
         pass
+
+
+def _read_settings_file() -> dict:
+    """Lee settings.json como dict ({} si no existe/corrupto). No persiste nada."""
+    try:
+        data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
 
 
 def get_current_language() -> str:

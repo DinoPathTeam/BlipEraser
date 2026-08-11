@@ -32,7 +32,6 @@ from blip_eraser.pages.base import BasePage
 from blip_eraser.utils.config import get_scan_paths
 from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
 from blip_eraser.utils.file_utils import (
-    delete_path,
     human_size,
     path_size_for_display,
     scan_manual_entries,
@@ -141,7 +140,7 @@ class _RecommendedSection(QWidget):
                     label=str(path),
                     category_label=tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")),
                     size_bytes=size,
-                    remove=lambda p=path: delete_path(p),
+                    paths=[path],
                 )
             )
 
@@ -240,7 +239,7 @@ class _ManualSection(QWidget):
                 label=str(path),
                 category_label=tr("kind_folder"),
                 size_bytes=path_size_for_display(path),
-                remove=lambda p=path: delete_path(p),
+                paths=[path],
             )
             for path in (self._visible[row] for row in rows)
         ]

@@ -30,7 +30,7 @@ from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.apps import health_score, kind_label_key, list_installed_apps
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
-from blip_eraser.utils.file_utils import delete_path, human_size
+from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.scan import (
@@ -253,7 +253,7 @@ class OverviewPage(QWidget):
                     CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")
                 ),
                 size_bytes=size,
-                remove=lambda p=path: delete_path(p),
+                paths=[path],
             )
             for cat_key, path, size in entries
         ]

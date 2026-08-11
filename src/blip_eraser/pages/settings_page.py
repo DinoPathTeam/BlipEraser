@@ -9,6 +9,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox,
     QLabel,
+    QPushButton,
     QVBoxLayout,
 )
 
@@ -16,6 +17,7 @@ from blip_eraser.pages.base import BasePage
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils import theme as theme_mod
+from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
 
 
 class SettingsPage(BasePage):
@@ -45,6 +47,13 @@ class SettingsPage(BasePage):
         layout.addWidget(QLabel(tr("settings_font_title")))
         self.font_combo = QComboBox()
         layout.addWidget(self.font_combo)
+
+        layout.addSpacing(20)
+        self.permissions_btn = QPushButton(tr("help_security_permissions_button"))
+        self.permissions_btn.clicked.connect(
+            lambda: show_permissions_dialog(self)
+        )
+        layout.addWidget(self.permissions_btn)
 
         layout.addStretch(1)
 

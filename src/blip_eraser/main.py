@@ -67,6 +67,7 @@ def main() -> int:
         return EXIT_PYQT6_MISSING
 
     from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QTimer
 
     app = QApplication(sys.argv)
 
@@ -77,9 +78,16 @@ def main() -> int:
         set_language(saved)
 
     from blip_eraser.renderer import MainWindow
+    from blip_eraser.utils.permissions import should_show_permissions_notice
+    from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
 
     window = MainWindow()
     window.show()
+
+    # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
+    # Se muestra tras el primer pintado para no retrasar el escaneo inicial.
+    if should_show_permissions_notice():
+        QTimer.singleShot(0, lambda: show_permissions_dialog(window))
     return app.exec()
 
 

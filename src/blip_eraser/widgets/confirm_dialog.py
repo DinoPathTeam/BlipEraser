@@ -3,9 +3,15 @@
 Reutilizado por el Desinstalador, el Limpiador del sistema y la Vista general
 (no duplican su propio confirm). Solo ofrece Sí/No: nunca un atajo de
 "no volver a preguntar". Cuando el plan la marca como operación grande, el
-total se resalta en color de advertencia. La ejecución del borrado (`remove`)
-deja intacta la lógica real: este módulo solo la invoca y agrupa errores.
+total se resalta en color de advertencia.
+
+La ejecución del borrado delega en `utils.privileges` (capa de privilegios):
+las rutas del lote se agrupan en UNA llamada a pkexec cuando corresponda, y
+los fallos se traducen a mensajes claros y localizados — sin tracebacks ni
+rutas técnicas crudas. La lógica de qué comando correr vive en utils/.
 """
+
+import subprocess
 
 from PyQt6.QtWidgets import QMessageBox
 
@@ -13,6 +19,7 @@ from blip_eraser.utils.confirm import ConfirmPlan
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.utils.privileges import RemovalError, remove_paths
 
 
 def _plan_body(plan: ConfirmPlan) -> str:
@@ -54,34 +61,72 @@ def ask_destructive_confirmation(parent, plan: ConfirmPlan, title: str) -> bool:
     return box.clickedButton() is yes
 
 
+def _friendly_error_message(error: RemovalError) -> str:
+    """Traduce un RemovalError estructurado a un mensaje claro y localizado."""
+    detail = error.detail.strip() if error.detail else ""
+    first_path = str(error.paths[0]) if error.paths else ""
+    if error.code == "cancelled":
+        return tr("priv_error_cancelled")
+    if error.code == "pkexec_missing":
+        return tr("priv_error_missing")
+    if error.code == "denied":
+        return tr("priv_error_denied").format(path=first_path)
+    # "failed" genérico: se muestra la ruta del lote sin el stderr crudo.
+    return tr("priv_error_failed").format(path=first_path or "(?)")
+
+
 def run_destructive_action(
     parent,
     plan: ConfirmPlan,
     title: str,
     log_key: str = "log_destructive_removed",
 ) -> bool:
-    """Confirma y ejecuta el plan: invoca el `remove` de cada ítem.
+    """Confirma y ejecuta el plan, agrupando el borrado de rutas.
 
-    Agrupa los errores individuales (las utilidades reales no se tocan) y
-    muestra el resultado. Devuelve True si se eliminó al menos un elemento.
+    - Los ítems con `paths` se borran mediante `remove_paths` (ONE pkexec
+      para todo el lote de sistema; rutas de $HOME directamente).
+    - Los ítems con `remove` (pacman) se ejecutan por su cuenta.
+    - Los fallos de privilegios se presentan como mensajes claros, nunca
+      como tracebacks ni rutas técnicas crudas.
+    Devuelve True si se eliminó al menos un elemento.
     """
     if not ask_destructive_confirmation(parent, plan, title):
         return False
 
-    errors = []
+    errors: list[str] = []
+    removed = 0
+
+    # 1) Borrado agrupado de rutas (una sola autenticación por lote).
+    path_items = [item for item in plan.items if item.paths]
+    batch_paths = [p for item in path_items for p in item.paths]
+    if batch_paths:
+        outcome = remove_paths(batch_paths)
+        removed += outcome.removed
+        errors.extend(_friendly_error_message(err) for err in outcome.errors)
+
+    # 2) Acciones con `remove` (desinstalación vía pacman/pkexec, etc.).
     for item in plan.items:
-        if item.remove is None:
+        if item.remove is None or item.paths:
             continue
         try:
             item.remove()
+            removed += 1
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 126:  # automática cancelada en pkexec
+                errors.append(tr("priv_error_cancelled"))
+            else:
+                errors.append(tr("priv_error_failed").format(path=item.label))
+        except FileNotFoundError:
+            errors.append(tr("priv_error_missing"))
         except (OSError, PermissionError) as e:
-            errors.append(f"{item.label}: {e}")
+            errors.append(tr("priv_error_failed").format(path=item.label))
+        except Exception as e:  # noqa: BLE001 - límite de la capa GUI
+            errors.append(tr("priv_error_failed").format(path=item.label))
 
-    removed = len(plan.items) - len(errors)
     if removed:
         log_buffer.add(tr(log_key).format(count=removed))
     if errors:
         QMessageBox.warning(parent, tr("some_errors_title"), "\n".join(errors))
-    else:
+    elif removed:
         QMessageBox.information(parent, tr("done_title"), tr("items_deleted_ok"))
     return removed > 0
