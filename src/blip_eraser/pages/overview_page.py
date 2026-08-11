@@ -59,6 +59,7 @@ class OverviewPage(QWidget):
     uninstall_requested = pyqtSignal(str, str, str)  # (nombre, fuente, detalle)
     _scan_result = pyqtSignal(dict)
     _cleanup_items_ready = pyqtSignal(list)  # entries de scan_cleanup_items()
+    _cleanup_summary_ready = pyqtSignal(dict)  # resultado de scan_cleanup()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -68,6 +69,7 @@ class OverviewPage(QWidget):
         self._apps: list = []
         self._scan_result.connect(self._on_scan_done)
         self._cleanup_items_ready.connect(self._on_cleanup_items_ready)
+        self._cleanup_summary_ready.connect(self._on_cleanup_summary_ready)
         self._build_ui()
 
         self._timer = QTimer(self)
@@ -256,9 +258,22 @@ class OverviewPage(QWidget):
             for cat_key, path, size in entries
         ]
         # Mismo flujo compartido que la sección "Limpieza recomendada".
-        run_destructive_action(
+        if run_destructive_action(
             self, build_confirmation_plan(items), tr("cleanup_confirm_title")
-        )
+        ):
+            # Se eliminó al menos un elemento: refresca el resumen con lo que
+            # queda, sin re-escanear apps (solo tamaños de las 3 categorías).
+            self._refresh_cleanup_summary()
+
+    def _refresh_cleanup_summary(self):
+        """Recomputa SOLO el resumen 'SYSTEM CLEANUP RECOMMENDED' en segundo plano."""
+        threading.Thread(
+            target=lambda: self._cleanup_summary_ready.emit(scan_cleanup()),
+            daemon=True,
+        ).start()
+
+    def _on_cleanup_summary_ready(self, cleanup: dict):
+        self._apply_cleanup(cleanup)
 
     def _on_scan_done(self, result: dict):
         self._scanning = False
@@ -269,15 +284,7 @@ class OverviewPage(QWidget):
         self._rebuild_apps()
 
         cleanup = result["cleanup"]
-        self.cleanup_junk_label.setText(
-            f"{tr('cleanup_junk')}: {human_size(cleanup['junk_bytes'])}"
-        )
-        self.cleanup_cache_label.setText(
-            f"{tr('cleanup_cache')}: {human_size(cleanup['pacman_cache_bytes'])}"
-        )
-        self.cleanup_logs_label.setText(
-            f"{tr('cleanup_logs')}: {human_size(cleanup['logs_bytes'])}"
-        )
+        self._apply_cleanup(cleanup)
 
         total_space = sum(a.size_bytes for a in self._apps)
         log_buffer.add(
@@ -290,6 +297,22 @@ class OverviewPage(QWidget):
             f"{tr('metric_loose')}: {sum(1 for a in self._apps if a.source == 'manual')}"
         )
         self.refresh()
+
+    def _apply_cleanup(self, cleanup: dict):
+        """Renderiza los tres labels 'SYSTEM CLEANUP RECOMMENDED' desde `scan_cleanup()`.
+
+        Compartido por `_on_scan_done` y `_on_cleanup_summary_ready` para que el
+        resumen quede siempre consistente con lo que se acaba de eliminar.
+        """
+        self.cleanup_junk_label.setText(
+            f"{tr('cleanup_junk')}: {human_size(cleanup['junk_bytes'])}"
+        )
+        self.cleanup_cache_label.setText(
+            f"{tr('cleanup_cache')}: {human_size(cleanup['pacman_cache_bytes'])}"
+        )
+        self.cleanup_logs_label.setText(
+            f"{tr('cleanup_logs')}: {human_size(cleanup['logs_bytes'])}"
+        )
 
     def _rebuild_apps(self):
         while self._apps_layout.count():
