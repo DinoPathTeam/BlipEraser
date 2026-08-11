@@ -147,6 +147,12 @@ QPushButton#PrimaryButton:hover {{ background-color: {p['subtext']}; }}
 QLineEdit {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; padding: 6px 10px; selection-background-color: {accent}; }}
 QTableWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; gridline-color: {p['border']}; }}
 QHeaderView::section {{ background-color: {p['sidebar']}; border: none; border-bottom: 1px solid {p['border']}; padding: 6px; color: {p['subtext']}; }}
+QHeaderView::section:first {{ padding: 0; }}
+QCheckBox#SelectAllCheck {{ background: transparent; spacing: 0; }}
+QCheckBox#SelectAllCheck::indicator {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 3px; width: 14px; height: 14px; }}
+QCheckBox#SelectAllCheck::indicator:hover {{ border-color: {accent}; }}
+QCheckBox#SelectAllCheck::indicator:checked {{ background-color: {accent}; border-color: {accent}; }}
+QCheckBox#SelectAllCheck::indicator:indeterminate {{ background-color: {accent}; border-color: {accent}; }}
 QTableWidget::item:selected {{ background-color: {accent}; color: #ffffff; }}
 QProgressBar {{ background-color: {p['hover']}; border: none; border-radius: 3px; height: 8px; }}
 QProgressBar::chunk {{ background-color: {accent}; border-radius: 3px; }}

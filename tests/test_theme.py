@@ -50,6 +50,13 @@ class TestBuildQss:
     def test_unknown_theme_falls_back_to_red(self):
         assert build_qss("no-existe") == build_qss("red")
 
+    def test_header_checkbox_has_no_block_background(self):
+        for key in THEMES:
+            qss = build_qss(key)
+            assert "QCheckBox#SelectAllCheck { background: transparent;" in qss
+            assert "QHeaderView::section:first { padding: 0; }" in qss
+            assert "::indicator:indeterminate" in qss
+
 
 class TestPalette:
     def test_palette_by_theme(self):

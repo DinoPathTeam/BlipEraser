@@ -19,6 +19,7 @@ class CheckTable(QTableWidget):
     def __init__(self, columns: int, parent=None):
         super().__init__(0, columns, parent)
         self.select_all_box = QCheckBox(self.horizontalHeader())
+        self.select_all_box.setObjectName("SelectAllCheck")
         self.select_all_box.setTristate(True)
         self.select_all_box.toggled.connect(self._select_all_toggled)
         self.select_all_box.setToolTip("")
