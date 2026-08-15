@@ -102,12 +102,28 @@ class Sidebar(QListWidget):
         self._rows: list[tuple[int, str]] = []
         for row, (section, key, icon_name) in enumerate(self.SECTIONS):
             item = QListWidgetItem(tr(key))
-            icon = QIcon.fromTheme(icon_name, QIcon.fromTheme(_ICON_FALLBACK))
-            item.setIcon(icon)
             item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.addItem(item)
             self._rows.append((row, section))
+        self.refresh_icons()
         self.setCurrentRow(0)
+
+    def refresh_icons(self) -> None:
+        """Recarga los iconos del tema del sistema.
+
+        Al construir, `QIcon.fromTheme` puede resolverse antes de que el
+        QIconLoader esté listo (sin window aún, sin event loop) y devolver
+        iconos vacíos que el delegate no pinta. Este método re-ejecuta la
+        resolución y se invoca como parte del refresco completo de
+        apariencia al arrancar y al cambiar tema/idioma.
+        """
+        for row, (_section, _key, icon_name) in enumerate(self.SECTIONS):
+            item = self.item(row)
+            if item is None:
+                continue
+            icon = QIcon.fromTheme(icon_name, QIcon.fromTheme(_ICON_FALLBACK))
+            item.setIcon(icon)
+        self.viewport().update()
 
     def apply_theme(self, accent: str, active_bg: str, hover: str, text: str) -> None:
         delegate = self.itemDelegate()

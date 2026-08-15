@@ -36,10 +36,13 @@ class ScanNowButton(QPushButton):
 
         disabled = not self.isEnabled()
 
-        # Resplandor: varios trazos con alpha decreciente
+        # Resplandor: varios trazos con alpha decreciente (usa el acento
+        # del tema activo, nunca un color fijo).
         if not disabled:
             for i, alpha in enumerate((40, 70, 110)):
-                glow_pen = QPen(QColor(229, 57, 53, alpha))
+                glow_color = QColor(self._accent)
+                glow_color.setAlpha(alpha)
+                glow_pen = QPen(glow_color)
                 glow_pen.setWidth(6 + i * 3)
                 painter.setPen(glow_pen)
                 painter.setBrush(Qt.BrushStyle.NoBrush)

@@ -261,6 +261,7 @@ class MainWindow(QMainWindow):
         accent = theme["accent"]
         palette = theme["palette"]
         self.sidebar.apply_theme(accent, accent, palette.get("hover", "#202024"), palette.get("subtext", "#9a9aa2"))
+        self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
         self._overview.set_accent(accent)
 
@@ -277,6 +278,17 @@ class MainWindow(QMainWindow):
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
+
+    def refresh_appearance(self):
+        """Rutina completa de arranque: tema + fuente + iconos + textos.
+
+        Es la misma pasada que dispara un cambio manual de idioma o tema,
+        ejecutada explícitamente tras el primer pintado para que los iconos
+        del tema del sistema y la fuente configurada queden aplicados sin
+        depender de que el usuario toque Configuración o el menú Idioma.
+        """
+        self._apply_appearance()
+        self.retranslate()
 
     # ------------------------------------------------------------------
     # Idioma

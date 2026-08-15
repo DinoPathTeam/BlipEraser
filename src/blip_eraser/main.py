@@ -84,6 +84,14 @@ def main() -> int:
     window = MainWindow()
     window.show()
 
+    # Refresco completo de apariencia tras el primer pintado: los iconos del
+    # sidebar (QIcon.fromTheme) y la fuente configurada pueden no resolverse
+    # si se aplican antes de que el QIconLoader/QStyleSheetStyle estén
+    # listos. Sin esto, iconos y fuente solo se "arreglaban" al cambiar
+    # idioma/tema manualmente. Se programa en el mismo tick que el aviso de
+    # permisos para que corra una vez el event loop está activo.
+    QTimer.singleShot(0, window.refresh_appearance)
+
     # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
     # Se muestra tras el primer pintado para no retrasar el escaneo inicial.
     if should_show_permissions_notice():
