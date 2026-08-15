@@ -59,13 +59,13 @@ python -m blip_eraser
 > Without installing, you can also run it straight from the repository root with
 > `PYTHONPATH=src python -m blip_eraser`.
 
-The window has two tabs:
+The window has a sidebar with the following sections:
 
-- **Packages (pacman):** lists the explicitly installed packages (`pacman -Qe`) and
-  lets you select one or more and uninstall them with `pkexec pacman -Rns --noconfirm`.
-- **Manual scan:** walks typical locations (`~/.local/share`, `~/Games`,
-  `~/Descargas`, `~/Applications`), computes the size of each folder/AppImage and
-  lets you delete them with confirmation.
+- **Overview:** system health gauge (*GOOD / FAIR / POOR*), live CPU/GPU/RAM/disk stats, and a one-click "Clean now" summary of recommended cleanup.
+- **Uninstaller:** a unified list of `pacman` packages and manual folders, with sorting, search filter and **manual per-row selection** (no "select all" header checkbox, to prevent accidental mass uninstalls). Uninstalls run through `pkexec pacman -Rns --noconfirm`.
+- **Cleaner:** two independent sections — *recommended cleanup* (junk `~/.cache`, pacman cache `/var/cache/pacman/pkg`, logs `/var/log`) and *manually installed apps* (loose folders and AppImages in the scan paths).
+- **Performance tweaks:** one-click optimizations for Arch/CachyOS — `fstrim` (SSD), `zswap` (RAM compression) and pacman mirrors sorted by speed, each with a detailed tooltip (mechanism, consequences, benefit).
+- **Settings:** theme, fonts, language and activity log management.
 
 ## Dependency checking
 

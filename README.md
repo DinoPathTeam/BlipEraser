@@ -34,7 +34,7 @@ Además, incluye diagnóstico de salud del sistema, limpiador de caché y regist
   - Especificaciones en tiempo real: CPU, GPU, uso de RAM y espacio en disco.
   - Resumen *"Limpieza del sistema recomendada"* con un clic para liberar basura, caché y registros.
 - **📦 Desinstalador Unificado**:
-  - Tabla multiselección con casilla en el encabezado (*seleccionar todo / ninguno*).
+  - Tabla multiselección con selección **manual por fila** (sin checkbox "seleccionar todo" en el encabezado, para evitar desinstalaciones masivas accidentales).
   - Clasificación clara de tipo: **Aplicación** (pacman explícito), **Dependencia** o **Carpeta suelta** (manual).
   - Botón dinámico *"Desinstalar seleccionados (N)"*.
 - **🧹 Limpiador del Sistema (2 Secciones Independientes)**:
@@ -45,7 +45,8 @@ Además, incluye diagnóstico de salud del sistema, limpiador de caché y regist
   - **Advertencia visual destacada (rojo / negrita)** para operaciones de gran tamaño (≥ 5 GiB).
   - **Confirmación obligatoria sin excepción**: no existe opción de *"no volver a preguntar"*.
 - **⚡ Ajustes de Rendimiento**:
-  - Optimizaciones seguras de un solo clic para Arch/CachyOS (`fstrim` para SSD, compresión de RAM `zswap`).
+  - Optimizaciones seguras de un solo clic para Arch/CachyOS: `fstrim` (SSD), compresión de RAM `zswap` y espejos de pacman ordenados por velocidad.
+  - Cada opción incluye un tooltip detallado (mecanismo, consecuencias y beneficio).
 - **🎨 Personalización e Idioma**:
   - Selector de tema visual (Red, Blue, Green, Purple, Dark) y familias de fuentes del sistema.
   - Soporte completo bilingüe (**Español** e **Inglés**) con cambio de idioma en caliente.

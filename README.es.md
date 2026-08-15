@@ -19,11 +19,11 @@ gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz 
 ## 🌟 Navegación y Secciones
 
 1. **Vista general (Overview)**: Puntuación de salud radial (*GOOD / FAIR / POOR*), estadísticas de CPU/GPU/RAM/Disco y botón de acción rápida *"Limpiar ahora"*.
-2. **Desinstalador**: Lista unificada de paquetes de `pacman` y carpetas manuales, con ordenación, filtro de búsqueda y casillas multiselección.
+2. **Desinstalador**: Lista unificada de paquetes de `pacman` y carpetas manuales, con ordenación, filtro de búsqueda y selección manual por fila (sin checkbox de "seleccionar todo").
 3. **Limpiador del sistema**:
    - **Limpieza recomendada**: Basura (`~/.cache`), Caché de pacman (`/var/cache/pacman/pkg`) y Registros (`/var/log`) desglosados ítem por ítem.
    - **Aplicaciones instaladas (manual)**: Carpetas sueltas y AppImages detectados.
-4. **Ajustes de rendimiento**: Optimizaciones seguras de CachyOS/Arch (`fstrim`, `zswap`).
+4. **Ajustes de rendimiento**: Optimizaciones seguras de CachyOS/Arch (`fstrim`, `zswap`, espejos de pacman por velocidad), cada una con tooltip de mecanismo, consecuencias y beneficio.
 5. **Configuración**: Selección de temas cromáticos, fuentes tipográficas y borrado de historial de actividad.
 
 ## 🛡️ Confirmación de Seguridad y Umbral de Gran Tamaño
