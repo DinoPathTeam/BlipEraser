@@ -38,6 +38,7 @@ from blip_eraser.utils.scan import (
     scan_cleanup,
     scan_cleanup_items,
 )
+from blip_eraser.utils.scan_cache import SECTION_CLEANER_RECOMMENDED
 from blip_eraser.utils.system_stats import (
     cpu_model,
     cpu_usage_percent,
@@ -259,7 +260,10 @@ class OverviewPage(QWidget):
         ]
         # Mismo flujo compartido que la sección "Limpieza recomendada".
         if run_destructive_action(
-            self, build_confirmation_plan(items), tr("cleanup_confirm_title")
+            self,
+            build_confirmation_plan(items),
+            tr("cleanup_confirm_title"),
+            invalidate_sections=(SECTION_CLEANER_RECOMMENDED,),
         ):
             # Se eliminó al menos un elemento: refresca el resumen con lo que
             # queda, sin re-escanear apps (solo tamaños de las 3 categorías).

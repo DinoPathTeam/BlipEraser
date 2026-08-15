@@ -20,6 +20,7 @@ from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.privileges import RemovalError, remove_paths
+from blip_eraser.utils.scan_cache import invalidate
 
 
 def _plan_body(plan: ConfirmPlan) -> str:
@@ -80,6 +81,7 @@ def run_destructive_action(
     plan: ConfirmPlan,
     title: str,
     log_key: str = "log_destructive_removed",
+    invalidate_sections: tuple[str, ...] = (),
 ) -> bool:
     """Confirma y ejecuta el plan, agrupando el borrado de rutas.
 
@@ -88,6 +90,9 @@ def run_destructive_action(
     - Los ítems con `remove` (pacman) se ejecutan por su cuenta.
     - Los fallos de privilegios se presentan como mensajes claros, nunca
       como tracebacks ni rutas técnicas crudas.
+    - `invalidate_sections` son las claves de scan_cache cuya caché se
+      invalida cuando se eliminó al menos un elemento (el diálogo es
+      compartido y no sabe en qué página se ejecutó: lo indica el llamador).
     Devuelve True si se eliminó al menos un elemento.
     """
     if not ask_destructive_confirmation(parent, plan, title):
@@ -125,6 +130,8 @@ def run_destructive_action(
 
     if removed:
         log_buffer.add(tr(log_key).format(count=removed))
+        for section in invalidate_sections:
+            invalidate(section)
     if errors:
         QMessageBox.warning(parent, tr("some_errors_title"), "\n".join(errors))
     elif removed:

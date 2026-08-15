@@ -39,6 +39,12 @@ from blip_eraser.utils.file_utils import (
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.scan import CLEANUP_CATEGORY_LABEL_KEYS, scan_cleanup_items
+from blip_eraser.utils.scan_cache import (
+    SECTION_CLEANER_MANUAL,
+    SECTION_CLEANER_RECOMMENDED,
+    is_stale,
+    mark_scanned,
+)
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 
@@ -95,6 +101,11 @@ class _RecommendedSection(QWidget):
         self._filter = text.strip().lower()
         self._render()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if is_stale(SECTION_CLEANER_RECOMMENDED):
+            QTimer.singleShot(0, self.scan)
+
     # ------------------------------------------------------------------
     # Escaneo
     # ------------------------------------------------------------------
@@ -102,6 +113,7 @@ class _RecommendedSection(QWidget):
         self._found = scan_cleanup_items()
         log_buffer.add(tr("log_cleanup_scanned").format(count=len(self._found)))
         self._render()
+        mark_scanned(SECTION_CLEANER_RECOMMENDED)
 
     def _render(self):
         if self._filter:
@@ -145,7 +157,10 @@ class _RecommendedSection(QWidget):
             )
 
         run_destructive_action(
-            self, build_confirmation_plan(items), tr("cleanup_confirm_title")
+            self,
+            build_confirmation_plan(items),
+            tr("cleanup_confirm_title"),
+            invalidate_sections=(SECTION_CLEANER_RECOMMENDED,),
         )
         self.scan()
 
@@ -200,6 +215,11 @@ class _ManualSection(QWidget):
         self._filter = text.strip().lower()
         self._render()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if is_stale(SECTION_CLEANER_MANUAL):
+            QTimer.singleShot(0, self.scan)
+
     # ------------------------------------------------------------------
     # Escaneo
     # ------------------------------------------------------------------
@@ -207,6 +227,7 @@ class _ManualSection(QWidget):
         self._found = scan_manual_entries(tuple(get_scan_paths()))
         log_buffer.add(tr("log_scan_finished").format(count=len(self._found)))
         self._render()
+        mark_scanned(SECTION_CLEANER_MANUAL)
 
     def _render(self):
         if self._filter:
@@ -245,7 +266,10 @@ class _ManualSection(QWidget):
         ]
 
         run_destructive_action(
-            self, build_confirmation_plan(items), tr("delete_confirm_title")
+            self,
+            build_confirmation_plan(items),
+            tr("delete_confirm_title"),
+            invalidate_sections=(SECTION_CLEANER_MANUAL,),
         )
         self.scan()
 
@@ -255,7 +279,6 @@ class CleanerPage(BasePage):
 
     def __init__(self):
         super().__init__()
-        self._auto_scanned = False
         self._build_ui()
 
     def _build_ui(self):
@@ -282,11 +305,3 @@ class CleanerPage(BasePage):
         # Cada sección filtra su propia tabla; no comparten estado.
         self.recommended.set_search_filter(text)
         self.manual.set_search_filter(text)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        # Escaneo automático solo la primera vez que se abre la página.
-        if not self._auto_scanned:
-            self._auto_scanned = True
-            QTimer.singleShot(0, self.recommended.scan)
-            QTimer.singleShot(0, self.manual.scan)
