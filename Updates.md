@@ -11,6 +11,41 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### ➕ Añadido: pantalla de arranque (splash) con mensajes de progreso
+
+- **Por qué:** al arrancar, la ventana principal aparecía completa pero
+  "congelada" unos segundos mientras se preparaba el entorno. Ahora se muestra
+  un splash (logo + mensajes de progreso) ANTES de construir `MainWindow`, que
+  se revela solo cuando el arranque está listo.
+- **Flujo:** `StartupWorker` (QThread) ejecuta 5 pasos y va emitiendo mensajes:
+  1. "Comprobando actualizaciones" → `utils/updates.py::check_for_updates()`
+     (stub sin red, devuelve siempre "sin actualización"; el `# TODO` marca
+     dónde consultar GitHub Releases en el futuro).
+  2. "Comprobando permisos" → `should_show_permissions_notice()` (el diálogo
+     se muestra después, con la ventana visible).
+  3. "Comprobando dependencias" → `localized_missing_lines(["pacman",
+     "pkexec"])`; el chequeo de binarios se movió aquí (antes corría en
+     segundo plano desde `MainWindow`), y el aviso se muestra tras el arranque
+     sin duplicar el trabajo.
+  4. "Escaneando el PC…" → un escaneo de referencia (`list_installed_apps()`)
+     cuyo resultado se descarta (no se guarda en caché ni se pasa a ninguna
+     página; estas siguen escaneando perezosamente en su `showEvent`).
+  5. "Escaneo finalizado, ¡Bienvenido!" → se construye y muestra la ventana.
+- **Cierre limpio:** si el usuario cierra el splash a mitad (Alt+F4), se
+  interrumpe el worker y la app sale limpiamente. El cierre programático del
+  camino de éxito usa `hide()`, no `close()`, para que la señal `closed` solo
+  signifique "el usuario lo cerró".
+- **Claves nuevas (ES y EN):** `splash_check_updates`, `splash_check_permissions`,
+  `splash_check_dependencies`, `splash_scanning`, `splash_welcome`.
+- **Código:** `src/blip_eraser/widgets/splash_screen.py`,
+  `src/blip_eraser/utils/updates.py`, `main.py` (flujo de arranque),
+  `renderer.py` (se retira el chequeo de binarios en segundo plano),
+  `utils/i18n.py`, `tests/test_updates.py`, `tests/test_splash_gui.py`.
+- **Nota:** el paso 2 comprueba `should_show_permissions_notice()`, y el paso 3
+  es quien ejecuta el chequeo autoritativo de binarios (`localized_missing_lines`).
+  La comprobación individual `check_binary_available("pkexec")` del paso 2 se
+  eliminó: duplicaba al paso 3 y su resultado no se usaba.
+
 ### ❌ Eliminado: opción "Reducir el quota de escritura de plymouth"
 
 - **Claves eliminadas (ES y EN):** `perf_disable_wp`, `perf_disable_wp_help`,
@@ -108,5 +143,5 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests: `230 passed, 1 skipped` (el skip es `test_check_table_gui.py`, que
-  requiere PyQt6; se salta en entornos sin él).
+- Tests: `233 passed, 2 skipped` (los 2 skips requieren PyQt6: `test_check_table_gui.py`
+  y `test_splash_gui.py`; se saltan en entornos sin él).
