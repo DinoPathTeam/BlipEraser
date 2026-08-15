@@ -13,6 +13,11 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 ASSET_LOGO_PATH = Path(__file__).parent.parent / "assets" / "BlipEraserLogo.png"
 
+# Altura objetivo del logotipo dentro del HeaderBar (px). El asset es
+# 2816x1536 y el emblema de fallback se dibuja a 64x64, así que este
+# escalado no produce borrosidad.
+LOGO_HEIGHT = 48
+
 
 class AppLogo(QWidget):
     def __init__(self, accent: str = "#E53935", parent=None):
@@ -37,14 +42,14 @@ class AppLogo(QWidget):
             pixmap = QPixmap(str(ASSET_LOGO_PATH))
             if not pixmap.isNull():
                 scaled = pixmap.scaledToHeight(
-                    36, Qt.TransformationMode.SmoothTransformation
+                    LOGO_HEIGHT, Qt.TransformationMode.SmoothTransformation
                 )
                 self._mark.setPixmap(scaled)
                 self._wordmark.hide()
                 return
 
         self._wordmark.show()
-        self._mark.setFixedSize(32, 32)
+        self._mark.setFixedSize(LOGO_HEIGHT, LOGO_HEIGHT)
         pm = QPixmap(64, 64)
         pm.fill(Qt.GlobalColor.transparent)
 
@@ -67,7 +72,7 @@ class AppLogo(QWidget):
         painter.end()
 
         self._mark.setPixmap(
-            pm.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pm.scaled(LOGO_HEIGHT, LOGO_HEIGHT, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         )
 
     def set_accent(self, accent: str) -> None:
