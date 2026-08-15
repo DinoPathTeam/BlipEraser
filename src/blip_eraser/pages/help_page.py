@@ -8,10 +8,10 @@ ventana es pequeña; al pie se muestra la versión ('Acerca de').
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QFormLayout,
     QFrame,
     QLabel,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -53,6 +53,9 @@ class HelpPage(BasePage):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         container = QWidget()
+        container.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+        )
         content = QVBoxLayout(container)
         content.setContentsMargins(4, 8, 8, 8)
         content.setSpacing(10)
@@ -75,16 +78,20 @@ class HelpPage(BasePage):
     def _make_group(self, title_key: str, body_key: str) -> QFrame:
         frame = QFrame()
         frame.setFrameShape(QFrame.Shape.StyledPanel)
-        form = QFormLayout(frame)
+        vbox = QVBoxLayout(frame)
+        vbox.setContentsMargins(12, 10, 12, 10)
+        vbox.setSpacing(4)
 
         title_label = QLabel()
         title_label.setStyleSheet("font-weight: bold;")
+        title_label.setWordWrap(True)
         body_label = QLabel()
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(
             body_label.textInteractionFlags() | Qt.TextInteractionFlag.TextSelectableByMouse
         )
-        form.addRow(title_label, body_label)
+        vbox.addWidget(title_label)
+        vbox.addWidget(body_label)
         self._group_labels.append((title_label, body_label))
 
         title_label.setText(tr(title_key))
