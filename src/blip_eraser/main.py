@@ -8,8 +8,14 @@ Flujo:
      (Español / English); si el usuario cierra sin elegir, se detecta del
      sistema. El resultado se guarda con set_language() ANTES de construir
      cualquier widget, para que todo se genere ya en el idioma correcto.
-  3. Ventana principal (renderer.MainWindow): menú "Idioma" para cambiar
-     en caliente (retranslate) y aviso en segundo plano si faltan binarios.
+  3. Splash (widgets.splash_screen): logo + mensajes de progreso que
+     StartupWorker (QThread) va emitiendo mientras prepara el arranque
+     (actualizaciones, permisos, dependencias y un escaneo de referencia).
+  4. Al terminar el worker se construye la ventana principal
+     (renderer.MainWindow), se muestra y se cierra el splash. El aviso de
+     binarios faltantes y el diálogo de permisos se muestran igual que
+     antes, con los resultados calculados durante el splash (sin duplicar
+     el trabajo).
 """
 
 import sys
@@ -60,6 +66,19 @@ def _prompt_initial_language() -> str | None:
     return None
 
 
+def _warn_missing_dependencies(window, lines: list[str]) -> None:
+    """Aviso de binarios faltantes, ya calculados durante el splash."""
+    if not lines:
+        return
+    from PyQt6.QtWidgets import QMessageBox
+
+    QMessageBox.warning(
+        window,
+        tr("missing_deps_title"),
+        tr("missing_deps_intro").format(lines="\n\n".join(lines)),
+    )
+
+
 def main() -> int:
     """Entry point. Devuelve el código de salida de la app."""
     if not check_pyqt6_available():
@@ -78,24 +97,53 @@ def main() -> int:
         set_language(saved)
 
     from blip_eraser.renderer import MainWindow
-    from blip_eraser.utils.permissions import should_show_permissions_notice
     from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
+    from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
 
-    window = MainWindow()
-    window.show()
+    splash = SplashScreen()
+    splash.show()
 
-    # Refresco completo de apariencia tras el primer pintado: los iconos del
-    # sidebar (QIcon.fromTheme) y la fuente configurada pueden no resolverse
-    # si se aplican antes de que el QIconLoader/QStyleSheetStyle estén
-    # listos. Sin esto, iconos y fuente solo se "arreglaban" al cambiar
-    # idioma/tema manualmente. Se programa en el mismo tick que el aviso de
-    # permisos para que corra una vez el event loop está activo.
-    QTimer.singleShot(0, window.refresh_appearance)
+    worker = StartupWorker()
+    cancel_requested = {"value": False}
 
-    # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
-    # Se muestra tras el primer pintado para no retrasar el escaneo inicial.
-    if should_show_permissions_notice():
-        QTimer.singleShot(0, lambda: show_permissions_dialog(window))
+    def _on_splash_closed() -> None:
+        # El usuario cerró el splash a mitad: se pide al worker parar en el
+        # siguiente paso y se sale limpiamente cuando termine.
+        cancel_requested["value"] = True
+        worker.requestInterruption()
+
+    def _on_worker_finished() -> None:
+        if cancel_requested["value"]:
+            app.quit()
+            return
+
+        window = MainWindow()
+        window.show()
+        # Ocultar (no cerrar) el splash: hide() no dispara closeEvent, así
+        # que `closed` solo se emite cuando el USUARIO lo cierra a mitad, no
+        # en el cierre programático del camino de éxito.
+        splash.hide()
+
+        # Refresco completo de apariencia tras el primer pintado: los iconos
+        # del sidebar (QIcon.fromTheme) y la fuente configurada pueden no
+        # resolverse si se aplican antes de que el QIconLoader esté listo.
+        QTimer.singleShot(0, window.refresh_appearance)
+
+        # Aviso de binarios faltantes, calculado durante el splash (no se
+        # duplica el chequeo). Se muestra tras el primer pintado.
+        if worker.missing_lines:
+            QTimer.singleShot(
+                0, lambda: _warn_missing_dependencies(window, worker.missing_lines)
+            )
+
+        # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
+        if worker.show_permissions_notice:
+            QTimer.singleShot(0, lambda: show_permissions_dialog(window))
+
+    splash.closed.connect(_on_splash_closed)
+    worker.message.connect(splash.set_message)
+    worker.finished.connect(_on_worker_finished)
+    worker.start()
     return app.exec()
 
 

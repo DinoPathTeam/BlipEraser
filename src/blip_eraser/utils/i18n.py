@@ -100,6 +100,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "language_first_run_text": (
             "¿En qué idioma prefieres usar BlipEraser?"
         ),
+        # Pantalla de arranque (splash)
+        "splash_check_updates": "Comprobando actualizaciones",
+        "splash_check_permissions": "Comprobando permisos",
+        "splash_check_dependencies": "Comprobando dependencias",
+        "splash_scanning": (
+            "Escaneando el PC, por favor mantente en espera unos segundos"
+        ),
+        "splash_welcome": "Escaneo finalizado, ¡Bienvenido!",
         # Navegación lateral
         "nav_packages": "Gestor de paquetes",
         "nav_cleaner": "Limpiador del sistema",
@@ -459,6 +467,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "language_first_run_text": (
             "Which language would you prefer BlipEraser to use?"
         ),
+        # Startup splash screen
+        "splash_check_updates": "Checking for updates",
+        "splash_check_permissions": "Checking permissions",
+        "splash_check_dependencies": "Checking dependencies",
+        "splash_scanning": (
+            "Scanning your PC, please wait a few seconds"
+        ),
+        "splash_welcome": "Scan finished, welcome!",
         # Sidebar navigation
         "nav_packages": "Package Manager",
         "nav_cleaner": "System Cleaner",

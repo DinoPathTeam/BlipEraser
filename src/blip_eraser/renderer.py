@@ -12,14 +12,12 @@ Composición del shell UI:
 Toda la lógica vive en utils/*; aquí solo hay composición y presentación.
 """
 
-from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QMainWindow,
     QMenu,
-    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -43,7 +41,6 @@ from blip_eraser.utils.i18n import (
     tr,
 )
 from blip_eraser.utils.log import log as log_buffer
-from blip_eraser.utils.ui_text import localized_missing_lines
 from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SystemStatusBar
 from blip_eraser.widgets.logo import AppLogo
 
@@ -88,9 +85,6 @@ class MainWindow(QMainWindow):
         self._update_header_tools("overview")
 
         log_buffer.add(tr("log_started"))
-
-        # Nivel 2: verificación de binarios en segundo plano (no bloquea la GUI).
-        QTimer.singleShot(0, self._warn_missing_binaries)
 
     # ------------------------------------------------------------------
     # Construcción
@@ -315,16 +309,3 @@ class MainWindow(QMainWindow):
         for page in self._pages.values():
             if hasattr(page, "retranslate"):
                 page.retranslate()
-
-    # ------------------------------------------------------------------
-    # Nivel 2: dependencias
-    # ------------------------------------------------------------------
-    def _warn_missing_binaries(self):
-        lines = localized_missing_lines(["pacman", "pkexec"])
-        if not lines:
-            return
-        QMessageBox.warning(
-            self,
-            tr("missing_deps_title"),
-            tr("missing_deps_intro").format(lines="\n\n".join(lines)),
-        )
