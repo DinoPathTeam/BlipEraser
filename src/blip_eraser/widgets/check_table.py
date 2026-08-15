@@ -16,13 +16,16 @@ from PyQt6.QtWidgets import (
 
 
 class CheckTable(QTableWidget):
-    def __init__(self, columns: int, parent=None):
+    def __init__(self, columns: int, show_select_all: bool = True, parent=None):
         super().__init__(0, columns, parent)
+        self._show_select_all = show_select_all
         self.select_all_box = QCheckBox(self.horizontalHeader())
         self.select_all_box.setObjectName("SelectAllCheck")
         self.select_all_box.setTristate(True)
         self.select_all_box.toggled.connect(self._select_all_toggled)
         self.select_all_box.setToolTip("")
+        if not show_select_all:
+            self.select_all_box.hide()
 
         header = self.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -80,6 +83,10 @@ class CheckTable(QTableWidget):
 
     def _place_select_all(self):
         """Posiciona el checkbox del encabezado sobre la columna de selección."""
+        box = self.select_all_box
+        if not self._show_select_all:
+            box.hide()
+            return
         header = self.horizontalHeader()
         if header.isHidden():
             return

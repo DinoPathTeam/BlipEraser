@@ -9,6 +9,7 @@ mismo que el Limpiador del sistema.
 
 from pathlib import Path
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -32,6 +33,7 @@ from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.pacman import uninstall_packages
+from blip_eraser.utils.scan_cache import SECTION_UNINSTALLER, is_stale, mark_scanned
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 
@@ -50,7 +52,6 @@ class UninstallerPage(BasePage):
         self._visible: list[InstalledApp] = []
         self._filter = ""
         self._build_ui()
-        self.load_apps()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -58,7 +59,10 @@ class UninstallerPage(BasePage):
         self.info_label = QLabel(tr("uninstaller_info"))
         layout.addWidget(self.info_label)
 
-        self.table = CheckTable(_COLUMNS)
+        # Sin checkbox de "seleccionar todo" en el encabezado: el
+        # Desinstalador solo permite selección manual (una a una o
+        # arrastrando) para evitar desinstalaciones masivas accidentales.
+        self.table = CheckTable(_COLUMNS, show_select_all=False)
         self.table.setHorizontalHeaderLabels(
             ["", tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
@@ -111,12 +115,21 @@ class UninstallerPage(BasePage):
         self._filter = text.strip().lower()
         self._render()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Escaneo automático al mostrar la página solo si el caché está
+        # viciado (primera vez, timeout de 5 min, o invalidado tras una
+        # desinstalación). El botón "Actualizar lista" escanea siempre.
+        if is_stale(SECTION_UNINSTALLER):
+            QTimer.singleShot(0, self.load_apps)
+
     # ------------------------------------------------------------------
     # Datos
     # ------------------------------------------------------------------
     def load_apps(self):
         self._apps = list_installed_apps()
         self._render()
+        mark_scanned(SECTION_UNINSTALLER)
 
     def _render(self):
         if self._filter:
@@ -180,7 +193,8 @@ class UninstallerPage(BasePage):
 
         plan = build_confirmation_plan(items)
         if run_destructive_action(
-            self, plan, tr("uninstaller_confirm_title")
+            self, plan, tr("uninstaller_confirm_title"),
+            invalidate_sections=(SECTION_UNINSTALLER,),
         ):
             log_buffer.add(
                 tr("log_uninstalled_packages").format(
@@ -210,6 +224,9 @@ class UninstallerPage(BasePage):
             )
 
         plan = build_confirmation_plan([item])
-        if run_destructive_action(self, plan, tr("uninstaller_confirm_title")):
+        if run_destructive_action(
+            self, plan, tr("uninstaller_confirm_title"),
+            invalidate_sections=(SECTION_UNINSTALLER,),
+        ):
             log_buffer.add(tr("log_uninstalled_packages").format(packages=name))
         self.load_apps()
