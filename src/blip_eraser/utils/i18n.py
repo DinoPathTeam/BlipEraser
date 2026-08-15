@@ -175,7 +175,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_trim_mounts": "Activar récorte automático de SSD (fstrim)",
         "perf_compress_ram": "Comprimir memoria en uso (zswap)",
         "perf_mirror_sort": "Sincronizar y ordenar los espejos de pacman",
-        "perf_disable_wp": "Reducir el quota de escritura de plymouth",
         "perf_trim_mounts_help": (
             "Programa fstrim para recortar automáticamente las unidades SSD "
             "y prolongar su vida útil."
@@ -188,9 +187,48 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Sincroniza los listados de los espejos de pacman y los ordena "
             "por velocidad para acelerar las descargas."
         ),
-        "perf_disable_wp_help": (
-            "Reduce la cuota de escritura de plymouth para acelerar el "
-            "arranque en equipos con discos lentos."
+        "perf_trim_mounts_tip": (
+            "<b>Mecanismo:</b> TRIM es un comando ATA/NVMe con el que el "
+            "sistema avisa al SSD qué bloques ya no se usan. Sin él, la "
+            "controladora no sabe qué celdas liberar y su recolección de "
+            "basura trabaja sobre todo el disco, degradando la escritura "
+            "con el tiempo. fstrim emite esos avisos en lote sobre los "
+            "sistemas montados y se programa con un temporizador de systemd."
+            "<br><b>Consecuencias:</b> La primera pasada recorre el espacio "
+            "libre y puede tardar unos segundos usando algo de CPU. Es "
+            "seguro: solo informa de bloques libres, no toca datos. En "
+            "NVMe modernos el beneficio es menor (ya hacen recolección de "
+            "basura), pero es inofensivo."
+            "<br><b>Beneficio:</b> Mantiene estable la velocidad de "
+            "escritura a largo plazo y prolonga la vida útil del SSD."
+        ),
+        "perf_compress_ram_tip": (
+            "<b>Mecanismo:</b> zswap es una caché de compresión en RAM del "
+            "kernel: cuando la memoria escasea, comprime las páginas "
+            "(zstd/lzo) y las guarda en un pool en RAM en lugar de escribir "
+            "a swap. Solo cuando ese pool se llena (por defecto ~20 % de la "
+            "RAM) las páginas pasan al swap real en disco."
+            "<br><b>Consecuencias:</b> Comprimir consume algo de CPU al "
+            "escribir y leer páginas. Requiere que exista una partición o "
+            "archivo de swap, o no tiene efecto. Reduce drásticamente el "
+            "uso de swap en disco bajo presión de memoria."
+            "<br><b>Beneficio:</b> En momentos de memoria llena evita el "
+            "intercambio a disco (mucho más lento): el sistema responde "
+            "mejor y se reduce el desgaste del SSD."
+        ),
+        "perf_mirror_sort_tip": (
+            "<b>Mecanismo:</b> pacman descarga paquetes de los servidores "
+            "espejo listados en /etc/pacman.d/mirrorlist, probándolos en "
+            "orden. Esta opción sincroniza el listado desde el repositorio "
+            "de espejos y lo reordena midiendo latencia y velocidad real de "
+            "cada uno, reescribiendo el archivo."
+            "<br><b>Consecuencias:</b> La medición tarda unos minutos "
+            "(descarga de prueba desde cada espejo) y necesita permisos de "
+            "administrador para reescribir el mirrorlist. No borra nada; "
+            "solo cambia el orden de preferencia."
+            "<br><b>Beneficio:</b> Descargas e instalaciones más rápidas, "
+            "sobre todo en actualizaciones grandes, al usar primero los "
+            "espejos más rápidos."
         ),
         "perf_effect_disk": "Disco",
         "perf_effect_ram": "RAM",
@@ -496,7 +534,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_trim_mounts": "Enable automatic SSD trim (fstrim)",
         "perf_compress_ram": "Compress memory in use (zswap)",
         "perf_mirror_sort": "Sync and sort pacman mirrors",
-        "perf_disable_wp": "Reduce plymouth write quota",
         "perf_trim_mounts_help": (
             "Schedules fstrim to automatically trim SSD drives and extend "
             "their lifespan."
@@ -509,8 +546,47 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Syncs the pacman mirror lists and sorts them by speed to speed "
             "up downloads."
         ),
-        "perf_disable_wp_help": (
-            "Lowers plymouth's write quota to speed up boot on slower disks."
+        "perf_trim_mounts_tip": (
+            "<b>Mechanism:</b> TRIM is an ATA/NVMe command that tells the "
+            "SSD which blocks are no longer in use. Without it, the "
+            "controller cannot free cells and its garbage collection works "
+            "over the whole disk, degrading writes over time. fstrim issues "
+            "those hints in batches for mounted filesystems and is scheduled "
+            "by a systemd timer."
+            "<br><b>Consequences:</b> The first pass walks the free space "
+            "and may take a few seconds using some CPU. It is safe: it only "
+            "reports free blocks, never touches data. On modern NVMe drives "
+            "the benefit is smaller (they already do garbage collection), "
+            "but it is harmless."
+            "<br><b>Benefit:</b> Keeps write speed stable in the long term "
+            "and extends the SSD's lifespan."
+        ),
+        "perf_compress_ram_tip": (
+            "<b>Mechanism:</b> zswap is a compressed cache in kernel RAM: "
+            "when memory is low, it compresses pages (zstd/lzo) and keeps "
+            "them in a RAM pool instead of writing to swap. Only when that "
+            "pool fills up (by default ~20% of RAM) do pages go to real "
+            "swap on disk."
+            "<br><b>Consequences:</b> Compression uses some CPU when "
+            "writing and reading pages. It requires a defined swap partition "
+            "or file, otherwise it has no effect. It drastically reduces "
+            "disk swapping under memory pressure."
+            "<br><b>Benefit:</b> Under heavy memory load it avoids the much "
+            "slower disk swap: the system responds better and SSD wear is "
+            "reduced."
+        ),
+        "perf_mirror_sort_tip": (
+            "<b>Mechanism:</b> pacman downloads packages from the mirror "
+            "servers listed in /etc/pacman.d/mirrorlist, trying them in "
+            "order. This option syncs the listing from the mirror "
+            "repository and reorders it by measuring each mirror's latency "
+            "and real speed, rewriting the file."
+            "<br><b>Consequences:</b> Measuring takes a few minutes (test "
+            "downloads from every mirror) and needs administrator rights to "
+            "rewrite the mirrorlist. Nothing is deleted; only the "
+            "preference order changes."
+            "<br><b>Benefit:</b> Faster downloads and installs, especially "
+            "on large updates, by using the fastest mirrors first."
         ),
         "perf_effect_disk": "Disk",
         "perf_effect_ram": "RAM",

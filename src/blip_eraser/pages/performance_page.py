@@ -26,27 +26,24 @@ from blip_eraser.utils.i18n import tr
 _PERF_OPTIONS = [
     {
         "key": "perf_trim_mounts",
-        "tip": "perf_trim_mounts_help",
+        "desc": "perf_trim_mounts_help",
+        "tip": "perf_trim_mounts_tip",
         "effect": "perf_effect_disk",
         "level": 0.70,
     },
     {
         "key": "perf_compress_ram",
-        "tip": "perf_compress_ram_help",
+        "desc": "perf_compress_ram_help",
+        "tip": "perf_compress_ram_tip",
         "effect": "perf_effect_ram",
         "level": 0.62,
     },
     {
         "key": "perf_mirror_sort",
-        "tip": "perf_mirror_sort_help",
+        "desc": "perf_mirror_sort_help",
+        "tip": "perf_mirror_sort_tip",
         "effect": "perf_effect_network",
         "level": 0.80,
-    },
-    {
-        "key": "perf_disable_wp",
-        "tip": "perf_disable_wp_help",
-        "effect": "perf_effect_disk",
-        "level": 0.52,
     },
 ]
 
@@ -130,7 +127,7 @@ class _EffectPreview(QWidget):
 class PerformancePage(BasePage):
     def __init__(self):
         super().__init__()
-        self._rows: list[tuple[QCheckBox, str, QLabel, QToolButton, str, _EffectPreview, str]] = []
+        self._rows: list[tuple[QCheckBox, str, QLabel, QToolButton, str, str, _EffectPreview, str]] = []
         self._previews: list[_EffectPreview] = []
         accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._build_ui(accent)
@@ -170,6 +167,7 @@ class PerformancePage(BasePage):
             help_btn.setToolTip(tr(opt["tip"]))
             help_btn.setCursor(Qt.CursorShape.WhatsThisCursor)
             tip_key = opt["tip"]
+            desc_key = opt["desc"]
             help_btn.clicked.connect(
                 lambda _checked=False, b=help_btn, k=tip_key: self._show_tip(b, tr(k))
             )
@@ -178,14 +176,14 @@ class PerformancePage(BasePage):
             block.addLayout(header_row)
 
             # Descripción breve visible bajo el nombre de la opción.
-            desc = QLabel(tr(tip_key))
+            desc = QLabel(tr(opt["desc"]))
             desc.setObjectName("SubText")
             desc.setWordWrap(True)
             desc.setContentsMargins(2, 0, 0, 0)
             block.addWidget(desc)
 
             layout.addLayout(block)
-            self._rows.append((box, opt["key"], desc, help_btn, tip_key, preview, opt["effect"]))
+            self._rows.append((box, opt["key"], desc, help_btn, tip_key, desc_key, preview, opt["effect"]))
 
         layout.addStretch(1)
 
@@ -214,8 +212,8 @@ class PerformancePage(BasePage):
             preview.tick()
 
     def retranslate(self):
-        for box, box_key, desc, help_btn, tip_key, preview, effect_key in self._rows:
+        for box, box_key, desc, help_btn, tip_key, desc_key, preview, effect_key in self._rows:
             box.setText(tr(box_key))
-            desc.setText(tr(tip_key))
+            desc.setText(tr(desc_key))
             help_btn.setToolTip(tr(tip_key))
             preview.set_label(tr(effect_key))
