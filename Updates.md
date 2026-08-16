@@ -11,6 +11,34 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔧 Corregido: porcentaje del gauge y ícono del Limpiador invisibles en temas claros
+
+- **Por qué:** en los temas Azul/Morado (fondo claro) dos elementos se veían
+  como "marca de agua" (contraste insuficiente):
+  1. El porcentaje del anillo "SALUD DEL SISTEMA" se pintaba con un blanco fijo
+     `QColor(245, 245, 245)` que solo funciona sobre fondo oscuro.
+  2. El ícono del "Limpiador del sistema" en el sidebar (`edit-clear`) se veía
+     en blanco: a diferencia de los otros 4 íconos (que son *symbolic* y heredan
+     la paleta del tema), este resuelve a un asset del tema del sistema con
+     color blanco incrustado que no reacciona al tema activo.
+- **Fix (gauge):** el porcentaje ahora usa el color de texto del tema activo
+  (`palette['text']`) vía nuevo `set_text_color()` en `HealthGauge`, conectado
+  desde `Renderer` (`_overview.set_text_color`). Rojo/Verde siguen claros sobre
+  fondo oscuro; Azul/Morado quedan oscuros sobre fondo claro.
+- **Fix (sidebar):** nuevo `tint_icon()` en `widgets/sidebar.py` que recubre
+  cada ícono con `palette['icon']` preservando su alpha (forma), y
+  `Sidebar.set_icon_color()` lo aplica desde el Renderer. Los 5 íconos quedan
+  con el color del tema activo en los 4 temas.
+- **Contraste verificado (WCAG AA ≥3:1):** texto sobre panel: 14.6–15.3:1 en
+  los 4 temas; ícono sobre sidebar: 3.3–19.8:1.
+- **Código:** `src/blip_eraser/widgets/health_gauge.py`,
+  `src/blip_eraser/widgets/sidebar.py`, `src/blip_eraser/renderer.py`,
+  `src/blip_eraser/pages/overview_page.py` (set_text_color),
+  `tests/test_theme.py` (nuevo `TestContrast`), `tests/test_theme_contrast_gui.py`
+  (nuevo: píxel real del porcentaje + tinte por tema).
+- **Verificado con PyQt6 real (offscreen):** 257 passed, 0 skipped. Sin PyQt6:
+  235 passed, 4 skipped.
+
 ### 🔧 Corregido: Vista general no refrescaba sus métricas tras "Limpiar ahora"
 
 - **Por qué:** tras un borrado exitoso en la Vista general, solo se repintaban
@@ -184,8 +212,9 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests sin PyQt6 (este Windows): `233 passed, 3 skipped` (skips: `test_check_table_gui.py`,
-  `test_splash_gui.py` y `test_refresh_after_delete_gui.py`, requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `249 passed, 0 skipped` — incluye los
-  tests de selección masiva del CheckTable, la suite de GUI del splash y el
-  refresco tras acción destructiva.
+- Tests sin PyQt6 (este Windows): `235 passed, 4 skipped` (skips: `test_check_table_gui.py`,
+  `test_splash_gui.py`, `test_refresh_after_delete_gui.py` y `test_theme_contrast_gui.py`,
+  requieren PyQt6).
+- Tests con PyQt6 (offscreen / CachyOS): `257 passed, 0 skipped` — incluye la
+  suite GUI del splash, el refresco tras acción destructiva, la selección
+  masiva del CheckTable y el contraste del gauge + tinte de íconos del sidebar.
