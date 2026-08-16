@@ -278,6 +278,7 @@ class OverviewPage(QWidget):
 
     def _on_cleanup_summary_ready(self, cleanup: dict):
         self._apply_cleanup(cleanup)
+        self._apply_metrics(cleanup)
 
     def _on_scan_done(self, result: dict):
         self._scanning = False
@@ -295,11 +296,7 @@ class OverviewPage(QWidget):
             tr("log_scan_completed").format(count=len(self._apps), space=human_size(total_space))
         )
 
-        self.metric_junk.setText(f"{tr('metric_junk')}: {human_size(cleanup['junk_bytes'])}")
-        self.metric_orphans.setText(f"{tr('metric_orphans')}: {cleanup['orphan_count']}")
-        self.metric_loose.setText(
-            f"{tr('metric_loose')}: {sum(1 for a in self._apps if a.source == 'manual')}"
-        )
+        self._apply_metrics(cleanup)
         self.refresh()
 
     def _apply_cleanup(self, cleanup: dict):
@@ -316,6 +313,21 @@ class OverviewPage(QWidget):
         )
         self.cleanup_logs_label.setText(
             f"{tr('cleanup_logs')}: {human_size(cleanup['logs_bytes'])}"
+        )
+
+    def _apply_metrics(self, cleanup: dict):
+        """Actualiza las tres métricas del panel izquierdo (basura/huérfanos/entradas).
+
+        Compartido por `_on_scan_done` y `_on_cleanup_summary_ready`: tras
+        "Limpiar ahora" la Vista general recalcula sus números ya mismo, sin
+        esperar a que el usuario navegue o pulse SCAN NOW de nuevo. Una sola
+        pasada de `scan_cleanup()` alimenta resumen y métricas (sin escaneo
+        duplicado).
+        """
+        self.metric_junk.setText(f"{tr('metric_junk')}: {human_size(cleanup['junk_bytes'])}")
+        self.metric_orphans.setText(f"{tr('metric_orphans')}: {cleanup['orphan_count']}")
+        self.metric_loose.setText(
+            f"{tr('metric_loose')}: {sum(1 for a in self._apps if a.source == 'manual')}"
         )
 
     def _rebuild_apps(self):

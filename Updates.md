@@ -11,6 +11,28 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔧 Corregido: Vista general no refrescaba sus métricas tras "Limpiar ahora"
+
+- **Por qué:** tras un borrado exitoso en la Vista general, solo se repintaban
+  los tres labels del resumen "SYSTEM CLEANUP RECOMMENDED" (`_apply_cleanup`),
+  pero las métricas del panel izquierdo (Archivos basura / Paquetes huérfanos /
+  Entradas sueltas) quedaban con los valores viejos hasta pulsar SCAN NOW. La
+  invalidación del caché solo afectaba a la próxima visita a Limpiador, no a la
+  propia Vista general.
+- **Fix:** nuevo `_apply_metrics(cleanup)` compartido por `_on_scan_done` y
+  `_on_cleanup_summary_ready`: tras "Limpiar ahora", la Vista general recalcula
+  sus números ya mismo con la misma pasada única de `scan_cleanup()` que ya
+  alimentaba el resumen (sin escaneo duplicado ni loop).
+- **Verificado (Limpiador):** `_RecommendedSection.delete_selected()` SÍ llama a
+  `self.scan()` tras `run_destructive_action`, y `scan()` repinta sin depender de
+  `is_stale()` (ignora el caché, igual que "Actualizar lista"). La cadena del
+  Limpiador ya era correcta; solo faltaba la Vista general.
+- **Código:** `src/blip_eraser/pages/overview_page.py`,
+  `tests/test_refresh_after_delete_gui.py` (+4 tests: Limpiador re-escanea y
+  repinta tras borrar; Vista general repinta resumen+métricas; una sola pasada).
+- **Verificado con PyQt6 real (offscreen):** 249 passed, 0 skipped. Sin PyQt6:
+  233 passed, 3 skipped.
+
 ### 🔧 Corregido: checkbox "seleccionar todo" del encabezado invisible en el Limpiador
 
 - **Por qué:** `_place_select_all()` posicionaba el checkbox con
@@ -162,7 +184,8 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests sin PyQt6 (este Windows): `233 passed, 2 skipped` (skips: `test_check_table_gui.py`
-  y `test_splash_gui.py`, requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `245 passed, 0 skipped` — incluye los
-  nuevos tests de selección masiva del CheckTable y la suite de GUI del splash.
+- Tests sin PyQt6 (este Windows): `233 passed, 3 skipped` (skips: `test_check_table_gui.py`,
+  `test_splash_gui.py` y `test_refresh_after_delete_gui.py`, requieren PyQt6).
+- Tests con PyQt6 (offscreen / CachyOS): `249 passed, 0 skipped` — incluye los
+  tests de selección masiva del CheckTable, la suite de GUI del splash y el
+  refresco tras acción destructiva.
