@@ -13,6 +13,12 @@ from PyQt6.QtTest import QSignalSpy
 
 from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
 
+# Duración total de la animación de entrada:
+#   logo (800) + delay (200) + título (600) = 1600 ms.
+_INTRO_TOTAL_MS = 800 + 200 + 600
+# Tras la intro, el mensaje encolado hace fade-out (200) + fade-in (300).
+_MSG_FADE_TOTAL_MS = 200 + 300
+
 
 @pytest.fixture(scope="module")
 def app():
@@ -26,10 +32,34 @@ def app():
 
 
 class TestSplashScreen:
-    def test_builds_and_sets_message(self, app):
+    def test_builds_and_sets_message_after_intro(self, app):
         splash = SplashScreen()
+        # Durante la intro el mensaje se encola, no se pinta de inmediato.
         splash.set_message("hola")
+        assert splash._pending_message == "hola"
+        assert splash._message.text() == ""
+        # Cuando termina la intro, el mensaje encolado se muestra tras su
+        # propia cadena fade-out + fade-in.
+        QtTest.QTest.qWait(_INTRO_TOTAL_MS + _MSG_FADE_TOTAL_MS + 200)
+        assert splash._intro_done is True
         assert splash._message.text() == "hola"
+
+    def test_message_queued_during_intro(self, app):
+        splash = SplashScreen()
+        splash.set_message("primero")
+        splash.set_message("segundo")
+        # El último mensaje gana: solo se conserva el más reciente.
+        assert splash._pending_message == "segundo"
+        assert splash._message.text() == ""
+
+    def test_message_after_intro_applies_after_fade(self, app):
+        splash = SplashScreen()
+        QtTest.QTest.qWait(_INTRO_TOTAL_MS + 100)
+        assert splash._intro_done is True
+        splash.set_message("fuera")
+        # El texto nuevo se escribe tras el fade-out del anterior.
+        QtTest.QTest.qWait(_MSG_FADE_TOTAL_MS + 100)
+        assert splash._message.text() == "fuera"
 
     def test_close_emits_closed_signal(self, app):
         splash = SplashScreen()
