@@ -36,6 +36,7 @@ from blip_eraser.utils.pacman import uninstall_packages
 from blip_eraser.utils.scan_cache import SECTION_UNINSTALLER, is_stale, mark_scanned
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
+from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 
 _COLUMNS = 6  # Sel | Nombre | Tipo | Detalle | Peso | Fecha
 
@@ -45,13 +46,14 @@ def _manual_target(app: InstalledApp) -> Path:
     return Path(app.detail) if app.detail else Path.home() / app.name
 
 
-class UninstallerPage(BasePage):
+class UninstallerPage(BasePage, BackgroundScanMixin):
     def __init__(self):
         super().__init__()
         self._apps: list[InstalledApp] = []
         self._visible: list[InstalledApp] = []
         self._filter = ""
         self._build_ui()
+        self._init_scan_buttons([self.refresh_btn, self.uninstall_btn])
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -92,7 +94,9 @@ class UninstallerPage(BasePage):
         """Contador dinámico 'Desinstalar seleccionados (N)' + estado del header."""
         count = len(self.table.checked_rows())
         self.uninstall_btn.setText(tr("uninstall_button_count").format(n=count))
-        self.uninstall_btn.setEnabled(count > 0)
+        # Durante un escaneo en segundo plano el botón queda deshabilitado
+        # (el mixin lo re-habilita al llegar el resultado).
+        self.uninstall_btn.setEnabled(count > 0 and not self._scanning)
         self.table.refresh_header_state()
 
     # ------------------------------------------------------------------
@@ -127,7 +131,10 @@ class UninstallerPage(BasePage):
     # Datos
     # ------------------------------------------------------------------
     def load_apps(self):
-        self._apps = list_installed_apps()
+        self._start_background_scan(list_installed_apps, self._on_apps_loaded)
+
+    def _on_apps_loaded(self, apps: list[InstalledApp]):
+        self._apps = apps
         self._render()
         mark_scanned(SECTION_UNINSTALLER)
 

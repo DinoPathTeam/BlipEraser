@@ -11,6 +11,42 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### ⚙️ Cambiado: escaneos del Desinstalador y del Limpiador en segundo plano
+
+- **Por qué:** al abrir "Desinstalador" o "Limpiador del sistema" (y tras cada
+  borrado o "Actualizar lista"), la app se congelaba unos segundos mientras
+  `list_installed_apps()`, `scan_cleanup_items()` y `scan_manual_entries()`
+  corrían en el hilo principal. Ahora esos escaneos corren en un hilo de fondo
+  con el mismo patrón que ya usaba la Vista general: `threading.Thread` +
+  `pyqtSignal`, entregando el resultado de forma queued al hilo principal.
+- **Worker reutilizable:** nuevo `widgets/scan_worker.py` con `BackgroundScanMixin`
+  (patrón compartido por las 3 fuentes pesadas). Garantiza:
+  1. **Botones deshabilitados durante el escaneo:** "Actualizar lista" y
+     "Eliminar seleccionados"/"Desinstalar seleccionados" de la página concreta
+     que está escaneando (no las demás). Se re-habilitan al llegar el resultado.
+  2. **Token por generación:** si se lanza un segundo escaneo antes de que
+     llegue el primero (doble clic en refrescar, o navegar y volver mientras un
+     escaneo corre), el resultado anterior se descarta para no aplicar datos
+     obsoletos.
+  3. **Seguridad de navegación:** las páginas viven toda la sesión en el
+     `QStackedWidget` (nunca se destruyen al navegar), así que aplicar el
+     resultado aunque la página esté oculta es seguro y deja los datos listos.
+- **`scan_cache.py` sin cambios:** `is_stale()`/`mark_scanned()` siguen
+  decidiendo CUÁNDO escanear (caché de 5 min, invalidación tras borrar); este
+  cambio solo mueve el CÓMO (hilo de fondo) a `mark_scanned()` cuando el
+  resultado real llega.
+- **Overview confirmado OK:** la Vista general ya escaneaba en segundo plano
+  (`_scan_worker`, `_refresh_cleanup_summary`); `_apply_metrics()` solo pinta un
+  dict que ya viene calculado y no llama a `scan_cleanup()`, así que no requirió
+  cambios.
+- **Código:** `src/blip_eraser/widgets/scan_worker.py` (nuevo),
+  `src/blip_eraser/pages/uninstaller_page.py`, `src/blip_eraser/pages/cleaner_page.py`,
+  `tests/test_refresh_after_delete_gui.py` (+3 tests: escaneo lento no congela
+  la GUI, resultado obsoleto descartado al lanzar otro escaneo, Desinstalador
+  también escanea en segundo plano con botones deshabilitados).
+- **Verificado con PyQt6 real (offscreen):** 262 passed, 0 skipped. Sin PyQt6:
+  235 passed, 4 skipped.
+
 ### ✨ Añadido: animación de entrada en el splash (logo + título deslizantes)
 
 - **Por qué:** el splash de arranque mostraba logo y mensaje estáticos. Ahora
@@ -242,7 +278,9 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 - Tests sin PyQt6 (este Windows): `235 passed, 4 skipped` (skips: `test_check_table_gui.py`,
   `test_splash_gui.py`, `test_refresh_after_delete_gui.py` y `test_theme_contrast_gui.py`,
   requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `259 passed, 0 skipped` — incluye la
+- Tests con PyQt6 (offscreen / CachyOS): `262 passed, 0 skipped` — incluye la
   suite GUI del splash (animación de entrada + encolado de mensajes), el
-  refresco tras acción destructiva, la selección masiva del CheckTable y el
-  contraste del gauge + tinte de íconos del sidebar.
+  refresco tras acción destructiva, la selección masiva del CheckTable, el
+  contraste del gauge + tinte de íconos del sidebar, y los escaneos en segundo
+  plano del Desinstalador y del Limpiador (no bloqueo de la GUI, descarte de
+  resultados obsoletos).

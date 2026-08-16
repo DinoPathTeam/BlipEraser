@@ -1,0 +1,96 @@
+"""Escaneos pesados fuera del hilo principal (patrón compartido).
+
+Lleva las funciones de escaneo que tardan (list_installed_apps,
+scan_cleanup_items, scan_manual_entries) a un hilo de fondo con el mismo
+patrón que la Vista general: threading.Thread + pyqtSignal. El hilo emite el
+resultado por señal, que Qt entrega de forma queued al hilo principal, y un
+token de generación descarta resultados obsoletos (si se lanza un segundo
+escaneo antes de que llegue el primero).
+"""
+
+from __future__ import annotations
+
+import threading
+from collections.abc import Callable
+
+from PyQt6.QtCore import QObject, pyqtSignal
+
+from blip_eraser.utils.log import log as log_buffer
+
+
+class _ScanBridge(QObject):
+    """Puente QObject: único lugar donde vive la señal, emitida por el hilo.
+
+    Al conectarla a un método de la página (un QObject que vive en el hilo
+    principal), Qt entrega el resultado de forma queued en ese hilo, sin que
+    el worker toque nunca un widget directamente.
+    """
+
+    result_ready = pyqtSignal(object)  # (token, resultado)
+    failed = pyqtSignal(str)
+
+
+class BackgroundScanMixin:
+    """Ejecuta una función de escaneo en un hilo de fondo sin bloquear la GUI.
+
+    La página que lo use debe:
+    - construir sus botones y llamar ``_init_scan_buttons([...])`` después;
+    - llamar ``_start_background_scan(fn, on_result)`` donde ``fn`` es la
+      función pesada (callable sin argumentos) y ``on_result(result)`` recibe
+      el resultado en el hilo principal.
+
+    Garantías:
+    - Los botones registrados se deshabilitan durante el escaneo y se
+      re-habilitan cuando llega el resultado (o falla el worker).
+    - Token por generación: si se lanza otro escaneo antes de que llegue el
+      resultado anterior, el anterior se descarta (doble refresco, o navegar
+      y volver mientras un escaneo corre).
+    - El resultado se aplica aunque la página esté oculta: las páginas viven
+      toda la sesión en el QStackedWidget (nunca se destruyen al navegar),
+      así que es seguro y deja los datos listos para cuando el usuario vuelva.
+    """
+
+    def _init_scan_buttons(self, buttons: list) -> None:
+        self._scan_buttons = list(buttons)
+        self._scan_token = 0
+        self._scanning = False
+        self._scan_on_result: Callable[[object], None] | None = None
+        self._scan_bridge = _ScanBridge()
+        self._scan_bridge.result_ready.connect(self._on_scan_result_ready)
+        self._scan_bridge.failed.connect(self._on_scan_failed)
+
+    def _start_background_scan(
+        self, fn: Callable[[], object], on_result: Callable[[object], None]
+    ) -> None:
+        self._scan_token += 1
+        token = self._scan_token
+        self._scanning = True
+        self._scan_on_result = on_result
+        for btn in self._scan_buttons:
+            btn.setEnabled(False)
+
+        def worker() -> None:
+            try:
+                result = fn()
+            except Exception as exc:  # noqa: BLE001 - el error viaja por señal
+                self._scan_bridge.failed.emit(str(exc))
+                return
+            self._scan_bridge.result_ready.emit((token, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_scan_result_ready(self, payload: tuple) -> None:
+        token, result = payload
+        if token != self._scan_token:
+            return  # resultado obsoleto: se lanzó otro escaneo después
+        self._scanning = False
+        for btn in self._scan_buttons:
+            btn.setEnabled(True)
+        if self._scan_on_result is not None:
+            self._scan_on_result(result)
+
+    def _on_scan_failed(self, message: str) -> None:
+        self._scanning = False
+        for btn in self._scan_buttons:
+            btn.setEnabled(True)
+        log_buffer.add(f"Error de escaneo: {message}")

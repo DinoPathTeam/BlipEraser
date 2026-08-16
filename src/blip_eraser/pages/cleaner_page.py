@@ -47,9 +47,10 @@ from blip_eraser.utils.scan_cache import (
 )
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
+from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 
 
-class _RecommendedSection(QWidget):
+class _RecommendedSection(QWidget, BackgroundScanMixin):
     """Sección (a): 'Limpieza recomendada' (basura + caché + registros)."""
 
     def __init__(self, parent=None):
@@ -58,6 +59,7 @@ class _RecommendedSection(QWidget):
         self._visible: list[tuple[str, Path, int]] = []
         self._filter = ""
         self._build_ui()
+        self._init_scan_buttons([self.refresh_btn, self.delete_btn])
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -110,7 +112,10 @@ class _RecommendedSection(QWidget):
     # Escaneo
     # ------------------------------------------------------------------
     def scan(self):
-        self._found = scan_cleanup_items()
+        self._start_background_scan(scan_cleanup_items, self._on_scan_ready)
+
+    def _on_scan_ready(self, entries: list[tuple[str, Path, int]]):
+        self._found = entries
         log_buffer.add(tr("log_cleanup_scanned").format(count=len(self._found)))
         self._render()
         mark_scanned(SECTION_CLEANER_RECOMMENDED)
@@ -165,7 +170,7 @@ class _RecommendedSection(QWidget):
         self.scan()
 
 
-class _ManualSection(QWidget):
+class _ManualSection(QWidget, BackgroundScanMixin):
     """Sección (b): 'Aplicaciones instaladas' (carpetas sueltas/AppImages).
 
     Reutiliza el patrón de checkboxes junto con el diálogo compartido.
@@ -177,6 +182,7 @@ class _ManualSection(QWidget):
         self._visible: list[Path] = []
         self._filter = ""
         self._build_ui()
+        self._init_scan_buttons([self.refresh_btn, self.delete_btn])
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -224,7 +230,13 @@ class _ManualSection(QWidget):
     # Escaneo
     # ------------------------------------------------------------------
     def scan(self):
-        self._found = scan_manual_entries(tuple(get_scan_paths()))
+        self._start_background_scan(
+            lambda: scan_manual_entries(tuple(get_scan_paths())),
+            self._on_scan_ready,
+        )
+
+    def _on_scan_ready(self, found: list[Path]):
+        self._found = found
         log_buffer.add(tr("log_scan_finished").format(count=len(self._found)))
         self._render()
         mark_scanned(SECTION_CLEANER_MANUAL)
