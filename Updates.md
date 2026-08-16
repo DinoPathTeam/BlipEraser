@@ -11,6 +11,33 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### ✨ Añadido: animación de entrada en el splash (logo + título deslizantes)
+
+- **Por qué:** el splash de arranque mostraba logo y mensaje estáticos. Ahora
+  el logo y el título "BLIPERASER" entran con una animación (deslizamiento
+  desde la derecha + fade-in), para dar una primera impresión más pulida.
+- **Animación:** logo desde la derecha (800ms, `OutQuart`) → pequeño respiro
+  (200ms, vía animación "puente" de opacidad nula) → título (600ms). Se usa
+  `QSequentialAnimationGroup` real (no timers sueltos) para que el orden sea
+  determinista. El área hero (logo+título) vive en un widget SIN layout: los
+  hijos se posicionan a mano con `move()`, porque un QVBoxLayout activo
+  pelearía contra `QPropertyAnimation` sobre `pos`.
+- **Encolado de mensajes:** mientras la intro corre, los `set_message()` del
+  `StartupWorker` se guardan en `_pending_message` (el último gana) y se
+  muestran apenas termina la entrada, para no competir visualmente con ella.
+  Tras la intro, cada mensaje nuevo hace fade-out del anterior + fade-in.
+- **Logo 4K:** `assets/BlipEraserLogo.png` se sustituyó por la versión 4K
+  (3960×2160, antes 2816×1536). `ASSET_LOGO_PATH` apunta al mismo nombre, así
+  que header y splash la aprovechan sin cambios de código.
+- **Interface intacta:** `SplashScreen`, `set_message()` y la señal `closed`
+  no cambian; `main.py` no requirió ninguna modificación.
+- **Código:** `src/blip_eraser/widgets/splash_screen.py`,
+  `src/blip_eraser/assets/BlipEraserLogo.png`,
+  `tests/test_splash_gui.py` (tests adaptados al encolado: mensaje pendiente
+  durante la intro, el último gana, aparición tras fade).
+- **Verificado con PyQt6 real (offscreen):** 259 passed, 0 skipped. Sin PyQt6:
+  235 passed, 4 skipped.
+
 ### 🔧 Corregido: porcentaje del gauge y ícono del Limpiador invisibles en temas claros
 
 - **Por qué:** en los temas Azul/Morado (fondo claro) dos elementos se veían
@@ -215,6 +242,7 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 - Tests sin PyQt6 (este Windows): `235 passed, 4 skipped` (skips: `test_check_table_gui.py`,
   `test_splash_gui.py`, `test_refresh_after_delete_gui.py` y `test_theme_contrast_gui.py`,
   requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `257 passed, 0 skipped` — incluye la
-  suite GUI del splash, el refresco tras acción destructiva, la selección
-  masiva del CheckTable y el contraste del gauge + tinte de íconos del sidebar.
+- Tests con PyQt6 (offscreen / CachyOS): `259 passed, 0 skipped` — incluye la
+  suite GUI del splash (animación de entrada + encolado de mensajes), el
+  refresco tras acción destructiva, la selección masiva del CheckTable y el
+  contraste del gauge + tinte de íconos del sidebar.
