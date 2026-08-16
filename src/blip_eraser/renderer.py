@@ -255,9 +255,11 @@ class MainWindow(QMainWindow):
         accent = theme["accent"]
         palette = theme["palette"]
         self.sidebar.apply_theme(accent, accent, palette.get("hover", "#202024"), palette.get("subtext", "#9a9aa2"))
+        self.sidebar.set_icon_color(palette.get("icon", "#ffffff"))
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
         self._overview.set_accent(accent)
+        self._overview.set_text_color(palette.get("text", "#ececef"))
 
         family = theme_mod.font_family(prefs.get("font", "system"))
         font = QFont(family) if family else QFont()

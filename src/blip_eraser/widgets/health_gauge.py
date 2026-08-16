@@ -20,6 +20,7 @@ class HealthGauge(QWidget):
         self._value = 0
         self._status = "—"
         self._accent = "#E53935"
+        self._text_color = "#ececef"
         self.setMinimumSize(240, 210)
 
     def set_value(self, value: int) -> None:
@@ -28,6 +29,16 @@ class HealthGauge(QWidget):
 
     def set_accent(self, color: str) -> None:
         self._accent = color
+        self.update()
+
+    def set_text_color(self, color: str) -> None:
+        """Color del texto del porcentaje central.
+
+        Debe derivarse del tema activo (`palette['text']`): un valor fijo
+        claro solo es legible sobre fondo oscuro y desaparece en los temas
+        Azul/Morado. El estado (GOOD/FAIR/POOR) mantiene su verde propio.
+        """
+        self._text_color = color
         self.update()
 
     def set_status(self, status: str) -> None:
@@ -60,7 +71,7 @@ class HealthGauge(QWidget):
         painter.drawArc(rect, _ARC_START * 16, -span * 16)
 
         # Porcentaje central (ligeramente por encima del centro)
-        painter.setPen(QColor(245, 245, 245))
+        painter.setPen(QColor(self._text_color))
         percent_font = QFont(self.font())
         percent_font.setPointSize(28)
         percent_font.setBold(True)

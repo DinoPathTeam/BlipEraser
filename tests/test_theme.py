@@ -67,6 +67,44 @@ class TestPalette:
         assert palette_for("red")["bg"] != palette_for("blue")["bg"]
 
 
+def _relative_luminance(hex_color: str) -> float:
+    def channel(c: int) -> float:
+        c /= 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (channel(int(hex_color[i : i + 2], 16)) for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contrast_ratio(a: str, b: str) -> float:
+    la, lb = _relative_luminance(a), _relative_luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+class TestContrast:
+    """Contraste garantizado de texto e íconos en los 4 temas.
+
+    El porcentaje del gauge "SALUD DEL SISTEMA" se pinta sobre el panel y
+    los íconos del sidebar sobre su fondo; ambos usan colores del tema.
+    Con este test verificamos que esos pares cumplen WCAG AA (≥3:1 para
+    texto/grandes), por lo que ningún tema puede dejar texto fantasma.
+    """
+
+    def test_gauge_text_on_panel(self):
+        for key, theme in THEMES.items():
+            p = theme["palette"]
+            ratio = _contrast_ratio(p["text"], p["panel"])
+            assert ratio >= 3.0, f"{key}: text sobre panel = {ratio:.2f}"
+
+    def test_sidebar_icon_on_sidebar_bg(self):
+        for key, theme in THEMES.items():
+            p = theme["palette"]
+            ratio = _contrast_ratio(p["icon"], p["sidebar"])
+            assert ratio >= 3.0, f"{key}: icon sobre sidebar = {ratio:.2f}"
+
+
 class TestFonts:
     def test_font_family_system_is_none(self):
         assert font_family("system") is None

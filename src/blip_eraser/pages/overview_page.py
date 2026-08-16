@@ -455,3 +455,6 @@ class OverviewPage(QWidget):
         self._accent = color
         self.gauge.set_accent(color)
         self.scan_btn.set_accent(color)
+
+    def set_text_color(self, color: str):
+        self.gauge.set_text_color(color)

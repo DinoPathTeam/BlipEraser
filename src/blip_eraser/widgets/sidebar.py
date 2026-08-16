@@ -6,13 +6,35 @@ izquierda en el elemento activo. Todos los colores se toman del tema.
 """
 
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyledItemDelegate
 
 from blip_eraser.utils.i18n import tr
 
 _ICON_FALLBACK = "applications-other"
 _ICON_SIZE = QSize(26, 26)
+
+
+def tint_icon(icon: QIcon, color: str, size: QSize = _ICON_SIZE) -> QIcon:
+    """Recolorea un ícono del tema del sistema con el color dado.
+
+    `QIcon.fromTheme` puede devolver íconos *symbolic* (que Qt tiñe con la
+    paleta) o íconos de color fijo incrustado (p. ej. `edit-clear` en blanco
+    sobre fondo claro, invisible en Azul/Morado). Para garantizar legibilidad
+    en los 4 temas, pintamos el asset con el color de ícono de la paleta
+    activa (`palette['icon']`) preservando su alpha (forma).
+    """
+    pixmap = icon.pixmap(size)
+    if pixmap.isNull():
+        return icon
+    tinted = QPixmap(size)
+    tinted.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color))
+    painter.end()
+    return QIcon(tinted)
 
 
 class _SidebarDelegate(QStyledItemDelegate):
@@ -99,6 +121,7 @@ class Sidebar(QListWidget):
         self.setSpacing(4)
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
 
+        self._icon_color = "#ffffff"
         self._rows: list[tuple[int, str]] = []
         for row, (section, key, icon_name) in enumerate(self.SECTIONS):
             item = QListWidgetItem(tr(key))
@@ -109,21 +132,31 @@ class Sidebar(QListWidget):
         self.setCurrentRow(0)
 
     def refresh_icons(self) -> None:
-        """Recarga los iconos del tema del sistema.
+        """Recarga los iconos del tema del sistema, recoloreados por tema.
 
         Al construir, `QIcon.fromTheme` puede resolverse antes de que el
         QIconLoader esté listo (sin window aún, sin event loop) y devolver
         iconos vacíos que el delegate no pinta. Este método re-ejecuta la
         resolución y se invoca como parte del refresco completo de
         apariencia al arrancar y al cambiar tema/idioma.
+
+        Además tiñe cada ícono con el color de ícono de la paleta activa:
+        los íconos *symbolic* del tema del sistema ya heredan la paleta,
+        pero los de color fijo (como `edit-clear`) se verían en blanco
+        sobre los fondos claros (Azul/Morado). El tinte garantiza
+        legibilidad en los 4 temas.
         """
         for row, (_section, _key, icon_name) in enumerate(self.SECTIONS):
             item = self.item(row)
             if item is None:
                 continue
             icon = QIcon.fromTheme(icon_name, QIcon.fromTheme(_ICON_FALLBACK))
-            item.setIcon(icon)
+            item.setIcon(tint_icon(icon, self._icon_color))
         self.viewport().update()
+
+    def set_icon_color(self, color: str) -> None:
+        self._icon_color = color
+        self.refresh_icons()
 
     def apply_theme(self, accent: str, active_bg: str, hover: str, text: str) -> None:
         delegate = self.itemDelegate()
