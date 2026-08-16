@@ -7,8 +7,9 @@ en CachyOS con PyQt6 instalado.
 import pytest
 
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
+QtTest = pytest.importorskip("PyQt6.QtTest")
 
-from PyQt6.QtCore import QSignalSpy
+from PyQt6.QtTest import QSignalSpy
 
 from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
 
@@ -42,8 +43,19 @@ class TestSplashScreen:
 
 
 class TestStartupWorker:
-    def test_worker_is_interruptible_before_start(self, app):
+    def test_worker_is_interruptible_while_running(self, app):
+        import time
+
+        # requestInterruption() solo marca el flag mientras el thread corre;
+        # isInterruptionRequested() devuelve False una vez finalizado.
         worker = StartupWorker()
+        worker.start()
+        for _ in range(200):
+            if worker.isRunning():
+                break
+            app.processEvents()
+            time.sleep(0.01)
+        assert worker.isRunning()
         worker.requestInterruption()
-        worker.run()
         assert worker.isInterruptionRequested() is True
+        assert worker.wait(5000) is True

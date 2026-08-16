@@ -94,11 +94,15 @@ class CheckTable(QTableWidget):
         w = header.sectionSize(0)
         if x < 0 or w <= 0:
             return
-        box = self.select_all_box
+        # Usar sizeHint: box.width()/height() devuelven el tamaño por defecto
+        # de Qt (100x30) hasta que el widget se muestra y coloca, y al ser
+        # autoresistente esa geometría queda desalineada (indicator fuera del
+        # header). Con sizeHint el box se centra sobre la columna real.
+        size = box.sizeHint()
         box.setGeometry(
-            x + (w - box.width()) // 2,
-            (header.height() - box.height()) // 2,
-            box.width(),
-            box.height(),
+            x + (w - size.width()) // 2,
+            (header.height() - size.height()) // 2,
+            size.width(),
+            size.height(),
         )
         box.show()

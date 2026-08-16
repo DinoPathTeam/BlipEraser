@@ -15,6 +15,8 @@ confirmación del requisito pedido.
 import pytest
 
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
+QtCore = pytest.importorskip("PyQt6.QtCore")
+QtTest = pytest.importorskip("PyQt6.QtTest")
 
 from blip_eraser.widgets.check_table import CheckTable
 
@@ -50,3 +52,96 @@ class TestCheckTableSelectAll:
         table.add_check_row()
         assert table.rowCount() == 1
         table.refresh_header_state()
+
+    def _shown_table(self, app, columns=4, rows=5):
+        """CheckTable mostrado con filas, en una ventana visible."""
+        from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
+
+        window = QMainWindow()
+        central = QWidget()
+        window.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        table = CheckTable(columns)
+        table.setHorizontalHeaderLabels(
+            ["", "Cat", "Nombre", "Tamaño"][:columns]
+        )
+        for _ in range(rows):
+            r = table.add_check_row()
+            for col in range(1, columns):
+                table.setItem(r, col, QtWidgets.QTableWidgetItem("x"))
+        layout.addWidget(table)
+        window.resize(600, 300)
+        window.show()
+        app.processEvents()
+        # Mantener viva la ventana: si se recolecta, PyQt destruye el table.
+        self._window = window
+        return table
+
+    def test_select_all_box_is_positioned_over_section_zero(self, app):
+        table = self._shown_table(app)
+        box = table.select_all_box
+        header = table.horizontalHeader()
+        app.processEvents()
+        assert box.isVisible()
+        x = header.sectionViewportPosition(0)
+        w = header.sectionSize(0)
+        assert w > 0
+        box_x, box_y, box_w, box_h = box.geometry().getRect()
+        # El box debe quedar centrado sobre la columna 0 (checkbox de fila),
+        # no desplazado fuera de la vista (regresión del tamaño por defecto).
+        assert box_x >= x
+        assert box_x + box_w <= x + w
+        assert box_w > 0 and box_h > 0
+
+    def test_select_all_box_toggles_all_rows(self, app):
+        table = self._shown_table(app)
+        box = table.select_all_box
+        assert table.checked_rows() == []
+        QtTest.QTest.mouseClick(box, QtCore.Qt.MouseButton.LeftButton, pos=box.rect().center())
+        app.processEvents()
+        assert table.checked_rows() == list(range(5))
+
+    def test_select_all_box_untoggles_all_rows(self, app):
+        table = self._shown_table(app)
+        box = table.select_all_box
+        QtTest.QTest.mouseClick(box, QtCore.Qt.MouseButton.LeftButton, pos=box.rect().center())
+        app.processEvents()
+        assert len(table.checked_rows()) == 5
+        QtTest.QTest.mouseClick(box, QtCore.Qt.MouseButton.LeftButton, pos=box.rect().center())
+        app.processEvents()
+        assert table.checked_rows() == []
+
+    def test_select_all_reflects_partial_state(self, app):
+        from PyQt6.QtCore import Qt
+
+        table = self._shown_table(app)
+        for r in range(2):
+            table.item(r, 0).setCheckState(Qt.CheckState.Checked)
+        app.processEvents()
+        assert (box := table.select_all_box)
+        assert box.checkState() == Qt.CheckState.PartiallyChecked
+        # Marcar todas manualmente -> Checked
+        for r in range(5):
+            table.item(r, 0).setCheckState(Qt.CheckState.Checked)
+        app.processEvents()
+        assert box.checkState() == Qt.CheckState.Checked
+        # Desmarcar todas -> Unchecked
+        for r in range(5):
+            table.item(r, 0).setCheckState(Qt.CheckState.Unchecked)
+        app.processEvents()
+        assert box.checkState() == Qt.CheckState.Unchecked
+
+    def test_show_select_all_false_keeps_box_hidden_even_when_shown(self, app):
+        from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget
+
+        window = QMainWindow()
+        central = QWidget()
+        window.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+        table = CheckTable(2, show_select_all=False)
+        layout.addWidget(table)
+        window.resize(600, 300)
+        window.show()
+        app.processEvents()
+        assert table.select_all_box.isHidden()
+        assert table.select_all_box.isVisible() is False

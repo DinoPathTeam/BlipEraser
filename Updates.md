@@ -11,6 +11,25 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔧 Corregido: checkbox "seleccionar todo" del encabezado invisible en el Limpiador
+
+- **Por qué:** `_place_select_all()` posicionaba el checkbox con
+  `box.width()`/`box.height()`, que devuelven el tamaño por defecto de Qt
+  (100×30) hasta que el widget se muestra y coloca, y esa geometría se
+  auto-preservaba. El indicator de 16px quedaba desplazado fuera del header
+  (x=-32), invisible e inutilizable. El fix del manchón (fondo transparente)
+  lo destapó: antes el bloque sólido ocultaba el desajuste.
+- **Fix:** usar `sizeHint()` (16×16) para centrar el box sobre la columna 0.
+- **Código:** `src/blip_eraser/widgets/check_table.py`,
+  `tests/test_check_table_gui.py` (+4 tests de posicionamiento, toggle
+  todos/ninguno y tristate, que corren con PyQt6 en CachyOS).
+- **Bonus:** `tests/test_splash_gui.py` tenía 2 bugs que solo saltaban con
+  PyQt6 presente: `QSignalSpy` vive en `QtCore.QTest`, no en `QtCore`, y
+  `requestInterruption()` solo marca el flag con el thread corriendo.
+  Corregidos para que la suite pase completa con PyQt6.
+- **Verificado:** con PyQt6 real (offscreen): 245 passed, 0 skipped. Sin
+  PyQt6 (este Windows): 233 passed, 2 skipped.
+
 ### ➕ Añadido: pantalla de arranque (splash) con mensajes de progreso
 
 - **Por qué:** al arrancar, la ventana principal aparecía completa pero
@@ -143,5 +162,7 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests: `233 passed, 2 skipped` (los 2 skips requieren PyQt6: `test_check_table_gui.py`
-  y `test_splash_gui.py`; se saltan en entornos sin él).
+- Tests sin PyQt6 (este Windows): `233 passed, 2 skipped` (skips: `test_check_table_gui.py`
+  y `test_splash_gui.py`, requieren PyQt6).
+- Tests con PyQt6 (offscreen / CachyOS): `245 passed, 0 skipped` — incluye los
+  nuevos tests de selección masiva del CheckTable y la suite de GUI del splash.
