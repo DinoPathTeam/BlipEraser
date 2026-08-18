@@ -12,6 +12,7 @@ Composición del shell UI:
 Toda la lógica vive en utils/*; aquí solo hay composición y presentación.
 """
 
+from PyQt6.QtCore import QCoreApplication, QEvent
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
     QApplication,
@@ -269,11 +270,24 @@ class MainWindow(QMainWindow):
         # (QStyleSheetStyle) cachea la fuente resuelta por widget, así que
         # el segundo cambio seguido no se refleja hasta un evento externo
         # (show/resize que fuerza el re-polish). Forzamos polish + repaint.
-        style = app.style()
+        # IMPORTANTE: unpolish/polish se hace con widget.style(), no con
+        # app.style(): la QSS envuelve el estilo base en un QStyleSheetStyle
+        # propio por widget y app.style() deja intacta la caché de fuente.
         for widget in app.allWidgets():
+            style = widget.style()
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
+        # El unpolish/polish de un widget bajo QSS deja programado el
+        # borrado diferido (DeferredDelete) del QStyleSheetStyle anterior.
+        # Si esos borrados quedan pendientes sin procesar, el driver global
+        # de QPropertyAnimation de esta QApplication deja de hacer ticks
+        # para animaciones creadas después (p. ej. el splash de arranque en
+        # los tests, que comparten la QApplication). Se procesan aquí mismo
+        # para no dejar el driver en mal estado.
+        for _ in range(10):
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
 
     def refresh_appearance(self):
         """Rutina completa de arranque: tema + fuente + iconos + textos.

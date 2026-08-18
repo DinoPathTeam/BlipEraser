@@ -11,6 +11,31 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔤 Arreglado: cambiar la fuente en Ajustes con la app abierta (regresión)
+
+- **Por qué:** al cambiar la fuente desde Ajustes, el texto no se actualizaba
+  hasta cambiar de página o redimensionar la ventana. El re-polish se hacía
+  con `app.style()`, pero la QSS envuelve el estilo base en un `QStyleSheetStyle`
+  propio por widget, así que la caché de fuente resuelta quedaba intacta.
+- **Fix:** el unpolish/polish ahora se hace con `widget.style()` por widget
+  (sobre `app.allWidgets()`, incluidas las páginas ocultas del QStackedWidget),
+  y se fuerza `update()` para que el repintado use la fuente nueva.
+- **Robustez para la suite GUI:** el unpolish/polish bajo QSS deja programado el
+  borrado diferido (`DeferredDelete`) del `QStyleSheetStyle` anterior. Si quedan
+  pendientes, el driver global de `QPropertyAnimation` de la QApplication deja de
+  hacer ticks para animaciones creadas después (el splash de arranque en los tests
+  se quedaba en `Running` sin avanzar). Se procesan los `DeferredDelete` al final
+  de `_apply_appearance()` para no dejar el driver en mal estado.
+- **Código:** `src/blip_eraser/renderer.py` (`_apply_appearance`),
+  `tests/test_font_change_gui.py` (nuevo, +4 tests: señal `font_changed` actualiza
+  `QApplication.font()`, widgets de todas las páginas, segundo cambio seguido sin
+  pausa, y persistencia en `prefs.json`).
+- **Verificación:**
+  - Con PyQt6 (offscreen): `266 passed, 0 skipped` (262 previos + 4 del nuevo
+    módulo de fuente). Suite completa verde y estable en corridas consecutivas.
+  - Sin PyQt6 (este Windows): `235 passed, 5 skipped` (el nuevo módulo de fuente
+    se suma a los 4 módulos GUI que requieren PyQt6).
+
 ### ⚙️ Cambiado: escaneos del Desinstalador y del Limpiador en segundo plano
 
 - **Por qué:** al abrir "Desinstalador" o "Limpiador del sistema" (y tras cada
@@ -275,12 +300,13 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests sin PyQt6 (este Windows): `235 passed, 4 skipped` (skips: `test_check_table_gui.py`,
-  `test_splash_gui.py`, `test_refresh_after_delete_gui.py` y `test_theme_contrast_gui.py`,
-  requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `262 passed, 0 skipped` — incluye la
+- Tests sin PyQt6 (este Windows): `235 passed, 5 skipped` (skips: `test_check_table_gui.py`,
+  `test_splash_gui.py`, `test_refresh_after_delete_gui.py`, `test_theme_contrast_gui.py`
+  y `test_font_change_gui.py`, requieren PyQt6).
+- Tests con PyQt6 (offscreen / CachyOS): `266 passed, 0 skipped` - incluye la
   suite GUI del splash (animación de entrada + encolado de mensajes), el
   refresco tras acción destructiva, la selección masiva del CheckTable, el
-  contraste del gauge + tinte de íconos del sidebar, y los escaneos en segundo
+  contraste del gauge + tinte de íconos del sidebar, los escaneos en segundo
   plano del Desinstalador y del Limpiador (no bloqueo de la GUI, descarte de
-  resultados obsoletos).
+  resultados obsoletos), y el cambio de fuente en caliente desde Ajustes
+  (señal `font_changed` → `QApplication.font()`, widgets y persistencia).
