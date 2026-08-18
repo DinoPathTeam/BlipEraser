@@ -11,6 +11,42 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🛡️ Defensa dura + instrumentación forense para renders (crash recurrente de CachyOS)
+
+- **Por qué:** el crash `RuntimeError: wrapped C/C++ object of type QVBoxLayout
+  has been deleted` en `overview_page._rebuild_apps` reapareció **3 veces** en
+  CachyOS pese a los guards de entrada (commits `2074ecf` y `ca49ecf`). El
+  número de línea del traceback confirmaba que el guard SÍ estaba desplegado,
+  por lo que el layout muere a **MITAD** de la reconstrucción, después del
+  guard inicial (la causa raíz exacta sigue sin diagnosticarse: el objetivo de
+  esta ronda es que la app no se caiga y que el próximo fallo deje evidencia).
+- **Defensa dura:** `_rebuild_apps` (Overview) y los `_render` del Desinstalador
+  y las dos secciones del Limpiador envuelven su cuerpo en `try/except
+  RuntimeError` que NO relanza: si un widget/layout muere en C++ durante el
+  render, se avisa al usuario en el log ("No se pudo actualizar la lista;
+  pulsa «Actualizar lista» para reintentar") y la app sigue funcionando.
+- **Instrumentación forense:** nueva bitácora `write_diagnostic()` en
+  `utils/log.py` → `~/.cache/blip-eraser/diagnostics.log` (timestamp + hilo,
+  truncada a 2 MB, best-effort). En cada fallo se registran: `sip.isdeleted()`
+  de página/layout/widget implicado, `id()` del layout (detecta reasignaciones),
+  filas limpiadas / fila en curso / total, y `threading.current_thread().name`.
+  Además, `_rebuild_apps` traza a nivel debug cada `deleteLater()` de fila y
+  cada `addWidget[i]` para reconstruir la secuencia de destrucciones.
+- **Helpers compartidos:** `BackgroundScanMixin._render_failure()` (contención
+  + evidencia + aviso) y `_forensic_debug()` (línea forense de depuración), así
+  que cualquier página futura hereda la misma defensa.
+- **Verificación:** `tests/test_log.py` (+4 tests puros del logger forense) y
+  `tests/test_render_hardening_gui.py` (nuevo, +8 tests GUI): layout que muere
+  A MITAD de `_rebuild_apps` (después de limpiar filas viejas, antes del
+  addWidget) → sin crash, error registrado, evidencia forense completa;
+  layout muerto al entrar → descarte con evidencia; tabla muerta en
+  Desinstalador/Limpiador → contenida; y camino feliz sin cambios. Suite: con
+  PyQt6 `293 passed`; sin PyQt6 `239 passed, 8 skipped`.
+- **Código:** `src/blip_eraser/utils/log.py`, `src/blip_eraser/utils/i18n.py`,
+  `src/blip_eraser/widgets/scan_worker.py`, `src/blip_eraser/pages/overview_page.py`,
+  `src/blip_eraser/pages/uninstaller_page.py`, `src/blip_eraser/pages/cleaner_page.py`,
+  `tests/test_log.py`, `tests/test_render_hardening_gui.py` (nuevo).
+
 ### 🔧 Corregido: crash persistente al primer arranque cuando el layout de apps muere solo (CachyOS)
 
 - **Por qué:** el crash `RuntimeError: wrapped C/C++ object of type

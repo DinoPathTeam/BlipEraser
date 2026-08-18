@@ -128,15 +128,25 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
         else:
             self._visible = list(self._found)
 
-        self.table.setRowCount(0)
-        for cat_key, path, size in self._visible:
-            row = self.table.add_check_row()
-            self.table.setItem(
-                row, 1, QTableWidgetItem(tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")))
+        try:
+            self.table.setRowCount(0)
+            for cat_key, path, size in self._visible:
+                row = self.table.add_check_row()
+                self.table.setItem(
+                    row, 1, QTableWidgetItem(tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")))
+                )
+                self.table.setItem(row, 2, QTableWidgetItem(str(path)))
+                self.table.setItem(row, 3, QTableWidgetItem(human_size(size)))
+            self.table.refresh_header_state()
+        except RuntimeError as exc:
+            # Defensa dura (mismo patrón que el crash de Overview en CachyOS):
+            # la tabla puede morir en C++ con la sección viva; no tumba la app.
+            self._render_failure(
+                "cleaner_recommended._render",
+                exc,
+                table=self.table,
+                extra={"rows": len(self._visible)},
             )
-            self.table.setItem(row, 2, QTableWidgetItem(str(path)))
-            self.table.setItem(row, 3, QTableWidgetItem(human_size(size)))
-        self.table.refresh_header_state()
 
     # ------------------------------------------------------------------
     # Borrado
@@ -247,14 +257,24 @@ class _ManualSection(QWidget, BackgroundScanMixin):
         else:
             self._visible = list(self._found)
 
-        self.table.setRowCount(0)
-        for path in self._visible:
-            row = self.table.add_check_row()
-            self.table.setItem(row, 1, QTableWidgetItem(str(path)))
-            self.table.setItem(
-                row, 2, QTableWidgetItem(human_size(path_size_for_display(path)))
+        try:
+            self.table.setRowCount(0)
+            for path in self._visible:
+                row = self.table.add_check_row()
+                self.table.setItem(row, 1, QTableWidgetItem(str(path)))
+                self.table.setItem(
+                    row, 2, QTableWidgetItem(human_size(path_size_for_display(path)))
+                )
+            self.table.refresh_header_state()
+        except RuntimeError as exc:
+            # Defensa dura (mismo patrón que el crash de Overview en CachyOS):
+            # la tabla puede morir en C++ con la sección viva; no tumba la app.
+            self._render_failure(
+                "cleaner_manual._render",
+                exc,
+                table=self.table,
+                extra={"rows": len(self._visible)},
             )
-        self.table.refresh_header_state()
 
     # ------------------------------------------------------------------
     # Borrado

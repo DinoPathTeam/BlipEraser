@@ -15,7 +15,9 @@ from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.utils.log import write_diagnostic
 
 
 class _ScanBridge(QObject):
@@ -75,6 +77,68 @@ class BackgroundScanMixin:
         from PyQt6 import sip
 
         return not sip.isdeleted(self)
+
+    def _forensic_debug(self, label: str, **widgets) -> str:
+        """Línea forense de depuración (vida + identidad de widgets implicados).
+
+        Va a la bitácora de diagnóstico (write_diagnostic), nunca a la UI del
+        usuario. `id()` permite comparar si un widget cambia de identidad
+        entre eventos (descarta/revela reasignaciones).
+        """
+        from PyQt6 import sip
+
+        try:
+            parts = [
+                f"{label} page_alive={not sip.isdeleted(self)} "
+                f"page_id={id(self)} thread={threading.current_thread().name}"
+            ]
+        except Exception:  # noqa: BLE001 - forense: nunca romper por el propio log
+            parts = [f"{label} page=unreadable"]
+        for name, widget in widgets.items():
+            try:
+                parts.append(f"{name}_alive={not sip.isdeleted(widget)} id={id(widget)}")
+            except Exception:  # noqa: BLE001
+                parts.append(f"{name}=unreadable")
+        return " ".join(parts)
+
+    def _render_failure(
+        self,
+        label: str,
+        exc: BaseException,
+        *,
+        user_message: str | None = None,
+        extra: dict | None = None,
+        **widgets,
+    ) -> None:
+        """Contiene un RuntimeError de render/rebuild SIN tumbar la app.
+
+        Aunque la causa raíz siga sin diagnosticarse, ninguna página puede
+        derribar la app por widgets/layouts destruidos a mitad de ejecución:
+        se deja evidencia forense en la bitácora de diagnóstico (vida e
+        identidad de los widgets implicados + datos del instante del fallo),
+        se avisa al usuario en el log con `user_message` (o el genérico
+        ``table_render_failed``) y NO se relanza la excepción.
+        """
+        from PyQt6 import sip
+
+        parts = [f"RENDER_FAILED {label}: {exc}"]
+        try:
+            parts += [
+                f"page_alive={not sip.isdeleted(self)}",
+                f"page_id={id(self)}",
+                f"thread={threading.current_thread().name}",
+            ]
+        except Exception:  # noqa: BLE001
+            parts.append("page=unreadable")
+        for name, widget in widgets.items():
+            try:
+                parts.append(f"{name}_alive={not sip.isdeleted(widget)} id={id(widget)}")
+            except Exception:  # noqa: BLE001
+                parts.append(f"{name}=unreadable")
+        for key, value in (extra or {}).items():
+            parts.append(f"{key}={value}")
+        write_diagnostic(" ".join(parts))
+        log_buffer.add(user_message if user_message is not None else tr("table_render_failed"))
 
     def _start_background_scan(
         self, fn: Callable[[], object], on_result: Callable[[object], None]

@@ -6,8 +6,10 @@ que la GUI refresque el panel de registro sin conocer su implementación.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
 Listener = Callable[[list[tuple[str, str]]], None]
 
@@ -66,3 +68,40 @@ class LogBuffer:
 
 
 log = LogBuffer()
+
+
+# ---------------------------------------------------------------------------
+# Bitácora forense (no visible en la UI)
+# ---------------------------------------------------------------------------
+# Mientras `log` alimenta la "Actividad reciente" (visible al usuario),
+# write_diagnostic() escribe a un archivo aparte con timestamp + hilo: sirve
+# para reconstruir la secuencia exacta de destrucciones de widgets Qt si un
+# RuntimeError vuelve a ocurrir en producción (p. ej. "wrapped C/C++ object
+# of type QVBoxLayout has been deleted" en CachyOS). El usuario normal nunca
+# la ve; un diagnóstico de CachyOS solo necesita adjuntar el archivo.
+DIAG_LOG_PATH = Path.home() / ".cache" / "blip-eraser" / "diagnostics.log"
+DIAG_LOG_MAX_BYTES = 2_000_000
+_diag_lock = threading.Lock()
+
+
+def write_diagnostic(message: str) -> None:
+    """Añade una línea forense a la bitácora de diagnóstico.
+
+    Best-effort: un fallo de escritura (permisos, disco, ...) nunca rompe la
+    app. La bitácora se trunca desde cero si supera ``DIAG_LOG_MAX_BYTES``
+    para no crecer sin límite.
+    """
+    try:
+        line = (
+            f"[{datetime.now().isoformat(timespec='milliseconds')}] "
+            f"[{threading.current_thread().name}] {message}\n"
+        )
+        with _diag_lock:
+            path = DIAG_LOG_PATH
+            if path.exists() and path.stat().st_size > DIAG_LOG_MAX_BYTES:
+                path.unlink()  # empezar de nuevo si se pasó del límite
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(line)
+    except OSError:
+        pass

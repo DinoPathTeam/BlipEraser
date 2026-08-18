@@ -146,17 +146,28 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         else:
             self._visible = list(self._apps)
 
-        self.table.setRowCount(0)
-        for app in self._visible:
-            row = self.table.add_check_row()
-            self.table.setItem(row, 1, QTableWidgetItem(app.name))
-            self.table.setItem(row, 2, QTableWidgetItem(tr(kind_label_key(app.kind))))
-            self.table.setItem(row, 3, QTableWidgetItem(app.detail))
-            self.table.setItem(
-                row, 4, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
+        try:
+            self.table.setRowCount(0)
+            for app in self._visible:
+                row = self.table.add_check_row()
+                self.table.setItem(row, 1, QTableWidgetItem(app.name))
+                self.table.setItem(row, 2, QTableWidgetItem(tr(kind_label_key(app.kind))))
+                self.table.setItem(row, 3, QTableWidgetItem(app.detail))
+                self.table.setItem(
+                    row, 4, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
+                )
+                self.table.setItem(row, 5, QTableWidgetItem(app.install_date))
+            self._update_uninstall_btn()
+        except RuntimeError as exc:
+            # Defensa dura: la tabla (widget Qt) puede morir en C++ dejando la
+            # página viva (mismo patrón que el crash de Overview en CachyOS).
+            # No tumba la app: se deja evidencia forense y se avisa al usuario.
+            self._render_failure(
+                "uninstaller_page._render",
+                exc,
+                table=self.table,
+                extra={"rows": len(self._visible)},
             )
-            self.table.setItem(row, 5, QTableWidgetItem(app.install_date))
-        self._update_uninstall_btn()
 
     # ------------------------------------------------------------------
     # Acciones

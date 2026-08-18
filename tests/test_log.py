@@ -1,6 +1,10 @@
 """Tests para utils/log.py (buffer de registro, sin PyQt6)."""
 
-from blip_eraser.utils.log import LogBuffer
+from pathlib import Path
+
+from blip_eraser.utils.log import LogBuffer, write_diagnostic
+
+import blip_eraser.utils.log as log_mod
 
 
 class TestLogBuffer:
@@ -82,3 +86,39 @@ class TestLogBuffer:
         buf.add("b")
         buf.add("a")
         assert [msg for _ts, msg in buf.entries()] == ["a", "b", "a"]
+
+
+class TestWriteDiagnostic:
+    """Bitácora forense (archivo aparte, no visible en la UI)."""
+
+    def test_writes_timestamped_line_with_thread(self, tmp_path, monkeypatch):
+        import threading
+
+        path = tmp_path / "diagnostics.log"
+        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", path)
+        write_diagnostic("RENDER_FAILED probe")
+        lines = path.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 1
+        assert lines[0].endswith("] [MainThread] RENDER_FAILED probe")
+        assert lines[0].startswith("[20")  # timestamp ISO con año
+
+    def test_appends_multiple_lines(self, tmp_path, monkeypatch):
+        path = tmp_path / "diagnostics.log"
+        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", path)
+        write_diagnostic("a")
+        write_diagnostic("b")
+        assert len(path.read_text(encoding="utf-8").strip().splitlines()) == 2
+
+    def test_rotates_when_file_too_large(self, tmp_path, monkeypatch):
+        path = tmp_path / "diagnostics.log"
+        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", path)
+        monkeypatch.setattr(log_mod, "DIAG_LOG_MAX_BYTES", 200)
+        write_diagnostic("x" * 300)  # supera el límite
+        write_diagnostic("segunda")
+        content = path.read_text(encoding="utf-8")
+        assert content.endswith("] [MainThread] segunda\n")
+        assert "x" * 300 not in content  # la primera línea se truncó
+
+    def test_never_raises_on_bad_path(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", Path("Z:/inexistente/dir/debug.log"))
+        write_diagnostic("no debe romper")  # sin excepción

@@ -32,6 +32,7 @@ from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.scan import (
     CLEANUP_CATEGORY_LABEL_KEYS,
     scan_cleanup,
@@ -329,71 +330,117 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         if sip.isdeleted(self._apps_layout):
             # Defensa extra (también se llega desde retranslate()): no tocar
             # un layout que Qt ya destruyó en C++, da igual que la página viva.
-            return
-        while self._apps_layout.count():
-            item = self._apps_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        if not self._apps:
-            empty = QLabel(tr("apps_empty"))
-            empty.setObjectName("SubText")
-            empty.setWordWrap(True)
-            self._apps_layout.addWidget(empty)
-            self.apps_count.setText(tr("apps_count_label").format(count=0))
+            write_diagnostic(
+                self._forensic_debug(
+                    "_rebuild_apps skipped (layout ya muerto al entrar)",
+                    apps_layout=self._apps_layout,
+                    apps_widget=self._apps_widget,
+                )
+            )
             return
 
-        self.apps_count.setText(tr("apps_count_label").format(count=len(self._apps)))
-        for app in self._apps:
-            row = QWidget()
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(4, 2, 4, 2)
-            row_layout.setSpacing(8)
-
-            # Icono de la app (por nombre, con respaldo genérico)
-            icon = QIcon.fromTheme(app.name.lower(), QIcon.fromTheme(_ICON_FALLBACK))
-            icon_label = QLabel()
-            icon_label.setPixmap(icon.pixmap(20, 20))
-            row_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
-
-            meta = QVBoxLayout()
-            meta.setSpacing(0)
-
-            name_row = QHBoxLayout()
-            name_row.setSpacing(6)
-            name_label = QLabel(app.name)
-            name_row.addWidget(name_label)
-
-            # Etiqueta del tipo: aplicación / dependencia / carpeta suelta
-            kind_key = kind_label_key(app.kind)
-            kind_obj = {
-                "app": "KindTagApp",
-                "dependency": "KindTagDep",
-                "folder": "KindTagFolder",
-            }.get(app.kind, "KindTagFolder")
-            kind_tag = QLabel(tr(kind_key))
-            kind_tag.setObjectName(kind_obj)
-            name_row.addWidget(kind_tag)
-            name_row.addStretch(1)
-            meta.addLayout(name_row)
-
-            sub_label = QLabel(
-                f"{app.detail}  |  {human_size(app.size_bytes)}"
-                if app.size_bytes
-                else app.detail
+        cleared_rows = 0
+        adding_index: int | None = None
+        try:
+            write_diagnostic(
+                self._forensic_debug(
+                    "_rebuild_apps start",
+                    apps_layout=self._apps_layout,
+                    apps_widget=self._apps_widget,
+                )
             )
-            sub_label.setObjectName("SubText")
-            sub_label.setWordWrap(True)
-            meta.addWidget(sub_label)
-            row_layout.addLayout(meta, 1)
+            while self._apps_layout.count():
+                item = self._apps_layout.takeAt(0)
+                widget = item.widget()
+                if widget:
+                    write_diagnostic(f"_rebuild_apps deleteLater widget_id={id(widget)}")
+                    widget.deleteLater()
+                cleared_rows += 1
 
-            uninstall_btn = QPushButton(tr("uninstall_short"))
-            uninstall_btn.setObjectName("DangerButton")
-            uninstall_btn.clicked.connect(
-                lambda _=False, n=app.name, s=app.source, d=app.detail: self.uninstall_requested.emit(n, s, d)
+            if not self._apps:
+                empty = QLabel(tr("apps_empty"))
+                empty.setObjectName("SubText")
+                empty.setWordWrap(True)
+                self._apps_layout.addWidget(empty)
+                self.apps_count.setText(tr("apps_count_label").format(count=0))
+                return
+
+            self.apps_count.setText(tr("apps_count_label").format(count=len(self._apps)))
+            for i, app in enumerate(self._apps):
+                adding_index = i
+                write_diagnostic(
+                    self._forensic_debug(
+                        f"_rebuild_apps addWidget[{i}]",
+                        apps_layout=self._apps_layout,
+                        apps_widget=self._apps_widget,
+                    )
+                )
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(4, 2, 4, 2)
+                row_layout.setSpacing(8)
+
+                # Icono de la app (por nombre, con respaldo genérico)
+                icon = QIcon.fromTheme(app.name.lower(), QIcon.fromTheme(_ICON_FALLBACK))
+                icon_label = QLabel()
+                icon_label.setPixmap(icon.pixmap(20, 20))
+                row_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
+
+                meta = QVBoxLayout()
+                meta.setSpacing(0)
+
+                name_row = QHBoxLayout()
+                name_row.setSpacing(6)
+                name_label = QLabel(app.name)
+                name_row.addWidget(name_label)
+
+                # Etiqueta del tipo: aplicación / dependencia / carpeta suelta
+                kind_key = kind_label_key(app.kind)
+                kind_obj = {
+                    "app": "KindTagApp",
+                    "dependency": "KindTagDep",
+                    "folder": "KindTagFolder",
+                }.get(app.kind, "KindTagFolder")
+                kind_tag = QLabel(tr(kind_key))
+                kind_tag.setObjectName(kind_obj)
+                name_row.addWidget(kind_tag)
+                name_row.addStretch(1)
+                meta.addLayout(name_row)
+
+                sub_label = QLabel(
+                    f"{app.detail}  |  {human_size(app.size_bytes)}"
+                    if app.size_bytes
+                    else app.detail
+                )
+                sub_label.setObjectName("SubText")
+                sub_label.setWordWrap(True)
+                meta.addWidget(sub_label)
+                row_layout.addLayout(meta, 1)
+
+                uninstall_btn = QPushButton(tr("uninstall_short"))
+                uninstall_btn.setObjectName("DangerButton")
+                uninstall_btn.clicked.connect(
+                    lambda _=False, n=app.name, s=app.source, d=app.detail: self.uninstall_requested.emit(n, s, d)
+                )
+                row_layout.addWidget(uninstall_btn)
+                self._apps_layout.addWidget(row)
+        except RuntimeError as exc:
+            # Defensa dura: aunque el layout muera a MITAD de la reconstrucción
+            # (después del guard inicial), la app sigue viva. Dejamos la
+            # evidencia forense en la bitácora de diagnóstico y avisamos al
+            # usuario; NO se relanza la excepción.
+            self._render_failure(
+                "overview_page._rebuild_apps",
+                exc,
+                user_message=tr("overview_rebuild_failed"),
+                apps_layout=self._apps_layout,
+                apps_widget=self._apps_widget,
+                extra={
+                    "rows_cleared": cleared_rows,
+                    "adding_index": adding_index,
+                    "apps_total": len(self._apps),
+                },
             )
-            row_layout.addWidget(uninstall_btn)
-            self._apps_layout.addWidget(row)
 
     # ------------------------------------------------------------------
     # Refresco de métricas del sistema
