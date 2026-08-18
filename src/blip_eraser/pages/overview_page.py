@@ -12,6 +12,7 @@ y actualiza el gauge, las métricas, la lista de apps y el resumen de
 limpieza con datos reales. Toda la lógica es pura y testeable.
 """
 
+from PyQt6 import sip
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
@@ -310,7 +311,25 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             f"{tr('metric_loose')}: {sum(1 for a in self._apps if a.source == 'manual')}"
         )
 
+    def _widget_is_alive(self) -> bool:
+        """La página viva en C++ Y su layout de apps también.
+
+        La página (OverviewPage) y el layout (self._apps_layout) son objetos
+        C++ independientes: Qt puede destruir el layout por separado (p. ej. si
+        el scroll/estilo lo reemplaza, o durante un cierre) dejando la página
+        viva. El mixin solo verifica la página; aquí se añade el layout para
+        que un resultado tardío no llame a addWidget/count sobre un QVBoxLayout
+        ya borrado (RuntimeError "wrapped C/C++ object ... has been deleted").
+        """
+        if not super()._widget_is_alive():
+            return False
+        return not sip.isdeleted(self._apps_layout)
+
     def _rebuild_apps(self):
+        if sip.isdeleted(self._apps_layout):
+            # Defensa extra (también se llega desde retranslate()): no tocar
+            # un layout que Qt ya destruyó en C++, da igual que la página viva.
+            return
         while self._apps_layout.count():
             item = self._apps_layout.takeAt(0)
             if item.widget():

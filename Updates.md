@@ -11,6 +11,35 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔧 Corregido: crash persistente al primer arranque cuando el layout de apps muere solo (CachyOS)
+
+- **Por qué:** el crash `RuntimeError: wrapped C/C++ object of type
+  QVBoxLayout has been deleted` seguía apareciendo en CachyOS en el primer
+  arranque, pocos segundos tras el splash, en `overview_page.py:377`
+  (`self._apps_layout.addWidget(row)`), aunque la página en sí seguía viva.
+  La guarda anterior (`_widget_is_alive()` del mixin) solo comprobaba
+  `sip.isdeleted(self)`; la página (OverviewPage) y su layout
+  (`self._apps_layout`) son objetos C++ independientes, y Qt puede destruir
+  el layout por separado dejando la página viva. Con la página viva la guarda
+  pasaba, el resultado se entregaba y `_rebuild_apps` crasheaba.
+- **Cómo (1):** `OverviewPage` sobrescribe `_widget_is_alive()` para
+  comprobar también `sip.isdeleted(self._apps_layout)`: si el layout ya no
+  existe en C++, el resultado del escaneo (y el fallo del worker) se
+  descartan en silencio, igual que cuando muere la página entera.
+- **Cómo (2):** defensa extra al inicio de `_rebuild_apps()` (la ruta de
+  `retranslate()` no pasa por el guard del mixin): no tocar un layout que Qt
+  ya destruyó.
+- **Verificación:** `tests/test_overview_crash_gui.py` ampliado (+4 tests):
+  página viva + layout muerto detectado por el guard, resultado de escaneo
+  descartado en esa situación, `_rebuild_apps` directo sin RuntimeError, y
+  control positivo con layout vivo. No se pudo reproducir el crash de
+  CachyOS en Windows (offscreen): dos repros fieles del arranque (splash →
+  worker → MainWindow, con y sin diálogos modales del primer arranque)
+  mantienen el layout vivo todo el flujo; la reproducción local es
+  determinística solo destruyendo el layout por separado.
+- **Código:** `src/blip_eraser/pages/overview_page.py`,
+  `tests/test_overview_crash_gui.py`.
+
 ### 🔧 Corregido: crash al cerrar la app durante un escaneo de Overview (CachyOS)
 
 - **Por qué:** en CachyOS la app crasheaba con `RuntimeError: wrapped C/C++

@@ -194,3 +194,72 @@ class TestLogListenerUnsubscribesOnDeath:
         buffer.add("y")
         assert alive["calls"] == 3  # sigue notificando
         assert dead["calls"] == 2  # el muerto ya no se llama
+
+
+class TestScanResultWhenLayoutDeadButPageAlive:
+    """Variante del crash de CachyOS: la PÁGINA está viva en C++ pero su
+    layout de apps (self._apps_layout) ha sido destruido por separado.
+
+    La traza de producción crasheaba en `_rebuild_apps -> addWidget(row)`
+    con "wrapped C/C++ object of type QVBoxLayout has been deleted", mientras
+    el guard del mixin (que solo mira sip.isdeleted(self)) dejaba pasar el
+    resultado. Aquí se destruye SOLO el layout (vía su widget padre) y se
+    verifica que la página lo detecta y descarta sin RuntimeError.
+    """
+
+    def _page(self, app, monkeypatch):
+        monkeypatch.setattr(overview_mod.OverviewPage, "_scan", lambda self: None)
+        page = overview_mod.OverviewPage()
+        page._apps = []
+        return page
+
+    def _destroy_layout_only(self, app, page):
+        """Destruye self._apps_layout en C++ dejando la página viva."""
+        page._apps_widget.deleteLater()
+        app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+        assert not sip.isdeleted(page)
+        assert sip.isdeleted(page._apps_layout)
+
+    def test_page_alive_but_layout_dead_is_detected(self, app, prefs_tmp, monkeypatch):
+        """El guard ampliado detecta layout muerto aunque la página viva."""
+        page = self._page(app, monkeypatch)
+        assert page._widget_is_alive() is True  # control: ambos vivos
+
+        self._destroy_layout_only(app, page)
+        assert page._widget_is_alive() is False
+
+    def test_scan_result_discarded_when_layout_dead(self, app, prefs_tmp, monkeypatch):
+        """Resultado que llega con el layout muerto: descarte sin RuntimeError."""
+        page = self._page(app, monkeypatch)
+        page._scan_token = 1
+        page._scanning = True
+        calls = {"on_result": 0}
+        page._scan_on_result = lambda result: calls.__setitem__(
+            "on_result", calls["on_result"] + 1
+        )
+        for btn in page._scan_buttons:
+            btn.setEnabled(False)
+
+        self._destroy_layout_only(app, page)
+
+        # Sin este fix, _on_scan_result_ready pasaba el guard (página viva) y
+        # _rebuild_apps crasheaba con "wrapped C/C++ object ... has been deleted".
+        page._on_scan_result_ready((1, {"apps": [], "cleanup": dict(_CLEANUP)}))
+        assert calls["on_result"] == 0
+        assert page._scanning is True  # nada se tocó
+
+    def test_rebuild_apps_guarded_when_layout_dead(self, app, prefs_tmp, monkeypatch):
+        """_rebuild_apps directo (p. ej. desde retranslate) no revienta con el
+        layout muerto."""
+        page = self._page(app, monkeypatch)
+        page._apps = [object()]
+        self._destroy_layout_only(app, page)
+
+        page._rebuild_apps()  # sin RuntimeError
+
+    def test_rebuild_apps_works_when_layout_alive(self, app, prefs_tmp, monkeypatch):
+        """Control positivo: layout vivo -> _rebuild_apps reconstruye la lista."""
+        page = self._page(app, monkeypatch)
+        page._apps = []
+        page._rebuild_apps()
+        assert page._apps_layout.count() == 1  # label "apps vacías"
