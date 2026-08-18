@@ -11,6 +11,40 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔧 Corregido: crash al cerrar la app durante un escaneo de Overview (CachyOS)
+
+- **Por qué:** en CachyOS la app crasheaba con `RuntimeError: wrapped C/C++
+  object of type QVBoxLayout has been deleted` al cerrar la ventana mientras
+  un escaneo de fondo seguía en marcha. El hilo daemon (`threading.Thread`)
+  mantiene viva la referencia al bound method de la página, así que el
+  wrapper Python sobrevive al cierre, pero Qt ya destruyó el C++ del widget
+  y de sus layouts; cuando el resultado llegaba al hilo principal y el slot
+  tocaba `_apps_layout.addWidget(...)`, Qt lanzaba el RuntimeError y la app
+  se cerraba sola.
+- **Cómo (1):** `OverviewPage` migra de su `threading.Thread` propio +
+  señales a `BackgroundScanMixin` (el patrón ya usado por Desinstalador y
+  Limpiador), con token de generación por escaneo.
+- **Cómo (2):** el mixin añade `_widget_is_alive()` (`PyQt6.sip.isdeleted`)
+  y lo comprueba al inicio de `_on_scan_result_ready` y `_on_scan_failed`:
+  si la página ya no existe en C++ (cierre de app/ventana), el resultado se
+  descarta en silencio sin tocar botones ni widgets. Beneficia también a
+  Desinstalador y Limpiador.
+- **Cómo (3):** el buffer de log (`utils/log.py`) ahora es auto-curativo:
+  `_notify()` descarta listeners cuyo widget C++ ya fue destruido (los
+  que lanzan `RuntimeError` al notificar), y `_on_log` de OverviewPage
+  comprueba la vida del widget antes de tocar `activity_list`. `LogPanel`
+  hace lo propio con `sip.isdeleted(self)`.
+- **Verificación:** `tests/test_overview_crash_gui.py` (nuevo, +7 tests:
+  resultado que llega tras destruir la página se descarta, worker que falla
+  tras la destrucción, control positivo con widget vivo, token obsoleto
+  ignorado, y notificación al log tras la muerte del widget/página sin
+  crash). Además 10 arranques/cierres de la app con el escaneo en vuelo sin
+  RuntimeError.
+- **Código:** `src/blip_eraser/pages/overview_page.py`,
+  `src/blip_eraser/widgets/scan_worker.py`, `src/blip_eraser/utils/log.py`,
+  `src/blip_eraser/widgets/log_panel.py`, `tests/test_overview_crash_gui.py`
+  (nuevo).
+
 ### 🖼️ Añadido: ícono de aplicación propio (barra de título y barra de tareas)
 
 - **Por qué:** BlipEraser usaba el ícono genérico por defecto de Qt en la

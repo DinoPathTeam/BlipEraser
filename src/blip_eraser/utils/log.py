@@ -42,13 +42,27 @@ class LogBuffer:
         self._listeners.append(listener)
         listener(self._entries)
 
+    def unsubscribe(self, listener: Listener) -> None:
+        """Quita un listener. Sin efecto si no estaba suscrito."""
+        self._listeners = [l for l in self._listeners if l is not listener]
+
     def latest(self) -> str | None:
         return self._entries[-1][1] if self._entries else None
 
     def _notify(self) -> None:
         snapshot = list(self._entries)
+        alive = []
         for listener in self._listeners:
-            listener(snapshot)
+            try:
+                listener(snapshot)
+                alive.append(listener)
+            except RuntimeError:
+                # Listener cuyo widget C++ ya fue destruido (cierre de app,
+                # página muerta por una ventana cerrada): descartarlo para que
+                # no vuelva a notificar y no bloquee a los demás.
+                pass
+        if len(alive) != len(self._listeners):
+            self._listeners = alive
 
 
 log = LogBuffer()

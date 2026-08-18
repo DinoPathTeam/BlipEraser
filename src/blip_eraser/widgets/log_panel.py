@@ -4,6 +4,7 @@ Se suscribe al buffer global `blip_eraser.utils.log.log` y refresca su
 visor ante cualquier cambio, sin conocer quién escribe en el buffer.
 """
 
+from PyQt6 import sip
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -46,6 +47,8 @@ class LogPanel(QWidget):
         self.clear_btn.setText(tr("log_clear_activity"))
 
     def _on_log(self, entries: list[tuple[str, str]]) -> None:
+        if sip.isdeleted(self):
+            return  # panel destruido pero el buffer global sigue notificando
         lines = [f"[{ts}] {msg}" for ts, msg in entries]
         self.view.setPlainText("\n".join(lines))
 

@@ -45,6 +45,10 @@ class BackgroundScanMixin:
     - Token por generación: si se lanza otro escaneo antes de que llegue el
       resultado anterior, el anterior se descarta (doble refresco, o navegar
       y volver mientras un escaneo corre).
+    - Verificación de vida del widget: si la página fue destruida en C++
+      (cierre de la app mientras el hilo corre), el resultado se descarta sin
+      tocar ningún widget — el wrapper Python puede seguir vivo por la
+      referencia del hilo, pero su C++ subyacente ya no existe.
     - El resultado se aplica aunque la página esté oculta: las páginas viven
       toda la sesión en el QStackedWidget (nunca se destruyen al navegar),
       así que es seguro y deja los datos listos para cuando el usuario vuelva.
@@ -58,6 +62,19 @@ class BackgroundScanMixin:
         self._scan_bridge = _ScanBridge()
         self._scan_bridge.result_ready.connect(self._on_scan_result_ready)
         self._scan_bridge.failed.connect(self._on_scan_failed)
+
+    def _widget_is_alive(self) -> bool:
+        """True si el QObject C++ subyacente de la página sigue existiendo.
+
+        Un thread de fondo puede terminar después de que la app/ventana se
+        cierre: el hilo mantiene viva la referencia al bound method, así que
+        el wrapper Python sobrevive, pero Qt ya destruyó el C++ del widget y
+        de sus layouts/hijos. Tocar cualquiera de ellos lanzaría RuntimeError
+        ("wrapped C/C++ object ... has been deleted").
+        """
+        from PyQt6 import sip
+
+        return not sip.isdeleted(self)
 
     def _start_background_scan(
         self, fn: Callable[[], object], on_result: Callable[[object], None]
@@ -83,6 +100,10 @@ class BackgroundScanMixin:
         token, result = payload
         if token != self._scan_token:
             return  # resultado obsoleto: se lanzó otro escaneo después
+        if not self._widget_is_alive():
+            # La página ya no existe en C++ (cierre de app): descartar sin
+            # tocar botones ni widgets, que lanzarían RuntimeError.
+            return
         self._scanning = False
         for btn in self._scan_buttons:
             btn.setEnabled(True)
@@ -90,6 +111,8 @@ class BackgroundScanMixin:
             self._scan_on_result(result)
 
     def _on_scan_failed(self, message: str) -> None:
+        if not self._widget_is_alive():
+            return
         self._scanning = False
         for btn in self._scan_buttons:
             btn.setEnabled(True)

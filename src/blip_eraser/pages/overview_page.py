@@ -12,8 +12,6 @@ y actualiza el gauge, las métricas, la lista de apps y el resumen de
 limpieza con datos reales. Toda la lógica es pura y testeable.
 """
 
-import threading
-
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
@@ -52,26 +50,21 @@ from blip_eraser.utils.system_stats import (
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.health_gauge import HealthGauge
 from blip_eraser.widgets.scan_button import ScanNowButton
+from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 
 _ICON_FALLBACK = "application-x-executable"
 
 
-class OverviewPage(QWidget):
+class OverviewPage(QWidget, BackgroundScanMixin):
     uninstall_requested = pyqtSignal(str, str, str)  # (nombre, fuente, detalle)
-    _scan_result = pyqtSignal(dict)
-    _cleanup_items_ready = pyqtSignal(list)  # entries de scan_cleanup_items()
-    _cleanup_summary_ready = pyqtSignal(dict)  # resultado de scan_cleanup()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._prev_cpu: tuple[int, int] | None = None
-        self._scanning = False
         self._accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._apps: list = []
-        self._scan_result.connect(self._on_scan_done)
-        self._cleanup_items_ready.connect(self._on_cleanup_items_ready)
-        self._cleanup_summary_ready.connect(self._on_cleanup_summary_ready)
         self._build_ui()
+        self._init_scan_buttons([self.scan_btn, self.cleanup_btn])
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
@@ -215,34 +208,26 @@ class OverviewPage(QWidget):
         outer.addLayout(layout, 1)
 
     # ------------------------------------------------------------------
-    # Escaneo (SCAN NOW) — en segundo plano para no bloquear la GUI
+    # Escaneo (SCAN NOW) — en segundo plano (BackgroundScanMixin)
     # ------------------------------------------------------------------
     def _scan(self):
         if self._scanning:
             return
-        self._scanning = True
         self.scan_btn.set_texts(tr("overview_scanning"), tr("overview_erase_subtitle"))
-        self.scan_btn.setEnabled(False)
+        self._start_background_scan(self._scan_worker, self._on_scan_done)
 
-        threading.Thread(target=self._scan_worker, daemon=True).start()
-
-    def _scan_worker(self):
+    def _scan_worker(self) -> dict:
         apps = list_installed_apps()
         cleanup = scan_cleanup()
-        self._scan_result.emit({"apps": apps, "cleanup": cleanup})
+        return {"apps": apps, "cleanup": cleanup}
 
     def _cleanup_now(self):
         """Botón del resumen: limpia basura + caché + registros (fondo, no bloquea)."""
         if self._scanning:
             return
-        self.cleanup_btn.setEnabled(False)
-        threading.Thread(target=self._cleanup_worker, daemon=True).start()
-
-    def _cleanup_worker(self):
-        self._cleanup_items_ready.emit(scan_cleanup_items())
+        self._start_background_scan(scan_cleanup_items, self._on_cleanup_items_ready)
 
     def _on_cleanup_items_ready(self, entries: list):
-        self.cleanup_btn.setEnabled(True)
         if not entries:
             QMessageBox.information(self, tr("done_title"), tr("cleanup_list_empty"))
             return
@@ -271,18 +256,13 @@ class OverviewPage(QWidget):
 
     def _refresh_cleanup_summary(self):
         """Recomputa SOLO el resumen 'SYSTEM CLEANUP RECOMMENDED' en segundo plano."""
-        threading.Thread(
-            target=lambda: self._cleanup_summary_ready.emit(scan_cleanup()),
-            daemon=True,
-        ).start()
+        self._start_background_scan(scan_cleanup, self._on_cleanup_summary_ready)
 
     def _on_cleanup_summary_ready(self, cleanup: dict):
         self._apply_cleanup(cleanup)
         self._apply_metrics(cleanup)
 
     def _on_scan_done(self, result: dict):
-        self._scanning = False
-        self.scan_btn.setEnabled(True)
         self.scan_btn.set_texts(tr("overview_erase_button"), tr("overview_erase_subtitle"))
 
         self._apps = result["apps"]
@@ -429,6 +409,8 @@ class OverviewPage(QWidget):
         self.disk_row.setText(f"{tr('status_disk')}: {disk_total}  ({disk}%)" if disk is not None else f"{tr('status_disk')}: {disk_total}  ({na})")
 
     def _on_log(self, entries: list[tuple[str, str]]):
+        if not self._widget_is_alive():
+            return  # la página ya no existe en C++: descartar (log_buffer global)
         recent = entries[-6:]
         if not recent:
             self.activity_list.setText(tr("list_empty_subtext"))
