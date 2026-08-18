@@ -8,15 +8,34 @@ contrario, genera el emblema dinámico con QPainter.
 from pathlib import Path
 
 from PyQt6.QtCore import QRect, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 ASSET_LOGO_PATH = Path(__file__).parent.parent / "assets" / "BlipEraserLogo.png"
+
+# Ícono de aplicación (barra de título, barra de tareas/dock, Alt+Tab).
+# Es un asset opcional: si falta, se devuelve un QIcon() vacío y Qt usa el
+# ícono por defecto, sin que la app falle.
+ASSET_ICON_PATH = Path(__file__).parent.parent / "assets" / "desktopiconBlip.png"
 
 # Altura objetivo del logotipo dentro del HeaderBar (px). El asset es
 # 2816x1536 y el emblema de fallback se dibuja a 64x64, así que este
 # escalado no produce borrosidad.
 LOGO_HEIGHT = 48
+
+
+def app_icon() -> QIcon:
+    """Ícono de la aplicación, o QIcon() vacío si el asset no existe.
+
+    Sigue el mismo patrón de ASSET_LOGO_PATH: el archivo es opcional. Si
+    no existe o no puede leerse, devolvemos un QIcon() vacío para que Qt
+    use el ícono por defecto del sistema (fallback silencioso).
+    """
+    if ASSET_ICON_PATH.exists():
+        icon = QIcon(str(ASSET_ICON_PATH))
+        if not icon.isNull():
+            return icon
+    return QIcon()
 
 
 class AppLogo(QWidget):

@@ -89,6 +89,11 @@ def main() -> int:
     from PyQt6.QtCore import QTimer
 
     app = QApplication(sys.argv)
+    # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a
+    # QIcon() vacío si el asset no existe (ver widgets/logo.py).
+    from blip_eraser.widgets.logo import app_icon
+
+    app.setWindowIcon(app_icon())
 
     saved = load_saved_language()
     if should_ask_for_language(saved):

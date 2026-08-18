@@ -11,6 +11,41 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🖼️ Añadido: ícono de aplicación propio (barra de título y barra de tareas)
+
+- **Por qué:** BlipEraser usaba el ícono genérico por defecto de Qt en la
+  barra de título y en la barra de tareas/dock. Ahora se integra el asset
+  `desktopiconBlip.png` (2048×2048, PNG 32-bit) para mostrar la marca en:
+  1. La barra de título de `MainWindow` y del `SplashScreen`.
+  2. La barra de tareas/dock del escritorio (Linux/GNOME/KDE Plasma).
+- **Cómo:** nuevo `app_icon()` en `widgets/logo.py` que devuelve un `QIcon`
+  si el asset existe y es legible, o un `QIcon()` vacío si no (fallback
+  silencioso, mismo patrón que `ASSET_LOGO_PATH`). Se aplica con
+  `app.setWindowIcon(app_icon())` en `main.py` (nivel aplicación) y con
+  `self.setWindowIcon(app_icon())` en `MainWindow.__init__` y en
+  `SplashScreen.__init__` (nivel ventana).
+- **Alt+Tab / entre escritorios:** `setWindowIcon()` a nivel de app y de
+  ventana es lo que Qt expone y cubre esto en desarrollo.
+- **Fuera de alcance (pendiente de empaquetado):** que la barra de tareas
+  asocie el ícono por *proceso* requiere un archivo `.desktop` con la
+  entrada `Icon=` en `~/.local/share/applications/` (o
+  `/usr/share/applications/` al empaquetar). El repo aún no tiene
+  `.desktop` ni PKGBUILD; eso se resuelve cuando se empaquete formalmente
+  vía AUR.
+- **Código:** `src/blip_eraser/widgets/logo.py` (`app_icon()`,
+  `ASSET_ICON_PATH`), `src/blip_eraser/main.py`, `src/blip_eraser/renderer.py`,
+  `src/blip_eraser/widgets/splash_screen.py`,
+  `src/blip_eraser/assets/desktopiconBlip.png` (nuevo),
+  `tests/test_app_icon_gui.py` (nuevo, +4 tests: `app_icon()` no nulo con
+  asset, `QIcon()` vacío con asset ausente, y `MainWindow` + `SplashScreen`
+  se construyen sin excepción en ambos casos).
+- **Verificación:**
+  - Con PyQt6 (offscreen): `270 passed, 0 skipped` (266 previos + 4 del
+    módulo del ícono). Suite completa verde y estable en corridas
+    consecutivas.
+  - Sin PyQt6 (este Windows): `235 passed, 6 skipped` (el módulo del ícono
+    se suma a los 5 módulos GUI que requieren PyQt6).
+
 ### 🔤 Arreglado: cambiar la fuente en Ajustes con la app abierta (regresión)
 
 - **Por qué:** al cambiar la fuente desde Ajustes, el texto no se actualizaba
@@ -300,13 +335,15 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 ## Verificación
 
 - Compilación: `python -m py_compile` sobre los módulos modificados, OK.
-- Tests sin PyQt6 (este Windows): `235 passed, 5 skipped` (skips: `test_check_table_gui.py`,
-  `test_splash_gui.py`, `test_refresh_after_delete_gui.py`, `test_theme_contrast_gui.py`
-  y `test_font_change_gui.py`, requieren PyQt6).
-- Tests con PyQt6 (offscreen / CachyOS): `266 passed, 0 skipped` - incluye la
+- Tests sin PyQt6 (este Windows): `235 passed, 6 skipped` (skips: `test_check_table_gui.py`,
+  `test_splash_gui.py`, `test_refresh_after_delete_gui.py`, `test_theme_contrast_gui.py`,
+  `test_font_change_gui.py` y `test_app_icon_gui.py`, requieren PyQt6).
+- Tests con PyQt6 (offscreen / CachyOS): `270 passed, 0 skipped` - incluye la
   suite GUI del splash (animación de entrada + encolado de mensajes), el
   refresco tras acción destructiva, la selección masiva del CheckTable, el
   contraste del gauge + tinte de íconos del sidebar, los escaneos en segundo
   plano del Desinstalador y del Limpiador (no bloqueo de la GUI, descarte de
-  resultados obsoletos), y el cambio de fuente en caliente desde Ajustes
-  (señal `font_changed` → `QApplication.font()`, widgets y persistencia).
+  resultados obsoletos), el cambio de fuente en caliente desde Ajustes
+  (señal `font_changed` → `QApplication.font()`, widgets y persistencia), y el
+  ícono de aplicación propio (`app_icon()` con fallback silencioso a `QIcon()`
+  vacío, y construcción de `MainWindow` + `SplashScreen` con y sin asset).

@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.theme import THEMES, palette_for
-from blip_eraser.widgets.logo import ASSET_LOGO_PATH
+from blip_eraser.widgets.logo import ASSET_LOGO_PATH, app_icon
 
 SPLASH_WIDTH = 560
 SPLASH_HEIGHT = 360
@@ -57,6 +57,9 @@ class SplashScreen(QWidget):
         )
         self.setFixedSize(SPLASH_WIDTH, SPLASH_HEIGHT)
         self.setObjectName("Splash")
+        # Ícono del splash (barra de tareas). Fallback a QIcon() vacío si el
+        # asset no existe (ver widgets/logo.py).
+        self.setWindowIcon(app_icon())
 
         theme_key = load_prefs().get("theme", "red")
         palette = palette_for(theme_key)

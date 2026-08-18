@@ -43,7 +43,7 @@ from blip_eraser.utils.i18n import (
 )
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SystemStatusBar
-from blip_eraser.widgets.logo import AppLogo
+from blip_eraser.widgets.logo import AppLogo, app_icon
 
 _SECTION_ORDER = [
     "overview",
@@ -67,6 +67,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.resize(1180, 720)
         self.setWindowTitle(_app_title())
+        # Ícono de la ventana (barra de título y Alt+Tab). Fallback a QIcon()
+        # vacío si el asset no existe (ver widgets/logo.py).
+        self.setWindowIcon(app_icon())
 
         self._pages: dict[str, QWidget] = {
             "overview": OverviewPage(),
