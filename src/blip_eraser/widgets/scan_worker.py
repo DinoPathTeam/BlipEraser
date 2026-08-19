@@ -11,6 +11,7 @@ escaneo antes de que llegue el primero).
 from __future__ import annotations
 
 import threading
+import traceback
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -138,6 +139,9 @@ class BackgroundScanMixin:
         for key, value in (extra or {}).items():
             parts.append(f"{key}={value}")
         write_diagnostic(" ".join(parts))
+        # La pila completa revela CUAL atributo/línea se estaba tocando cuando
+        # murió el widget — no hace falta saberlo de antemano (whack-a-mole).
+        write_diagnostic("TRACEBACK:\n" + traceback.format_exc())
         log_buffer.add(user_message if user_message is not None else tr("table_render_failed"))
 
     def _start_background_scan(

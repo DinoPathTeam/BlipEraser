@@ -75,6 +75,14 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         log_buffer.subscribe(self._on_log)
         self._scan()
 
+        write_diagnostic(
+            f"OverviewPage CREATED id={id(self)} "
+            f"apps_layout_id={id(self._apps_layout)} "
+            f"cleanup_junk_label_id={id(self.cleanup_junk_label)} "
+            f"cleanup_cache_label_id={id(self.cleanup_cache_label)} "
+            f"cleanup_logs_label_id={id(self.cleanup_logs_label)}"
+        )
+
     # ------------------------------------------------------------------
     # UI
     # ------------------------------------------------------------------
@@ -265,21 +273,36 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._apply_metrics(cleanup)
 
     def _on_scan_done(self, result: dict):
-        self.scan_btn.set_texts(tr("overview_erase_button"), tr("overview_erase_subtitle"))
+        # Defensa dura de TODA la cadena del resultado: cualquier widget de la
+        # página que muera en C++ durante el procesamiento (apps, cleanup,
+        # métricas, o uno futuro) queda contenido aquí, sin whack-a-mole por
+        # función. La pila del fallo (write_diagnostic) dice cuál fue.
+        try:
+            self.scan_btn.set_texts(tr("overview_erase_button"), tr("overview_erase_subtitle"))
 
-        self._apps = result["apps"]
-        self._rebuild_apps()
+            self._apps = result["apps"]
+            self._rebuild_apps()
 
-        cleanup = result["cleanup"]
-        self._apply_cleanup(cleanup)
+            cleanup = result["cleanup"]
+            self._apply_cleanup(cleanup)
 
-        total_space = sum(a.size_bytes for a in self._apps)
-        log_buffer.add(
-            tr("log_scan_completed").format(count=len(self._apps), space=human_size(total_space))
-        )
+            total_space = sum(a.size_bytes for a in self._apps)
+            log_buffer.add(
+                tr("log_scan_completed").format(count=len(self._apps), space=human_size(total_space))
+            )
 
-        self._apply_metrics(cleanup)
-        self.refresh()
+            self._apply_metrics(cleanup)
+            self.refresh()
+        except RuntimeError as exc:
+            self._render_failure(
+                "overview_page._on_scan_done",
+                exc,
+                user_message=tr("overview_rebuild_failed"),
+                apps_layout=self._apps_layout,
+                apps_widget=self._apps_widget,
+                cleanup_junk_label=self.cleanup_junk_label,
+                extra={"apps_total": len(self._apps)},
+            )
 
     def _apply_cleanup(self, cleanup: dict):
         """Renderiza los tres labels 'SYSTEM CLEANUP RECOMMENDED' desde `scan_cleanup()`.

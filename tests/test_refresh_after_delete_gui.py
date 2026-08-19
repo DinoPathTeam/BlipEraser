@@ -31,6 +31,14 @@ def app():
     return instance
 
 
+@pytest.fixture(autouse=True)
+def diag_redirect(tmp_path, monkeypatch):
+    """Mantiene la bitácora forense fuera de la ruta real durante los tests."""
+    import blip_eraser.utils.log as log_mod
+
+    monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", tmp_path / "diagnostics.log")
+
+
 def _pump_until(app, condition, timeout_ms=3000):
     """Bombea el event loop hasta que `condition()` sea verdadera (o timeout)."""
     deadline = time.monotonic() + timeout_ms / 1000

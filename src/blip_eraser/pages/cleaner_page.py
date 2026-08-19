@@ -38,6 +38,7 @@ from blip_eraser.utils.file_utils import (
 )
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.scan import CLEANUP_CATEGORY_LABEL_KEYS, scan_cleanup_items
 from blip_eraser.utils.scan_cache import (
     SECTION_CLEANER_MANUAL,
@@ -60,6 +61,10 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
         self._filter = ""
         self._build_ui()
         self._init_scan_buttons([self.refresh_btn, self.delete_btn])
+
+        write_diagnostic(
+            f"CleanerRecommendedSection CREATED id={id(self)} table_id={id(self.table)}"
+        )
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -115,10 +120,19 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
         self._start_background_scan(scan_cleanup_items, self._on_scan_ready)
 
     def _on_scan_ready(self, entries: list[tuple[str, Path, int]]):
-        self._found = entries
-        log_buffer.add(tr("log_cleanup_scanned").format(count=len(self._found)))
-        self._render()
-        mark_scanned(SECTION_CLEANER_RECOMMENDED)
+        # Defensa dura de TODA la cadena del resultado (la pila dice cuál falló).
+        try:
+            self._found = entries
+            log_buffer.add(tr("log_cleanup_scanned").format(count=len(self._found)))
+            self._render()
+            mark_scanned(SECTION_CLEANER_RECOMMENDED)
+        except RuntimeError as exc:
+            self._render_failure(
+                "cleaner_recommended._on_scan_ready",
+                exc,
+                table=self.table,
+                extra={"entries_total": len(self._found)},
+            )
 
     def _render(self):
         if self._filter:
@@ -194,6 +208,10 @@ class _ManualSection(QWidget, BackgroundScanMixin):
         self._build_ui()
         self._init_scan_buttons([self.refresh_btn, self.delete_btn])
 
+        write_diagnostic(
+            f"CleanerManualSection CREATED id={id(self)} table_id={id(self.table)}"
+        )
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 0)
@@ -246,10 +264,19 @@ class _ManualSection(QWidget, BackgroundScanMixin):
         )
 
     def _on_scan_ready(self, found: list[Path]):
-        self._found = found
-        log_buffer.add(tr("log_scan_finished").format(count=len(self._found)))
-        self._render()
-        mark_scanned(SECTION_CLEANER_MANUAL)
+        # Defensa dura de TODA la cadena del resultado (la pila dice cuál falló).
+        try:
+            self._found = found
+            log_buffer.add(tr("log_scan_finished").format(count=len(self._found)))
+            self._render()
+            mark_scanned(SECTION_CLEANER_MANUAL)
+        except RuntimeError as exc:
+            self._render_failure(
+                "cleaner_manual._on_scan_ready",
+                exc,
+                table=self.table,
+                extra={"entries_total": len(self._found)},
+            )
 
     def _render(self):
         if self._filter:

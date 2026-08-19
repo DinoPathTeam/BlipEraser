@@ -11,6 +11,49 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🛡️ Defensa por cadena completa del resultado + forense de instancias (crash 3 de CachyOS)
+
+- **Por qué:** tras contener `_rebuild_apps`, el crash volvió en el MISMO
+  arranque pero en OTRO widget de OverviewPage: `QLabel has been deleted` en
+  `_on_scan_done → _apply_cleanup → cleanup_junk_label.setText`. El widget
+  muerto no tiene relación estructural con el anterior (`_apps_layout`) —
+  apunta a que algo afecta a un bloque amplio (o toda) la página durante la
+  ventana del arranque, no a un widget aislado. Fin del whack-a-mole.
+- **Defensa por cadena:** `_on_scan_done` (Overview), `_on_apps_loaded`
+  (Desinstalador) y ambos `_on_scan_ready` (Limpiador) envuelven el handler
+  COMPLETO en un `try/except RuntimeError` único (no cada sub-llamada): si
+  CUALQUIER widget muere en cualquier punto del procesamiento del resultado
+  (o uno futuro), queda contenido en un solo lugar.
+- **Forense con la pila exacta:** `_render_failure` ahora adjunta
+  `traceback.format_exc()` a la bitácora → el próximo incidente revelará la
+  línea y el atributo EXACTOS que se tocaban, sin depender de identificarlos
+  de antemano.
+- **Forense de instancias (hipótesis de página duplicada):**
+  `__init__` de OverviewPage/UninstallerPage/secciones del Limpiador registra
+  `CREATED id=<id(self)> ..._id=<id(widget)>` al construirse; el except del
+  handler ya registra `page_id=<id(self)>`. Si vuelve a pasar, basta comparar
+  el `id()` del crash contra los `CREATED` de la sesión: una sola construcción
+  + ids de widgets distintos confirmaría reasignación; DOS construcciones
+  confirmaría la instancia duplicada.
+- **Grep exhaustivo:** `OverviewPage()` solo existe en `renderer.py:75`,
+  dentro de `MainWindow.__init__`, y `MainWindow()` solo en `main.py:125`
+  (`_on_worker_finished`, conectado una vez). No hay segundo camino de
+  construcción en producción ni en código muerto; los dialogs de idioma/
+  permisos no reconstruyen páginas.
+- **Verificación:** `tests/test_render_hardening_gui.py` ampliado (+8 tests):
+  el escenario NUEVO (cleanup_junk_label muere DESPUÉS de que `_rebuild_apps`
+  corrió bien, dentro del mismo `_on_scan_done`) queda contenido con
+  `RENDER_FAILED overview_page._on_scan_done` + pila con `cleanup_junk_label.
+  setText`; camino feliz de `_on_scan_done`; el log `CREATED` de `__init__`;
+  handlers de Desinstalador/Limpiador contienen fallos fuera del `_render`
+  interno; y caminos felices de las 3 páginas. Suite: con PyQt6 `301 passed`;
+  sin PyQt6 `239 passed, 8 skipped`.
+- **Código:** `src/blip_eraser/widgets/scan_worker.py`,
+  `src/blip_eraser/pages/overview_page.py`, `src/blip_eraser/pages/uninstaller_page.py`,
+  `src/blip_eraser/pages/cleaner_page.py`, `tests/test_render_hardening_gui.py`,
+  y fixtures `diag_redirect` en 4 test files GUI (bitácora forense fuera de la
+  ruta real durante los tests).
+
 ### 🛡️ Defensa dura + instrumentación forense para renders (crash recurrente de CachyOS)
 
 - **Por qué:** el crash `RuntimeError: wrapped C/C++ object of type QVBoxLayout

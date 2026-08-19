@@ -50,6 +50,12 @@ def prefs_tmp(tmp_path_factory):
     return prefs_file
 
 
+@pytest.fixture(autouse=True)
+def diag_redirect(tmp_path, monkeypatch):
+    """Mantiene la bitácora forense fuera de la ruta real durante los tests."""
+    monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", tmp_path / "diagnostics.log")
+
+
 _CLEANUP = {
     "junk_bytes": 1024,
     "pacman_cache_bytes": 2048,

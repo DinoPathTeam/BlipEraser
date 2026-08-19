@@ -32,6 +32,7 @@ from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.pacman import uninstall_packages
 from blip_eraser.utils.scan_cache import SECTION_UNINSTALLER, is_stale, mark_scanned
 from blip_eraser.widgets.check_table import CheckTable
@@ -54,6 +55,10 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         self._filter = ""
         self._build_ui()
         self._init_scan_buttons([self.refresh_btn, self.uninstall_btn])
+
+        write_diagnostic(
+            f"UninstallerPage CREATED id={id(self)} table_id={id(self.table)}"
+        )
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -134,9 +139,20 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         self._start_background_scan(list_installed_apps, self._on_apps_loaded)
 
     def _on_apps_loaded(self, apps: list[InstalledApp]):
-        self._apps = apps
-        self._render()
-        mark_scanned(SECTION_UNINSTALLER)
+        # Defensa dura de TODA la cadena del resultado: la tabla (o cualquier
+        # otro widget de la página) puede morir en C++ y el handler completo
+        # queda contenido en un solo lugar (la pila dice cuál falló).
+        try:
+            self._apps = apps
+            self._render()
+            mark_scanned(SECTION_UNINSTALLER)
+        except RuntimeError as exc:
+            self._render_failure(
+                "uninstaller_page._on_apps_loaded",
+                exc,
+                table=self.table,
+                extra={"apps_total": len(self._apps)},
+            )
 
     def _render(self):
         if self._filter:

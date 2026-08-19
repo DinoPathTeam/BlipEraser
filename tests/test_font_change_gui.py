@@ -18,6 +18,17 @@ QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 QtGui = pytest.importorskip("PyQt6.QtGui")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def diag_redirect(tmp_path_factory):
+    """Mantiene la bitácora forense fuera de la ruta real durante los tests."""
+    import blip_eraser.utils.log as log_mod
+
+    original = log_mod.DIAG_LOG_PATH
+    log_mod.DIAG_LOG_PATH = tmp_path_factory.mktemp("diag") / "diagnostics.log"
+    yield
+    log_mod.DIAG_LOG_PATH = original
+
+
 @pytest.fixture(scope="module")
 def app():
     from PyQt6.QtWidgets import QApplication

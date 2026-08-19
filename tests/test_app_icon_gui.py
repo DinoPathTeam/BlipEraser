@@ -47,6 +47,14 @@ def prefs_tmp(tmp_path_factory):
     return prefs_file
 
 
+@pytest.fixture(autouse=True)
+def diag_redirect(tmp_path, monkeypatch):
+    """Mantiene la bitácora forense fuera de la ruta real durante los tests."""
+    import blip_eraser.utils.log as log_mod
+
+    monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", tmp_path / "diagnostics.log")
+
+
 _KEEP_ALIVE: list = []
 
 
