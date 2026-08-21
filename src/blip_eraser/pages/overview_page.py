@@ -469,33 +469,57 @@ class OverviewPage(QWidget, BackgroundScanMixin):
     # Refresco de métricas del sistema
     # ------------------------------------------------------------------
     def refresh(self):
-        sample = read_cpu_sample()
-        cpu = cpu_usage_percent(self._prev_cpu, sample)
-        self._prev_cpu = sample if sample is not None else self._prev_cpu
+        # Guard de entrada: página viva + layout de apps vivo (mismo patrón
+        # que _rebuild_apps). Si la página o su layout murieron en C++,
+        # no intentamos tocar gauge/cpu_row/etc. — el timer seguirá
+        # disparándose pero será no-op hasta que la app cierre.
+        if not self._widget_is_alive():
+            return
 
-        ram = memory_usage_percent()
-        disk = disk_usage_percent("/")
+        try:
+            sample = read_cpu_sample()
+            cpu = cpu_usage_percent(self._prev_cpu, sample)
+            self._prev_cpu = sample if sample is not None else self._prev_cpu
 
-        health = health_score(cpu, ram, disk)
-        if health is None:
-            health = 0
-        self.gauge.set_value(health)
-        self.gauge.set_status(
-            tr("overview_status_good")
-            if health >= 70
-            else tr("overview_status_fair") if health >= 40 else tr("overview_status_poor")
-        )
+            ram = memory_usage_percent()
+            disk = disk_usage_percent("/")
 
-        na = tr("status_na")
-        cpu_model_text = cpu_model() or na
-        gpu_model_text = gpu_model() or na
-        ram_total = human_size(ram_total_bytes()) if ram_total_bytes() else na
-        disk_total = human_size(disk_total_bytes()) if disk_total_bytes() else na
+            health = health_score(cpu, ram, disk)
+            if health is None:
+                health = 0
+            self.gauge.set_value(health)
+            self.gauge.set_status(
+                tr("overview_status_good")
+                if health >= 70
+                else tr("overview_status_fair") if health >= 40 else tr("overview_status_poor")
+            )
 
-        self.cpu_row.setText(f"{tr('status_cpu')}: {cpu_model_text}  ({cpu}%)" if cpu is not None else f"{tr('status_cpu')}: {cpu_model_text}  ({na})")
-        self.gpu_row.setText(f"{tr('gpu_label')}: {gpu_model_text}")
-        self.ram_row.setText(f"{tr('status_ram')}: {ram_total}  ({ram}%)" if ram is not None else f"{tr('status_ram')}: {ram_total}  ({na})")
-        self.disk_row.setText(f"{tr('status_disk')}: {disk_total}  ({disk}%)" if disk is not None else f"{tr('status_disk')}: {disk_total}  ({na})")
+            na = tr("status_na")
+            cpu_model_text = cpu_model() or na
+            gpu_model_text = gpu_model() or na
+            ram_total = human_size(ram_total_bytes()) if ram_total_bytes() else na
+            disk_total = human_size(disk_total_bytes()) if disk_total_bytes() else na
+
+            self.cpu_row.setText(f"{tr('status_cpu')}: {cpu_model_text}  ({cpu}%)" if cpu is not None else f"{tr('status_cpu')}: {cpu_model_text}  ({na})")
+            self.gpu_row.setText(f"{tr('gpu_label')}: {gpu_model_text}")
+            self.ram_row.setText(f"{tr('status_ram')}: {ram_total}  ({ram}%)" if ram is not None else f"{tr('status_ram')}: {ram_total}  ({na})")
+            self.disk_row.setText(f"{tr('status_disk')}: {disk_total}  ({disk}%)" if disk is not None else f"{tr('status_disk')}: {disk_total}  ({na})")
+        except RuntimeError as exc:
+            # Defensa dura: un widget del panel de información (gauge,
+            # cpu_row, gpu_row, ram_row, disk_row) puede morir en C++
+            # mientras la página vive. El try/except captura CUALQUIER
+            # RuntimeError puntual y deja evidencia forense con qué widget
+            # se estaba tocando (la pila en _render_failure lo dice).
+            self._render_failure(
+                "overview_page.refresh",
+                exc,
+                user_message=tr("overview_rebuild_failed"),
+                gauge=self.gauge,
+                cpu_row=self.cpu_row,
+                gpu_row=self.gpu_row,
+                ram_row=self.ram_row,
+                disk_row=self.disk_row,
+            )
 
     def _on_log(self, entries: list[tuple[str, str]]):
         if not self._widget_is_alive():

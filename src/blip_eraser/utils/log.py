@@ -96,10 +96,15 @@ def write_diagnostic(message: str) -> None:
             f"[{datetime.now().isoformat(timespec='milliseconds')}] "
             f"[{threading.current_thread().name}] {message}\n"
         )
+        line_bytes = line.encode("utf-8")
         with _diag_lock:
-            path = DIAG_LOG_PATH
-            if path.exists() and path.stat().st_size > DIAG_LOG_MAX_BYTES:
-                path.unlink()  # empezar de nuevo si se pasó del límite
+            # Usar el atributo del módulo (permite monkeypatch en tests)
+            import sys
+            mod = sys.modules[__name__]
+            path = mod.DIAG_LOG_PATH
+            current_size = path.stat().st_size if path.exists() else 0
+            if path.exists() and current_size + len(line_bytes) > mod.DIAG_LOG_MAX_BYTES:
+                path.unlink()  # empezar de nuevo si la línea superaría el límite
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(line)
