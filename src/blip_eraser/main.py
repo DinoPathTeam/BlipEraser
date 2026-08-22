@@ -132,7 +132,14 @@ def main() -> int:
         # Refresco completo de apariencia tras el primer pintado: los iconos
         # del sidebar (QIcon.fromTheme) y la fuente configurada pueden no
         # resolverse si se aplican antes de que el QIconLoader esté listo.
-        QTimer.singleShot(0, window.refresh_appearance)
+        # Tras el refresco, iniciar el primer escaneo de Overview para evitar
+        # carrera con StartupWorker (que también ejecuta list_installed_apps())
+        # y con el unpolish/polish de refresh_appearance().
+        def _post_refresh():
+            window.refresh_appearance()
+            window._overview.start_initial_scan()
+
+        QTimer.singleShot(0, _post_refresh)
 
         # Aviso de binarios faltantes, calculado durante el splash (no se
         # duplica el chequeo). Se muestra tras el primer pintado.

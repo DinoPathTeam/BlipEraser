@@ -55,6 +55,9 @@ class BackgroundScanMixin:
     - El resultado se aplica aunque la página esté oculta: las páginas viven
       toda la sesión en el QStackedWidget (nunca se destruyen al navegar),
       así que es seguro y deja los datos listos para cuando el usuario vuelva.
+    - Desconexión explícita al cerrar la app: ``disconnect_scan_signals()``
+      rompe la conexión queued ANTES de que Qt entregue señales pendientes,
+      evitando qFatal en PyQt6 al entregar a un receptor en estado inconsistente.
     """
 
     def _init_scan_buttons(self, buttons: list) -> None:
@@ -65,6 +68,10 @@ class BackgroundScanMixin:
         self._scan_bridge = _ScanBridge()
         self._scan_bridge.result_ready.connect(self._on_scan_result_ready)
         self._scan_bridge.failed.connect(self._on_scan_failed)
+        # Flag para doble protección: si se desconectan las señales
+        # explícitamente (p. ej. en closeEvent), los handlers salen
+        # inmediatamente sin procesar nada.
+        self._closing = False
 
     def _widget_is_alive(self) -> bool:
         """True si el QObject C++ subyacente de la página sigue existiendo.
@@ -164,7 +171,32 @@ class BackgroundScanMixin:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def disconnect_scan_signals(self) -> None:
+        """Desconecta explícitamente las señales del bridge de escaneo.
+
+        Debe llamarse ANTES de que la app cierre (en MainWindow.closeEvent)
+        para evitar que Qt entregue señales queued pendientes a un receptor
+        cuyo estado C++ es inconsistente (tras unpolish/polish, durante
+        destrucción, etc.). Esto previene qFatal en PyQt6/sip.
+        """
+        self._closing = True
+        # Desconectar de forma segura: si ya estaban desconectadas, ignorar.
+        try:
+            self._scan_bridge.result_ready.disconnect(self._on_scan_result_ready)
+        except (TypeError, RuntimeError):
+            pass
+        try:
+            self._scan_bridge.failed.disconnect(self._on_scan_failed)
+        except (TypeError, RuntimeError):
+            pass
+        # Limpiar callback para que no se invoque aunque la señal llegue.
+        self._scan_on_result = None
+
     def _on_scan_result_ready(self, payload: tuple) -> None:
+        # Doble protección: flag _closing (desconexión explícita en closeEvent)
+        # + guard de vida del widget. Si cualquiera falla, descartar.
+        if self._closing:
+            return
         token, result = payload
         if token != self._scan_token:
             return  # resultado obsoleto: se lanzó otro escaneo después
@@ -179,6 +211,8 @@ class BackgroundScanMixin:
             self._scan_on_result(result)
 
     def _on_scan_failed(self, message: str) -> None:
+        if self._closing:
+            return
         if not self._widget_is_alive():
             return
         self._scanning = False

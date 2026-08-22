@@ -328,3 +328,32 @@ class MainWindow(QMainWindow):
         for page in self._pages.values():
             if hasattr(page, "retranslate"):
                 page.retranslate()
+
+    # ------------------------------------------------------------------
+    # Cierre limpio: desconectar señales de escaneo ANTES de destruir
+    # ------------------------------------------------------------------
+    def closeEvent(self, event):
+        """Desconecta todos los bridges de escaneo antes de cerrar.
+
+        Previene qFatal en PyQt6 al entregar señales queued a receptores
+        en estado inconsistente (tras unpolish/polish, durante destrucción).
+        """
+        # Páginas que usan BackgroundScanMixin directamente
+        scan_pages = [
+            self._pages.get("overview"),
+            self._pages.get("uninstaller"),
+        ]
+        # CleanerPage tiene dos secciones internas con BackgroundScanMixin
+        cleaner = self._pages.get("system_cleaner")
+        if cleaner is not None:
+            scan_pages.append(cleaner.recommended)
+            scan_pages.append(cleaner.manual)
+
+        for page in scan_pages:
+            if page is not None and hasattr(page, "disconnect_scan_signals"):
+                try:
+                    page.disconnect_scan_signals()
+                except Exception:
+                    pass  # best-effort: nunca romper el cierre por esto
+
+        super().closeEvent(event)

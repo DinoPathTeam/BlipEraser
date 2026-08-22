@@ -73,7 +73,11 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._timer.start(2000)
         self.refresh()
         log_buffer.subscribe(self._on_log)
-        self._scan()
+        # NO llamar a _scan() aquí: se dispara explícitamente tras
+        # refresh_appearance() para evitar carrera con StartupWorker
+        # (que también ejecuta list_installed_apps()) y con el
+        # unpolish/polish de refresh_appearance() que deja widgets
+        # en estado inconsistente.
 
         write_diagnostic(
             f"OverviewPage CREATED id={id(self)} "
@@ -82,6 +86,15 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             f"cleanup_cache_label_id={id(self.cleanup_cache_label)} "
             f"cleanup_logs_label_id={id(self.cleanup_logs_label)}"
         )
+
+    def start_initial_scan(self) -> None:
+        """Inicia el primer escaneo tras completarse la inicialización completa.
+
+        Llamado desde MainWindow tras refresh_appearance() para evitar
+        condiciones de carrera con StartupWorker y con el unpolish/polish
+        de la primera aplicación de tema/fuente.
+        """
+        self._scan()
 
     # ------------------------------------------------------------------
     # UI
