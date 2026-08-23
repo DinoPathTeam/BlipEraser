@@ -11,7 +11,13 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
-### 🛡️ Defensa por cadena completa del resultado + forense de instancias (crash 3 de CachyOS)
+### 🛡️ Firmwall/Firewall de seguridad (implementado - Fase 1 completada ~100%)
+
+- **Objetivo**: restringir operaciones privilegiadas (`pkexec pacman -Rns`, `pkexec rm -rf`) a allowlist estricta y validar paths antes de ejecutar.
+- **Alcance Fase 1**: policy polkit custom (`/usr/share/polkit-1/actions/com.dinopath.blip-eraser.policy`) + validación dura en `privileges.py` (resolve + allowlist `/var/cache/pacman/pkg`, `/var/log`, `/var/lib/pacman` + rechazo symlinks) + auditoría estructurada en bitácora forense + validación de paquetes en `pacman.py` antes de desinstalar.
+- **Alcance Fase 2**: demonio systemd D-Bus (`blip-eraser-privileged`) con separación real de privilegios (pendiente).
+- **No afecta** al fix de crash actual (capas independientes: Qt event loop vs subprocess/polkit).
+- Documento interno de investigación guardado (no público).
 
 - **Por qué:** tras contener `_rebuild_apps`, el crash volvió en el MISMO
   arranque pero en OTRO widget de OverviewPage: `QLabel has been deleted` en

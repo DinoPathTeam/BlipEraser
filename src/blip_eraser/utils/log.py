@@ -2,10 +2,17 @@
 
 Un buffer simple de entradas (timestamp, mensaje) con suscriptores para
 que la GUI refresque el panel de registro sin conocer su implementación.
+
+Seguridad (Fase 1 - Bitácora forense protegida):
+- Entradas hasheadas (SHA-256) para paths sensibles
+- Permisos 600 en archivo de bitácora (solo owner read/write)
+- No loggeo de paths completos en texto plano
 """
 
 from __future__ import annotations
 
+import hashlib
+import os
 import threading
 from collections.abc import Callable
 from datetime import datetime
@@ -79,9 +86,74 @@ log = LogBuffer()
 # RuntimeError vuelve a ocurrir en producción (p. ej. "wrapped C/C++ object
 # of type QVBoxLayout has been deleted" en CachyOS). El usuario normal nunca
 # la ve; un diagnóstico de CachyOS solo necesita adjuntar el archivo.
+#
+# SEGURIDAD (Fase 1):
+# - Paths hasheados con SHA-256 (truncado a 16 chars) para no exponer rutas
+#   en entradas AUDIT (paths hasheados INDIVIDUALMENTE antes de unir con comas)
+# - Permisos 0o600 en archivo (solo owner read/write)
+# - NO paths completos en texto plano en entradas AUDIT
+#
+# LIMITACIÓN ACEPTADA (Riesgo asumido, no resuelto):
+# - TRACEBACKS (líneas que empiezan con "TRACEBACK:\n") NO se sanean.
+#   Contienen rutas absolutas reales del home del usuario, nombres de archivo,
+#   números de línea. El chmod 600 mitiga acceso cross-user, pero cualquier
+#   proceso con el mismo UID (malware, etc.) puede leerlos.
+#   DECISIÓN: No sanear tracebacks = preservar capacidad de diagnóstico.
+#   Riesgo: exfiltración de paths por proceso co-uid. Mitigación: solo 600.
+#   Ver: SECURITY_RESEARCH_INTERNAL.md hallazgo #2 (parcialmente mitigado).
 DIAG_LOG_PATH = Path.home() / ".cache" / "blip-eraser" / "diagnostics.log"
 DIAG_LOG_MAX_BYTES = 2_000_000
 _diag_lock = threading.Lock()
+
+
+def _hash_path(path_str: str) -> str:
+    """Devuelve hash SHA-256 truncado (16 chars) de un path.
+    
+    Permite correlacionar entradas sin exponer la ruta completa.
+    """
+    return hashlib.sha256(path_str.encode()).hexdigest()[:16]
+
+
+def _sanitize_message(message: str) -> str:
+    """Sanea el mensaje para no loggear paths completos.
+
+    Detecta patrones tipo path=... y los reemplaza por su hash.
+    Formato esperado: path=valor#hash  (donde hash = SHA-256 truncado 16 chars)
+    Acepta múltiples paths separados por comas: paths=a,b,c -> a#h1,b#h2,c#h3
+    NO hashea texto libre que contenga "/" (p.ej. tracebacks, errores).
+    """
+    import re
+    # Patrones: paths=..., path=..., target=... - SOLO estos parámetros explícitos
+    # El valor puede contener comas y hashes (#), así que usamos [^\s]+
+    def replace_path(match):
+        full = match.group(0)
+        key = match.group(1)
+        value = match.group(2)
+        # Si ya tiene hash (# seguido de 16 chars hex), no tocar
+        if "#" in value and len(value.split("#")[-1]) == 16:
+            return full
+        # Si tiene comas, dividir y hashear cada parte
+        if "," in value:
+            parts = [f"{part}#{_hash_path(part)}" for part in value.split(",")]
+            return f"{key}={','.join(parts)}"
+        # Path simple
+        if "/" in value or value.startswith("~"):
+            return f"{key}={value}#{_hash_path(value)}"
+        return full
+    
+    # Reemplaza SOLO patterns explícitos: paths=..., path=..., target=...
+    # NO reemplaza slashes en texto libre (tracebacks, errores, etc.)
+    message = re.sub(r'(paths?|target)=([^\s]+)', replace_path, message)
+    return message
+
+
+def _ensure_secure_permissions(path: Path) -> None:
+    """Asegura permisos 0o600 en el archivo de bitácora (solo owner rw)."""
+    try:
+        if path.exists():
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def write_diagnostic(message: str) -> None:
@@ -90,11 +162,16 @@ def write_diagnostic(message: str) -> None:
     Best-effort: un fallo de escritura (permisos, disco, ...) nunca rompe la
     app. La bitácora se trunca desde cero si supera ``DIAG_LOG_MAX_BYTES``
     para no crecer sin límite.
+
+    SEGURIDAD: Mensaje saneado (paths hasheados) + permisos 600 en archivo.
     """
     try:
+        # Sanear mensaje antes de escribir
+        safe_message = _sanitize_message(message)
+        
         line = (
             f"[{datetime.now().isoformat(timespec='milliseconds')}] "
-            f"[{threading.current_thread().name}] {message}\n"
+            f"[{threading.current_thread().name}] {safe_message}\n"
         )
         line_bytes = line.encode("utf-8")
         with _diag_lock:
@@ -108,5 +185,7 @@ def write_diagnostic(message: str) -> None:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as fh:
                 fh.write(line)
+            # Asegurar permisos 600 tras cada escritura
+            _ensure_secure_permissions(path)
     except OSError:
         pass

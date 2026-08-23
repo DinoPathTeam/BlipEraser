@@ -9,6 +9,10 @@ La ejecución del borrado delega en `utils.privileges` (capa de privilegios):
 las rutas del lote se agrupan en UNA llamada a pkexec cuando corresponda, y
 los fallos se traducen a mensajes claros y localizados — sin tracebacks ni
 rutas técnicas crudas. La lógica de qué comando correr vive en utils/.
+
+SEGURIDAD: Las operaciones se despachan vía allowlist en `privileges.py`
+(ALLOWED_OPERATIONS). ConfirmItem.operation debe ser un ID en esa allowlist.
+NO se ejecutan callables arbitrarios (elimina vector RCE).
 """
 
 import subprocess
@@ -19,7 +23,11 @@ from blip_eraser.utils.confirm import ConfirmPlan
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
-from blip_eraser.utils.privileges import RemovalError, remove_paths
+from blip_eraser.utils.privileges import (
+    RemovalError,
+    remove_paths,
+    get_allowed_operation,
+)
 from blip_eraser.utils.scan_cache import invalidate
 
 
@@ -87,7 +95,8 @@ def run_destructive_action(
 
     - Los ítems con `paths` se borran mediante `remove_paths` (ONE pkexec
       para todo el lote de sistema; rutas de $HOME directamente).
-    - Los ítems con `remove` (pacman) se ejecutan por su cuenta.
+    - Los ítems con `operation` se despachan vía allowlist en `privileges.py`
+      (ej. "pacman_remove", "rm_rf"). NO se ejecutan callables arbitrarios.
     - Los fallos de privilegios se presentan como mensajes claros, nunca
       como tracebacks ni rutas técnicas crudas.
     - `invalidate_sections` son las claves de scan_cache cuya caché se
@@ -109,12 +118,16 @@ def run_destructive_action(
         removed += outcome.removed
         errors.extend(_friendly_error_message(err) for err in outcome.errors)
 
-    # 2) Acciones con `remove` (desinstalación vía pacman/pkexec, etc.).
+    # 2) Acciones con `operation` (desinstalación vía pacman, etc.).
     for item in plan.items:
-        if item.remove is None or item.paths:
+        if item.operation is None or item.paths:
+            continue
+        op_func = get_allowed_operation(item.operation)
+        if op_func is None:
+            errors.append(tr("priv_error_failed").format(path=item.label))
             continue
         try:
-            item.remove()
+            op_func(item.paths if item.operation == "rm_rf" else [item.label])
             removed += 1
         except subprocess.CalledProcessError as e:
             if e.returncode == 126:  # automática cancelada en pkexec
@@ -125,6 +138,9 @@ def run_destructive_action(
             errors.append(tr("priv_error_missing"))
         except (OSError, PermissionError) as e:
             errors.append(tr("priv_error_failed").format(path=item.label))
+        except ValueError as e:
+            # Paquetes no válidos (rechazados por validación en pacman.py)
+            errors.append(str(e))
         except Exception as e:  # noqa: BLE001 - límite de la capa GUI
             errors.append(tr("priv_error_failed").format(path=item.label))
 

@@ -35,15 +35,15 @@ class ConfirmItem:
     - `paths`: rutas a borrar en disco. Si se proveen, el diálogo las borra de
       forma agrupada (un solo `pkexec` para todo el lote de sistema) usando la
       capa de privilegios — no pide autenticación por cada ruta suelta.
-    - `remove`: callable sin argumentos que ejecuta el borrado real (p. ej.
-      un cierre sobre `delete_path` o `uninstall_packages`). Se usa cuando la
-      eliminación no es un simple borrado de rutas (desinstalación pacman).
+    - `operation`: ID de operación permitida (e.g., "pacman_remove", "rm_rf").
+      SOLO IDs en la allowlist de `privileges.ALLOWED_OPERATIONS` son válidos.
+      Esto elimina el vector RCE de callables arbitrarios.
     """
     label: str
     category_label: str
     size_bytes: int = 0
     paths: list[Path] = field(default_factory=list)
-    remove: Callable[[], None] | None = None
+    operation: str | None = None
 
 
 @dataclass

@@ -122,3 +122,104 @@ class TestWriteDiagnostic:
     def test_never_raises_on_bad_path(self, tmp_path, monkeypatch):
         monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", Path("Z:/inexistente/dir/debug.log"))
         write_diagnostic("no debe romper")  # sin excepción
+
+
+class TestSanitizeMessage:
+    """Tests para _sanitize_message (sanitización de paths en bitácora)."""
+
+    def test_single_path_hashed(self):
+        from blip_eraser.utils.log import _sanitize_message
+        msg = _sanitize_message("AUDIT action=remove_system paths=/var/log/a result=success")
+        # Formato: path#hash (path original + # + hash de 16 chars hex)
+        assert "paths=/var/log/a#" in msg
+        import re
+        assert re.search(r"paths=/var/log/a#[0-9a-f]{16}", msg)
+
+    def test_multiple_paths_comma_separated_all_hashed(self):
+        from blip_eraser.utils.log import _sanitize_message
+        msg = _sanitize_message("AUDIT action=remove_system paths=/var/log/a,/var/log/b result=success")
+        # Ambas rutas deben estar hasheadas (formato path#hash)
+        import re
+        hashes = re.findall(r"#[0-9a-f]{16}", msg)
+        assert len(hashes) == 2
+
+    def test_mixed_path_and_target_both_hashed(self):
+        from blip_eraser.utils.log import _sanitize_message
+        msg = _sanitize_message("paths=/home/user/file,target=/etc/passwd")
+        assert msg.count("#") == 2
+        import re
+        hashes = re.findall(r"#[0-9a-f]{16}", msg)
+        assert len(hashes) == 2
+
+    def test_already_hashed_not_double_hashed(self):
+        from blip_eraser.utils.log import _sanitize_message
+        # Ya tiene hash válido (16 chars hex)
+        msg = _sanitize_message("paths=/var/log/a#a1b2c3d4e5f67890")
+        assert msg.count("#") == 1  # no doble hash
+        assert msg == "paths=/var/log/a#a1b2c3d4e5f67890"
+
+
+class TestFilePermissions:
+    """Tests para permisos 600 en bitácora forense."""
+
+    def test_write_diagnostic_creates_file_with_600(self, tmp_path, monkeypatch):
+        import stat
+        import os
+        path = tmp_path / "diagnostics.log"
+        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", path)
+        write_diagnostic("test")
+        # Verificar permisos 600 (owner rw only) - solo en POSIX
+        if os.name == "posix":
+            mode = path.stat().st_mode
+            assert stat.S_IMODE(mode) == 0o600
+        else:
+            # En Windows, verificar que el archivo existe y se escribió
+            assert path.exists()
+            content = path.read_text(encoding="utf-8")
+            assert "test" in content
+
+
+class TestIsPathDeniedInHome:
+    """Tests para denylist de $HOME en privileges.py."""
+
+    def test_ssh_directory_rejected(self, tmp_path, monkeypatch):
+        import blip_eraser.utils.privileges as priv
+        # Mock home
+        home = tmp_path / "home"
+        home.mkdir()
+        ssh_dir = home / ".ssh"
+        ssh_dir.mkdir()
+        (ssh_dir / "id_rsa").write_text("fake")
+        monkeypatch.setattr(Path, "home", lambda: home)
+        assert priv._is_path_denied_in_home(ssh_dir / "id_rsa") is True
+        assert priv._is_path_denied_in_home(ssh_dir) is True
+
+    def test_gnupg_directory_rejected(self, tmp_path, monkeypatch):
+        import blip_eraser.utils.privileges as priv
+        home = tmp_path / "home"
+        home.mkdir()
+        gnupg = home / ".gnupg"
+        gnupg.mkdir()
+        (gnupg / "pubring.gpg").write_text("fake")
+        monkeypatch.setattr(Path, "home", lambda: home)
+        assert priv._is_path_denied_in_home(gnupg / "pubring.gpg") is True
+
+    def test_config_directory_rejected(self, tmp_path, monkeypatch):
+        import blip_eraser.utils.privileges as priv
+        home = tmp_path / "home"
+        home.mkdir()
+        config = home / ".config"
+        config.mkdir()
+        (config / "app.conf").write_text("fake")
+        monkeypatch.setattr(Path, "home", lambda: home)
+        assert priv._is_path_denied_in_home(config / "app.conf") is True
+
+    def test_allowed_home_path_not_rejected(self, tmp_path, monkeypatch):
+        import blip_eraser.utils.privileges as priv
+        home = tmp_path / "home"
+        home.mkdir()
+        downloads = home / "Downloads"
+        downloads.mkdir()
+        (downloads / "archivo.txt").write_text("fake")
+        monkeypatch.setattr(Path, "home", lambda: home)
+        assert priv._is_path_denied_in_home(downloads / "archivo.txt") is False

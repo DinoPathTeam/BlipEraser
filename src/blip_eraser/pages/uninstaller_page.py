@@ -204,6 +204,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
 
         if pacman_names:
             # Un solo `pkexec pacman -Rns` para todo el lote (una autenticación).
+            # Usa operation="pacman_remove" (allowlist en privileges.py).
             items.append(
                 ConfirmItem(
                     label=", ".join(pacman_names),
@@ -211,7 +212,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
                     size_bytes=sum(
                         (a.size_bytes or 0) for a in apps if a.source == "pacman"
                     ),
-                    remove=lambda: uninstall_packages(pacman_names),
+                    operation="pacman_remove",
                 )
             )
         for app in manual_apps:
@@ -246,7 +247,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
                 label=name,
                 category_label=tr(kind_label_key(kind)),
                 size_bytes=0,
-                remove=lambda: uninstall_packages([name]),
+                operation="pacman_remove",
             )
         else:
             target = Path(detail) if detail else Path.home() / name

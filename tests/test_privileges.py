@@ -72,29 +72,34 @@ class TestRemovePathsSystem:
             return FakeResult(returncode=0)
 
         monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-        outcome = remove_paths([Path("/var/log/mensajes"), Path("/var/log/boot")])
+        # Usar rutas que están en ALLOWED_SYSTEM_PREFIXES
+        outcome = remove_paths([Path("/var/log/journal"), Path("/var/log/pacman.log")])
         assert outcome.removed == 2
         assert outcome.errors == []
         assert len(calls) == 1  # UNA sola llamada pkexec para el lote
         assert calls[0][:4] == ["pkexec", "rm", "-rf", "--"]
         normalized = {str(p).replace("\\", "/") for p in calls[0][4:]}
-        assert normalized == {"/var/log/mensajes", "/var/log/boot"}
+        assert normalized == {"/var/log/journal", "/var/log/pacman.log"}
 
     def test_cancelled_auth_is_structured_error(self, monkeypatch):
         def fake_run(cmd, **kwargs):
-            return FakeResult(returncode=126, stderr="dismissed")
+            if cmd[0] == "pkexec":
+                return FakeResult(returncode=126, stderr="dismissed")
+            return FakeResult()
 
         monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-        outcome = remove_paths([Path("/var/cache/pacman/pkg/foo")])
+        outcome = remove_paths([Path("/var/cache/pacman/pkg/foo.pkg.tar.zst")])
         assert outcome.removed == 0
         assert outcome.errors[0].code == "cancelled"
 
     def test_pkexec_missing_structured_error(self, monkeypatch):
         def boom(cmd, **kwargs):
-            raise FileNotFoundError("pkexec")
+            if cmd[0] == "pkexec":
+                raise FileNotFoundError("pkexec")
+            return FakeResult()
 
         monkeypatch.setattr(privileges.subprocess, "run", boom)
-        outcome = remove_paths([Path("/var/log")])
+        outcome = remove_paths([Path("/var/lib/pacman/local")])
         assert outcome.errors[0].code == "pkexec_missing"
 
     def test_mixed_batch_splits_home_and_system(self, monkeypatch, tmp_path):
@@ -103,14 +108,60 @@ class TestRemovePathsSystem:
         home_target.mkdir()
 
         def fake_run(cmd, **kwargs):
+            if cmd[0] == "pkexec":
+                calls.append(cmd)
+                return FakeResult(returncode=0)
+            return FakeResult()
+
+        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
+        outcome = remove_paths([tmp_path / "carpeta", Path("/var/log/test.log")])
+        assert outcome.removed == 2
+        assert len(calls) == 1
+        assert not home_target.exists()
+
+    def test_rejects_path_not_in_allowlist(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
             calls.append(cmd)
             return FakeResult(returncode=0)
 
         monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-        outcome = remove_paths([tmp_path / "carpeta", Path("/var/log")])
-        assert outcome.removed == 2
-        assert len(calls) == 1
-        assert not home_target.exists()
+        # /etc/passwd no está en la allowlist
+        outcome = remove_paths([Path("/etc/passwd")])
+        assert outcome.removed == 0
+        assert len(outcome.errors) == 1
+        assert outcome.errors[0].code == "validation_failed"
+        assert outcome.errors[0].detail == "path_not_in_allowlist"
+        assert len(calls) == 0  # No se debe llamar a pkexec
+
+    def test_rejects_symlink(self, monkeypatch, tmp_path):
+        """Test que la validación rechaza symlinks.
+
+        En Windows no se pueden crear symlinks sin privilegios, así que
+        mockeamos _reject_symlinks para simular la detección.
+        """
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return FakeResult(returncode=0)
+
+        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
+
+        # Mock _reject_symlinks para simular detección de symlink
+        original_reject = privileges._reject_symlinks
+        monkeypatch.setattr(privileges, "_reject_symlinks", lambda p: True)
+
+        outcome = remove_paths([Path("/var/log/fake_link")])
+        assert outcome.removed == 0
+        assert len(outcome.errors) == 1
+        assert outcome.errors[0].code == "validation_failed"
+        assert outcome.errors[0].detail == "symlink_detected"
+        assert len(calls) == 0  # No se debe llamar a pkexec
+
+        # Restaurar
+        monkeypatch.setattr(privileges, "_reject_symlinks", original_reject)
 
 
 class TestRemovalError:

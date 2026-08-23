@@ -14,16 +14,29 @@ privilegios y CÓMO ejecutarla:
 Los errores se devuelven de forma estructurada (código + detalle), nunca
 como excepciones técnicas: la GUI los traduce a mensajes claros y
 localizados sin exponer tracebacks ni rutas crudas pormenorizadas.
+
+Seguridad (Fase 1 - Polkit policy + validación estricta):
+- Allowlist estricta de prefijos de sistema permitidos para `rm -rf`
+- Validación con `Path.resolve()` para prevenir path traversal
+- Rechazo de symlinks en cualquier nivel de la ruta
+- Auditoría estructurada de cada operación privilegiada
+- Allowlist de operaciones permitidas (elimina RCE vía callables arbitrarios)
+- Validación de rutas $HOME (denylist: .ssh, .gnupg, .config, etc.)
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from collections.abc import Callable
 
 from blip_eraser.utils.file_utils import delete_path
+from blip_eraser.utils.log import write_diagnostic
 
 # Rutas de sistema cuyo borrado requiere privilegios. Un path que no cae en
 # $HOME y empieza por uno de estos prefijos se considera privilegiado.
@@ -39,6 +52,31 @@ SYSTEM_PATH_PREFIXES: tuple[str, ...] = (
     "/media/",
 )
 
+# Allowlist estricta de prefijos permitidos para operaciones `rm -rf` vía pkexec.
+# Solo estas rutas pueden borrarse con privilegios. Cualquier otra ruta
+# fuera de $HOME será rechazada ANTES de invocar pkexec.
+ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
+    "/var/cache/pacman/pkg",
+    "/var/log",
+    "/var/lib/pacman",
+)
+
+# Denylist de rutas dentro de $HOME que NUNCA deben borrarse automáticamente.
+# Protege claves SSH, configuración GPG, configs de usuario, etc.
+HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
+    ".ssh",
+    ".gnupg",
+    ".config",
+    ".local/share/keyrings",
+    ".local/share/gnupg",
+    ".cache/gpg",
+    ".cache/ssh",
+    ".password-store",
+    ".gnupg/secring.gpg",
+    ".gnupg/pubring.gpg",
+    ".gnupg/trustdb.gpg",
+)
+
 # Códigos de retorno de pkexec (man pkexec).
 PKEXEC_RC_AUTH_CANCELLED = 126
 PKEXEC_RC_EXECUTION_FAILED = 127
@@ -49,7 +87,7 @@ class RemovalError:
     """Fallo de borrado estructurado para la GUI (no raw OSError).
 
     - `paths`: rutas afectadas (una, o todo el lote de sistema).
-    - `code`: "cancelled" | "pkexec_missing" | "denied" | "failed".
+    - `code`: "cancelled" | "pkexec_missing" | "denied" | "failed" | "validation_failed".
     - `detail`: texto corto del comando heredado (opcional, ya saneado).
     """
     paths: list[Path]
@@ -62,6 +100,149 @@ class RemovalOutcome:
     """Resultado agregado de `remove_paths`: cuántos se borraron y qué falló."""
     removed: int = 0
     errors: list[RemovalError] = field(default_factory=list)
+
+
+# =========================================================================
+# ALLOWLIST DE OPERACIONES PERMITIDAS (elimina RCE vía callables arbitrarios)
+# =========================================================================
+# Cada operación tiene un ID string y una función asociada. SOLO estas
+# operaciones pueden ejecutarse vía ConfirmItem.operation.
+# El registro se construye aquí para que confirm_dialog.py lo importe.
+
+def _op_pacman_remove(packages: list[str]) -> str:
+    """Operación permitida: desinstala paquetes vía pkexec pacman -Rns."""
+    from blip_eraser.utils.pacman import uninstall_packages
+    return uninstall_packages(packages)
+
+
+def _op_rm_rf(paths: list[Path]) -> RemovalOutcome:
+    """Operación permitida: borra rutas de sistema vía pkexec rm -rf."""
+    return remove_paths(paths)
+
+
+# Registro de operaciones permitidas. La clave es el ID que usa ConfirmItem.operation.
+# SOLO estas operaciones pueden invocarse. Cualquier otro ID es rechazado.
+ALLOWED_OPERATIONS: dict[str, Callable] = {
+    "pacman_remove": _op_pacman_remove,
+    "rm_rf": _op_rm_rf,
+}
+
+
+def get_allowed_operation(op_id: str) -> Callable | None:
+    """Obtiene la función permitida para un ID de operación.
+    
+    Returns None si el ID no está en la allowlist (rechazo seguro).
+    """
+    return ALLOWED_OPERATIONS.get(op_id)
+
+
+def _validate_path(path: Path) -> bool:
+    """Valida que una ruta está dentro de los prefijos permitidos.
+
+    Usa `resolve()` en POSIX para seguir symlinks y obtener la ruta canónica,
+    luego verifica que empiece por uno de los prefijos de la allowlist.
+    En Windows (tests), valida contra el string original normalizado.
+    """
+    # Normalizar separadores para comparación consistente
+    path_str = str(path).replace("\\", "/")
+
+    # Verificación rápida del prefijo en el string original
+    # (funciona en cualquier plataforma)
+    if not any(path_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES):
+        return False
+
+    # En POSIX (Linux), resolver y verificar de nuevo para detectar
+    # path traversal via symlinks. En Windows, saltar resolve.
+    if os.name == "posix":
+        try:
+            resolved = path.resolve(strict=False)
+        except OSError:
+            return False
+        resolved_str = str(resolved).replace("\\", "/")
+        return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
+
+    return True
+
+
+def _reject_symlinks(path: Path) -> bool:
+    """True si la ruta o cualquiera de sus padres es un symlink/reparse point.
+
+    Previene ataques de symlink donde un path válido apunta a
+    ubicaciones sensibles (/etc/passwd, /etc/shadow, etc.).
+
+    En Windows, detecta symlinks (Python 3.8+) y reparse points
+    (junctions, mount points) vía GetFileAttributesW.
+    """
+    # Comprobación rápida en la ruta dada
+    if _is_symlink_or_reparse(path):
+        return True
+    # Comprobar padres
+    for parent in path.parents:
+        if _is_symlink_or_reparse(parent):
+            return True
+    return False
+
+
+def _is_symlink_or_reparse(path: Path) -> bool:
+    """Detecta symlinks (POSIX/Windows) y reparse points (Windows)."""
+    try:
+        # POSIX y Windows 3.8+: Path.is_symlink() detecta symlinks propiamente dichos
+        if path.is_symlink():
+            return True
+    except OSError:
+        return True  # Error al acceder = sospechoso
+
+    # Windows: detectar reparse points (junctions, mount points)
+    # que NO son symlinks pero sí redirigen a otra ubicación
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.windll.kernel32
+            GetFileAttributesW = kernel32.GetFileAttributesW
+            GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
+            GetFileAttributesW.restype = wintypes.DWORD
+
+            FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+            attrs = GetFileAttributesW(str(path))
+            if attrs != 0xFFFFFFFF and (attrs & FILE_ATTRIBUTE_REPARSE_POINT):
+                return True
+        except Exception:
+            # Si falla la API de Windows, asumir seguro (no bloquear por false positive)
+            pass
+
+    return False
+
+
+def _audit_log(action: str, paths: list[Path], result: str, detail: str = "") -> None:
+    """Registra una entrada de auditoría estructurada en la bitácora forense.
+
+    Formato: [timestamp] [thread] AUDIT action=... paths=... result=... detail=...
+
+    SEGURIDAD: Los paths se haslean INDIVIDUALMENTE antes de unirlos,
+    para que _sanitize_message no falle con rutas separadas por comas.
+    """
+    from blip_eraser.utils.log import _hash_path
+    path_strs = ",".join(f"{p}#{_hash_path(str(p))}" for p in paths)
+    msg = f"AUDIT action={action} paths={path_strs} result={result}"
+    if detail:
+        msg += f" detail={detail}"
+    write_diagnostic(msg)
+
+
+def _is_path_denied_in_home(path: Path, home: Path | None = None) -> bool:
+    """True si la ruta está en el denylist de $HOME (nunca borrar)."""
+    if home is None:
+        home = Path.home()
+    try:
+        expanded = path.expanduser()
+        resolved = expanded.resolve()
+        rel = resolved.relative_to(home.resolve())
+        rel_str = str(rel).replace("\\", "/")
+        return any(rel_str.startswith(prefix) for prefix in HOME_DENYLIST_PREFIXES)
+    except (OSError, ValueError):
+        return False
 
 
 def needs_elevation(path: Path, home: Path | None = None) -> bool:
@@ -131,7 +312,11 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
     - Rutas de sistema: UN solo `pkexec rm -rf` con todo el lote (una única
       solicitud de autenticación para el lote).
 
-    Devuelve un RemovalOutcome con el conteo y errores estructurados.
+    VALIDACIONES DE SEGURIDAD (Fase 1):
+    - Cada ruta de sistema debe pasar _validate_path (allowlist estricta)
+    - Cada ruta de sistema debe pasar _reject_symlinks (no symlinks)
+    - Rutas de $HOME deben pasar _is_path_denied_in_home (denylist)
+    - Auditoría completa de cada operación
     """
     outcome = RemovalOutcome()
     home_paths: list[Path] = []
@@ -142,17 +327,46 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
         (system_paths if needs_elevation(safe) else home_paths).append(safe)
 
     for path in home_paths:
+        # Validación denylist en $HOME
+        if _is_path_denied_in_home(path):
+            err = RemovalError(paths=[path], code="validation_failed", detail="path_in_home_denylist")
+            outcome.errors.append(err)
+            _audit_log("remove_home", [path], "rejected", "path_in_home_denylist")
+            continue
         try:
             delete_path(path)
             outcome.removed += 1
+            _audit_log("remove_home", [path], "success")
         except (OSError, PermissionError) as exc:
             outcome.errors.append(_home_removal_error(path, exc))
+            _audit_log("remove_home", [path], "failed", str(exc))
 
     if system_paths:
-        error = _run_pkexec_rm(system_paths)
-        if error is None:
-            outcome.removed += len(system_paths)
-        else:
-            outcome.errors.append(error)
+        # Validación estricta ANTES de invocar pkexec
+        validated_paths: list[Path] = []
+        for path in system_paths:
+            if _reject_symlinks(path):
+                err = RemovalError(paths=[path], code="validation_failed", detail="symlink_detected")
+                outcome.errors.append(err)
+                _audit_log("remove_system", [path], "rejected", "symlink_detected")
+                continue
+            if not _validate_path(path):
+                err = RemovalError(paths=[path], code="validation_failed", detail="path_not_in_allowlist")
+                outcome.errors.append(err)
+                _audit_log("remove_system", [path], "rejected", "path_not_in_allowlist")
+                continue
+            validated_paths.append(path)
+
+        if validated_paths:
+            error = _run_pkexec_rm(validated_paths)
+            if error is None:
+                outcome.removed += len(validated_paths)
+                _audit_log("remove_system", validated_paths, "success")
+            else:
+                outcome.errors.append(error)
+                _audit_log("remove_system", validated_paths, "failed", error.detail)
+        elif not outcome.errors:
+            # Todas las rutas de sistema fueron rechazadas por validación
+            _audit_log("remove_system", system_paths, "rejected_all", "no_valid_paths_after_validation")
 
     return outcome

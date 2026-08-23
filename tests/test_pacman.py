@@ -73,13 +73,18 @@ class TestUninstallPackages:
         calls = []
 
         def fake_run(cmd, **kwargs):
+            if cmd[0] == "pacman" and cmd[1] == "-Q":
+                return FakeResult(stdout="firefox 130.0-1\nvim 9.1.0000-1\n")
             calls.append((cmd, kwargs))
             return FakeResult(stdout="ok")
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
 
         pacman.uninstall_packages(["firefox", "vim"])
-        cmd, kwargs = calls[0]
+        # Find the pkexec call
+        pkexec_calls = [c for c in calls if c[0][0] == "pkexec"]
+        assert len(pkexec_calls) == 1
+        cmd, kwargs = pkexec_calls[0]
         assert cmd == ["pkexec", "pacman", "-Rns", "--noconfirm", "firefox", "vim"]
         assert kwargs == {"capture_output": True, "text": True, "check": True}
 
@@ -87,17 +92,33 @@ class TestUninstallPackages:
         calls = []
 
         def fake_run(cmd, **kwargs):
+            if cmd[0] == "pacman" and cmd[1] == "-Q":
+                return FakeResult(stdout="x 1.0-1\n")
             calls.append(cmd)
             return FakeResult()
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
         pacman.uninstall_packages(["x"], noconfirm=False)
-        assert calls[0] == ["pkexec", "pacman", "-Rns", "x"]
+        pkexec_calls = [c for c in calls if c[0] == "pkexec"]
+        assert len(pkexec_calls) == 1
+        assert pkexec_calls[0] == ["pkexec", "pacman", "-Rns", "x"]
 
     def test_propagates_errors(self, monkeypatch):
-        def boom(cmd, **kwargs):
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "pacman" and cmd[1] == "-Q":
+                return FakeResult(stdout="sudo 1.0-1\n")
             raise subprocess.CalledProcessError(126, cmd)
 
-        monkeypatch.setattr(pacman.subprocess, "run", boom)
+        monkeypatch.setattr(pacman.subprocess, "run", fake_run)
         with pytest.raises(subprocess.CalledProcessError):
             pacman.uninstall_packages(["sudo"])
+
+    def test_rejects_packages_not_installed(self, monkeypatch):
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "pacman" and cmd[1] == "-Q":
+                return FakeResult(stdout="other-package 1.0-1\n")
+            return FakeResult()
+
+        monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        with pytest.raises(ValueError, match="no instalados"):
+            pacman.uninstall_packages(["not-installed"])

@@ -33,5 +33,8 @@ blip-eraser = "blip_eraser.main:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"*" = ["packaging/polkit/*.policy"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
