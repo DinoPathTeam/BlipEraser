@@ -104,14 +104,17 @@ class TestUninstallPackages:
         assert pkexec_calls[0] == ["pkexec", "pacman", "-Rns", "x"]
 
     def test_propagates_errors(self, monkeypatch):
+        from blip_eraser.utils.dbus_client import DBusError
+
         def fake_run(cmd, **kwargs):
             if cmd[0] == "pacman" and cmd[1] == "-Q":
                 return FakeResult(stdout="sudo 1.0-1\n")
             raise subprocess.CalledProcessError(126, cmd)
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
-        with pytest.raises(subprocess.CalledProcessError):
+        with pytest.raises(DBusError) as exc:
             pacman.uninstall_packages(["sudo"])
+        assert exc.value.code == "CANCELLED"
 
     def test_rejects_packages_not_installed(self, monkeypatch):
         def fake_run(cmd, **kwargs):

@@ -16,16 +16,17 @@ manager** and therefore cannot be detected by the usual "uninstall" tools.
 
 - CachyOS or any Arch-based distro (requires `pacman`).
 - KDE Plasma (recommended, though not strictly required).
-- Python 3.11+ and PyQt6 (see installation).
+- Python 3.11+, PyQt6 and **PyGObject** (see installation).
 - `pkexec` / polkit for privileged actions.
+- `systemd` + D-Bus (system bus) for privileged daemon (Phase 2).
 
 ## Installation
 
-**Important:** PyQt6 must be installed through the system package manager, **not via
-pip**. Installing it with pip clashes with your system's Qt libraries:
+**Important:** PyQt6 and PyGObject must be installed through the system package manager, **not via
+pip**. Installing them with pip clashes with your system's libraries:
 
 ```bash
-sudo pacman -S python-pyqt6 python-pytest
+sudo pacman -S python-pyqt6 python-gobject python-pytest
 ```
 
 Then clone the repository and install the project in editable mode:

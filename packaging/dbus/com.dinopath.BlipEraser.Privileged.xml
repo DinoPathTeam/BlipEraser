@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<node name="/com/dinopath/BlipEraser/Privileged">
+  <interface name="com.dinopath.BlipEraser.Privileged">
+    <method name="RemovePackages">
+      <arg name="packages" type="as" direction="in"/>
+      <arg name="result" type="s" direction="out"/>
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="false"/>
+    </method>
+    <method name="CleanSystemPaths">
+      <arg name="paths" type="as" direction="in"/>
+      <arg name="result" type="s" direction="out"/>
+      <annotation name="org.freedesktop.DBus.Method.NoReply" value="false"/>
+    </method>
+    <method name="Ping">
+      <arg name="result" type="b" direction="out"/>
+    </method>
+  </interface>
+</node>

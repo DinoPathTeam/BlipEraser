@@ -237,3 +237,192 @@ Riesgos:
 - Contiene análisis de superficie de ataque
 - Mantener solo en copies de trabajo locales
 - Actualizar UPDATES.md con estado público genérico
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 📦 FASE 2 — INSTALACIÓN DAEMON D-BUS PRIVILEGIADO (systemd)
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILTRO: buscar "FASE 2 — INSTALACIÓN" o "DAEMON D-BUS PRIVILEGIADO"
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## Resumen
+Implementación completa del daemon D-Bus privilegiado (`blip-eraser-privileged`) 
+para separación real de privilegios. El daemon corre como root vía systemd (Type=dbus)
+y expone interfaz `com.dinopath.BlipEraser.Privileged` con métodos:
+- `RemovePackages(as packages) -> s`
+- `CleanSystemPaths(as paths) -> s`
+- `Ping() -> b`
+
+Fallback transparente a `pkexec` si daemon no disponible (dev/tests).
+
+## Archivos de packaging (instalados por pyproject.toml → setuptools)
+
+| Archivo origen | Destino instalado | Propósito |
+|----------------|-------------------|-----------|
+| `packaging/polkit/com.dinopath.blip-eraser.policy` | `/usr/share/polkit-1/actions/` | PolicyKit custom (Fase 1, mantenido) |
+| `packaging/dbus/com.dinopath.BlipEraser.Privileged.xml` | `/usr/share/dbus-1/interfaces/` | Definición interfaz D-Bus (introspección) |
+| `packaging/dbus/blip-eraser-privileged.conf` | `/usr/share/dbus-1/system.d/` | Policy D-Bus bus de sistema |
+| `packaging/systemd/blip-eraser-privileged.service` | `/usr/lib/systemd/system/` | Servicio systemd Type=dbus |
+| `packaging/scripts/blip-eraser-privileged` | `/usr/lib/blip-eraser/` | Wrapper entrypoint del daemon |
+
+## Instalación en Arch/CachyOS (producción)
+
+### Opción A: pip editable (desarrollo)
+```bash
+pip install -e .
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
+```
+
+### Opción B: PKGBUILD / makepkg (paquete real)
+```bash
+# El PKGBUILD debe incluir:
+# - depends=('python' 'python-gobject' 'polkit' 'systemd' 'pacman')
+# - package() que copie los archivos de packaging/ a $pkgdir/usr/...
+# - post_install: systemctl daemon-reload && systemctl enable blip-eraser-privileged
+makepkg -si
+```
+
+### Opción C: Instalación manual (testing rápido)
+```bash
+sudo cp packaging/polkit/com.dinopath.blip-eraser.policy /usr/share/polkit-1/actions/
+sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
+sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
+sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
+sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
+sudo chmod 755 /usr/lib/blip-eraser/blip-eraser-privileged
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
+```
+
+## Verificación post-instalación
+
+```bash
+# 1. Verificar servicio activo
+systemctl status blip-eraser-privileged.service
+# Debe mostrar: Active: active (running) y Main PID: XXXX (blip-eraser-privileged)
+
+# 2. Verificar nombre D-Bus registrado
+busctl --system list | grep blip-eraser
+# Debe mostrar: com.dinopath.BlipEraser.Privileged
+
+# 3. Test ping al daemon
+busctl --system call com.dinopath.BlipEraser.Privileged \
+  /com/dinopath/BlipEraser/Privileged \
+  com.dinopath.BlipEraser.Privileged Ping
+# Debe retornar: b true
+
+# 4. Verificar logs auditoría
+journalctl -u blip-eraser-privileged -f
+# Buscar líneas: AUDIT action=...
+```
+
+## Hardening systemd aplicado (service file)
+
+```ini
+# Aislamiento
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+
+# Red y namespaces
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+# Syscalls
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Rutas permitidas (SOLO estas)
+ReadWritePaths=/var/cache/pacman/pkg /var/log /var/lib/pacman
+ReadOnlyPaths=/usr/bin/pacman /usr/bin/pacman-key /usr/bin/rm /usr/lib/blip-eraser
+
+# Capabilities mínimas
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_FOWNER
+```
+
+## Validaciones de seguridad en daemon (código)
+
+| Validación | Archivo | Descripción |
+|------------|---------|-------------|
+| Allowlist prefijos | `privileged_daemon.py:58` | Solo `/var/cache/pacman/pkg`, `/var/log`, `/var/lib/pacman` |
+| Resolve + startswith | `privileged_daemon.py:156` | `Path.resolve()` + verificación prefijo (anti-traversal) |
+| Rechazo symlinks | `privileged_daemon.py:167` | `is_symlink()` en ruta y todos los padres |
+| Verificación firmas | `privileged_daemon.py:79` | `pacman-key --verify` sobre `.sig` en caché |
+| Caché thread-safe | `privileged_daemon.py:27` | Lock + lazy init + invalidación atómica |
+
+## Cliente unificado (fallback transparente)
+
+`src/blip_eraser/utils/dbus_client.py` → `PrivilegedAPI`:
+1. Intenta conectar a daemon D-Bus (bus de sistema)
+2. Si disponible → llama métodos daemon
+3. Si NO disponible (dev, tests, fallback) → ejecuta `pkexec` directo con **misma validación local**
+4. API idéntica: `api.remove_packages(pkgs)`, `api.clean_system_paths(paths)`
+
+```python
+# Uso en código (igual que antes):
+from blip_eraser.utils.privileges import remove_paths
+from blip_eraser.utils.pacman import uninstall_packages
+
+# Internamente usa PrivilegedAPI con fallback automático
+```
+
+## Dependencias NUEVAS requeridas
+
+| Dependencia | Tipo | Por qué |
+|-------------|------|---------|
+| `python-gobject` (PyGObject) | Runtime (sistema) | `gi.repository.Gio`, `GLib` para D-Bus daemon y cliente |
+| `polkit` | Runtime (sistema) | PolicyKit para auth (ya requerido en Fase 1) |
+| `systemd` | Runtime (sistema) | Servicio Type=dbus, journal, busctl |
+| `pacman` | Runtime (sistema) | Operaciones de paquetes (ya requerido) |
+
+**En Arch/CachyOS:**
+```bash
+sudo pacman -S python-gobject polkit systemd pacman
+# python-gobject provee: gi, Gio, GLib
+```
+
+**En pyproject.toml** → NO se añaden a `dependencies` (pip) porque son paquetes del sistema.
+Se documentan en `README.md` y `Installation guide.*.txt` como dependencias de sistema.
+
+## Tests
+
+```bash
+# Tests unitarios (sin daemon, usa fallback pkexec mockado)
+pytest tests/test_dbus_client.py -v
+pytest tests/test_privileges.py -v
+
+# Tests de integración (requieren daemon corriendo)
+# pytest tests/test_daemon_integration.py -v  # TODO: crear
+```
+
+## Troubleshooting
+
+| Problema | Causa | Solución |
+|----------|-------|----------|
+| `DaemonUnavailable` en logs | Daemon no iniciado | `systemctl start blip-eraser-privileged` |
+| `org.freedesktop.DBus.Error.AccessDenied` | Policy D-Bus no permite usuario | Verificar `/usr/share/dbus-1/system.d/blip-eraser-privileged.conf` |
+| `pkexec: command not found` | polkit no instalado | `sudo pacman -S polkit` |
+| `gi module not found` | PyGObject no instalado | `sudo pacman -S python-gobject` |
+| Timeout en llamada D-Bus | Daemon colgado | `systemctl restart blip-eraser-privileged` |
+
+## Estado de implementación actualizado
+
+- [x] Fase 2: systemd D-Bus daemon (diseño + implementación completa)
+- [x] Fase 2: Cliente unificado con fallback pkexec
+- [x] Fase 2: Packaging systemd + D-Bus + polkit
+- [x] Fase 2: Tests unitarios cliente + integración privileges/pacman
+- [ ] **PENDIENTE**: Tests integración daemon real (requiere VM Arch)
+- [ ] **PENDIENTE**: PKGBUILD para AUR
+- [ ] Fase 3: AppArmor profile (opcional)

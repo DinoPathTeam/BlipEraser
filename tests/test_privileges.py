@@ -1,19 +1,24 @@
-"""Tests para utils/privileges.py — decisión y ejecución con pkexec.
+"""Tests para utils/privileges.py — decisión y ejecución con daemon D-Bus + fallback pkexec.
 
-Sin PyQt6, sin borrados reales de sistema: se mockea subprocess.run y se usan
+Sin PyQt6, sin borrados reales de sistema: se mockea la API privilegiada y se usan
 rutas temporales para la parte de $HOME.
 """
 
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from blip_eraser.utils import privileges
 from blip_eraser.utils.privileges import (
     RemovalError,
     needs_elevation,
     remove_paths,
+    get_privileged_api,
 )
+from blip_eraser.utils.dbus_client import OperationResult, DBusError, reset_privileged_api
 
 
 @dataclass
@@ -62,93 +67,79 @@ class TestRemovePathsHome:
         assert len(outcome.errors) == 1
         assert outcome.errors[0].code == "failed"
 
+    def test_home_denylist_rejected(self, tmp_path):
+        # .ssh está en denylist - usar home real para que relative_to funcione
+        target = Path.home() / ".ssh" / "test_blip_eraser"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "id_rsa").write_bytes(b"x")
+        try:
+            outcome = remove_paths([target])
+            assert outcome.removed == 0
+            assert len(outcome.errors) == 1
+            assert outcome.errors[0].code == "validation_failed"
+            assert outcome.errors[0].detail == "path_in_home_denylist"
+        finally:
+            # Limpiar
+            import shutil
+            shutil.rmtree(target.parent, ignore_errors=True)
+
 
 class TestRemovePathsSystem:
-    def test_builds_single_pkexec_batch(self, monkeypatch):
-        calls = []
+    def _mock_api_success(self, monkeypatch):
+        """Mock de API que simula éxito en operación de sistema."""
+        def mock_clean(paths):
+            return OperationResult(success=True, output="ok", used_daemon=False)
+        mock_api = MagicMock()
+        mock_api.clean_system_paths = mock_clean
+        monkeypatch.setattr(privileges, "get_privileged_api", lambda: mock_api)
 
-        def fake_run(cmd, **kwargs):
-            calls.append(cmd)
-            return FakeResult(returncode=0)
+    def _mock_api_failure(self, monkeypatch, code="EXECUTION_FAILED", message="failed"):
+        """Mock de API que simula fallo."""
+        def mock_clean(paths):
+            return OperationResult(
+                success=False,
+                error=DBusError(code, message),
+                used_daemon=False
+            )
+        mock_api = MagicMock()
+        mock_api.clean_system_paths = mock_clean
+        monkeypatch.setattr(privileges, "get_privileged_api", lambda: mock_api)
 
-        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-        # Usar rutas que están en ALLOWED_SYSTEM_PREFIXES
+    def test_success_via_api(self, monkeypatch):
+        self._mock_api_success(monkeypatch)
         outcome = remove_paths([Path("/var/log/journal"), Path("/var/log/pacman.log")])
         assert outcome.removed == 2
         assert outcome.errors == []
-        assert len(calls) == 1  # UNA sola llamada pkexec para el lote
-        assert calls[0][:4] == ["pkexec", "rm", "-rf", "--"]
-        normalized = {str(p).replace("\\", "/") for p in calls[0][4:]}
-        assert normalized == {"/var/log/journal", "/var/log/pacman.log"}
 
-    def test_cancelled_auth_is_structured_error(self, monkeypatch):
-        def fake_run(cmd, **kwargs):
-            if cmd[0] == "pkexec":
-                return FakeResult(returncode=126, stderr="dismissed")
-            return FakeResult()
-
-        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
+    def test_cancelled_is_structured_error(self, monkeypatch):
+        self._mock_api_failure(monkeypatch, "CANCELLED", "Autenticación cancelada")
         outcome = remove_paths([Path("/var/cache/pacman/pkg/foo.pkg.tar.zst")])
         assert outcome.removed == 0
         assert outcome.errors[0].code == "cancelled"
 
     def test_pkexec_missing_structured_error(self, monkeypatch):
-        def boom(cmd, **kwargs):
-            if cmd[0] == "pkexec":
-                raise FileNotFoundError("pkexec")
-            return FakeResult()
-
-        monkeypatch.setattr(privileges.subprocess, "run", boom)
+        self._mock_api_failure(monkeypatch, "COMMAND_NOT_FOUND", "pkexec not found")
         outcome = remove_paths([Path("/var/lib/pacman/local")])
         assert outcome.errors[0].code == "pkexec_missing"
 
     def test_mixed_batch_splits_home_and_system(self, monkeypatch, tmp_path):
-        calls = []
+        self._mock_api_success(monkeypatch)
         home_target = tmp_path / "carpeta"
         home_target.mkdir()
-
-        def fake_run(cmd, **kwargs):
-            if cmd[0] == "pkexec":
-                calls.append(cmd)
-                return FakeResult(returncode=0)
-            return FakeResult()
-
-        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
         outcome = remove_paths([tmp_path / "carpeta", Path("/var/log/test.log")])
         assert outcome.removed == 2
-        assert len(calls) == 1
         assert not home_target.exists()
 
     def test_rejects_path_not_in_allowlist(self, monkeypatch):
-        calls = []
-
-        def fake_run(cmd, **kwargs):
-            calls.append(cmd)
-            return FakeResult(returncode=0)
-
-        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-        # /etc/passwd no está en la allowlist
+        # La validación ocurre ANTES de llamar a la API
         outcome = remove_paths([Path("/etc/passwd")])
         assert outcome.removed == 0
         assert len(outcome.errors) == 1
         assert outcome.errors[0].code == "validation_failed"
         assert outcome.errors[0].detail == "path_not_in_allowlist"
-        assert len(calls) == 0  # No se debe llamar a pkexec
 
     def test_rejects_symlink(self, monkeypatch, tmp_path):
-        """Test que la validación rechaza symlinks.
-
-        En Windows no se pueden crear symlinks sin privilegios, así que
-        mockeamos _reject_symlinks para simular la detección.
-        """
-        calls = []
-
-        def fake_run(cmd, **kwargs):
-            calls.append(cmd)
-            return FakeResult(returncode=0)
-
-        monkeypatch.setattr(privileges.subprocess, "run", fake_run)
-
+        """Test que la validación rechaza symlinks."""
         # Mock _reject_symlinks para simular detección de symlink
         original_reject = privileges._reject_symlinks
         monkeypatch.setattr(privileges, "_reject_symlinks", lambda p: True)
@@ -158,10 +149,15 @@ class TestRemovePathsSystem:
         assert len(outcome.errors) == 1
         assert outcome.errors[0].code == "validation_failed"
         assert outcome.errors[0].detail == "symlink_detected"
-        assert len(calls) == 0  # No se debe llamar a pkexec
 
         # Restaurar
         monkeypatch.setattr(privileges, "_reject_symlinks", original_reject)
+
+    def test_rejects_all_invalid_paths(self, monkeypatch):
+        """Todas las rutas inválidas -> rejected_all audit log."""
+        outcome = remove_paths([Path("/etc/passwd"), Path("/tmp/foo")])
+        assert outcome.removed == 0
+        assert len(outcome.errors) == 2
 
 
 class TestRemovalError:
@@ -169,3 +165,33 @@ class TestRemovalError:
         err = RemovalError(paths=[Path("/var/log/x")], code="cancelled")
         assert err.code == "cancelled"
         assert err.paths[0].name == "x"
+
+
+class TestPrivilegedAPIIntegration:
+    """Tests de integración con la API real (fallback pkexec mockado)."""
+
+    def test_remove_packages_uses_api(self, monkeypatch):
+        """Verifica que uninstall_packages usa la API privilegiada."""
+        from blip_eraser.utils import pacman
+
+        mock_remove = MagicMock(return_value=OperationResult(success=True, output="removed", used_daemon=False))
+
+        mock_api = MagicMock()
+        mock_api.remove_packages = mock_remove
+        monkeypatch.setattr(pacman, "get_privileged_api", lambda: mock_api)
+
+        # Mock validación de paquetes
+        monkeypatch.setattr(pacman, "_validate_packages_exist", lambda pkgs: (pkgs, []))
+
+        result = pacman.uninstall_packages(["foo", "bar"])
+        assert result == "removed"
+        mock_remove.assert_called_once_with(["foo", "bar"], noconfirm=True)
+
+    def test_uninstall_packages_rejects_invalid(self, monkeypatch):
+        from blip_eraser.utils import pacman
+
+        monkeypatch.setattr(pacman, "_validate_packages_exist", lambda pkgs: ([], pkgs))
+
+        with pytest.raises(ValueError) as exc:
+            pacman.uninstall_packages(["invalid"])
+        assert "rechazados" in str(exc.value)

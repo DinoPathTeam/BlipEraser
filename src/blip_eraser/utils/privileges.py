@@ -7,27 +7,28 @@ privilegios y CÓMO ejecutarla:
   se borran directamente con `delete_path`, sin pedir contraseña.
 - Rutas de sistema (p. ej. /var/cache/pacman/pkg, /var/log): la app NUNCA
   se eleva toda entera; únicamente el `rm` concreto se ejecuta vía
-  `pkexec rm -rf -- <rutas>`. Un lote completo de rutas de sistema se envía
-  en UNA sola llamada a pkexec, de modo que la autenticación se pide una
-  sola vez por lote.
+  daemon D-Bus privilegiado (con fallback a `pkexec rm -rf`). Un lote completo
+  de rutas de sistema se envía en UNA sola llamada, de modo que la
+  autenticación se pide una sola vez por lote.
 
 Los errores se devuelven de forma estructurada (código + detalle), nunca
 como excepciones técnicas: la GUI los traduce a mensajes claros y
 localizados sin exponer tracebacks ni rutas crudas pormenorizadas.
 
-Seguridad (Fase 1 - Polkit policy + validación estricta):
+Seguridad (Fase 1 + Fase 2):
 - Allowlist estricta de prefijos de sistema permitidos para `rm -rf`
 - Validación con `Path.resolve()` para prevenir path traversal
 - Rechazo de symlinks en cualquier nivel de la ruta
 - Auditoría estructurada de cada operación privilegiada
 - Allowlist de operaciones permitidas (elimina RCE vía callables arbitrarios)
 - Validación de rutas $HOME (denylist: .ssh, .gnupg, .config, etc.)
+- **Fase 2**: Daemon D-Bus systemd con separación real de privilegios
+  (fallback a pkexec si el daemon no está disponible)
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import threading
 import time
@@ -37,6 +38,12 @@ from collections.abc import Callable
 
 from blip_eraser.utils.file_utils import delete_path
 from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.dbus_client import (
+    PrivilegedAPI,
+    get_privileged_api,
+    DBusError,
+    OperationResult,
+)
 
 # Rutas de sistema cuyo borrado requiere privilegios. Un path que no cae en
 # $HOME y empieza por uno de estos prefijos se considera privilegiado.
@@ -52,9 +59,9 @@ SYSTEM_PATH_PREFIXES: tuple[str, ...] = (
     "/media/",
 )
 
-# Allowlist estricta de prefijos permitidos para operaciones `rm -rf` vía pkexec.
+# Allowlist estricta de prefijos permitidos para operaciones `rm -rf` vía pkexec/daemon.
 # Solo estas rutas pueden borrarse con privilegios. Cualquier otra ruta
-# fuera de $HOME será rechazada ANTES de invocar pkexec.
+# fuera de $HOME será rechazada ANTES de invocar la operación privilegiada.
 ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
     "/var/cache/pacman/pkg",
     "/var/log",
@@ -77,7 +84,7 @@ HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
     ".gnupg/trustdb.gpg",
 )
 
-# Códigos de retorno de pkexec (man pkexec).
+# Códigos de retorno de pkexec (man pkexec) - mantenidos para compatibilidad fallback
 PKEXEC_RC_AUTH_CANCELLED = 126
 PKEXEC_RC_EXECUTION_FAILED = 127
 
@@ -87,7 +94,7 @@ class RemovalError:
     """Fallo de borrado estructurado para la GUI (no raw OSError).
 
     - `paths`: rutas afectadas (una, o todo el lote de sistema).
-    - `code`: "cancelled" | "pkexec_missing" | "denied" | "failed" | "validation_failed".
+    - `code`: "cancelled" | "pkexec_missing" | "denied" | "failed" | "validation_failed" | "dbus_unavailable".
     - `detail`: texto corto del comando heredado (opcional, ya saneado).
     """
     paths: list[Path]
@@ -110,13 +117,13 @@ class RemovalOutcome:
 # El registro se construye aquí para que confirm_dialog.py lo importe.
 
 def _op_pacman_remove(packages: list[str]) -> str:
-    """Operación permitida: desinstala paquetes vía pkexec pacman -Rns."""
+    """Operación permitida: desinstala paquetes vía daemon/pkexec pacman -Rns."""
     from blip_eraser.utils.pacman import uninstall_packages
     return uninstall_packages(packages)
 
 
 def _op_rm_rf(paths: list[Path]) -> RemovalOutcome:
-    """Operación permitida: borra rutas de sistema vía pkexec rm -rf."""
+    """Operación permitida: borra rutas de sistema vía daemon/pkexec rm -rf."""
     return remove_paths(paths)
 
 
@@ -130,7 +137,7 @@ ALLOWED_OPERATIONS: dict[str, Callable] = {
 
 def get_allowed_operation(op_id: str) -> Callable | None:
     """Obtiene la función permitida para un ID de operación.
-    
+
     Returns None si el ID no está en la allowlist (rechazo seguro).
     """
     return ALLOWED_OPERATIONS.get(op_id)
@@ -281,42 +288,34 @@ def _home_removal_error(path: Path, exc: BaseException) -> RemovalError:
     return RemovalError(paths=[path], code="failed", detail=str(exc))
 
 
-def _run_pkexec_rm(paths: list[Path]) -> RemovalError | None:
-    """Ejecuta `pkexec rm -rf -- <paths>`. Devuelve un RemovalError o None si OK."""
-    cmd = ["pkexec", "rm", "-rf", "--", *(str(p) for p in paths)]
-    try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError:
-        return RemovalError(paths=paths, code="pkexec_missing")
-    if proc.returncode == PKEXEC_RC_AUTH_CANCELLED:
-        return RemovalError(
-            paths=paths, code="cancelled", detail=(proc.stderr or "").strip()
-        )
-    if proc.returncode != 0:
-        detail = (proc.stderr or "").strip()
-        code = "failed"
-        if proc.returncode == PKEXEC_RC_EXECUTION_FAILED:
-            code = "failed"
-        return RemovalError(paths=paths, code=code, detail=detail)
-    return None
+def _convert_dbus_error_to_removal(paths: list[Path], error: DBusError) -> RemovalError:
+    """Convierte un DBusError a RemovalError para compatibilidad con GUI."""
+    code_map = {
+        "CANCELLED": "cancelled",
+        "VALIDATION_FAILED": "validation_failed",
+        "EXECUTION_FAILED": "failed",
+        "COMMAND_NOT_FOUND": "pkexec_missing",
+        "DAEMON_UNAVAILABLE": "dbus_unavailable",
+        "INTERNAL": "failed",
+    }
+    code = code_map.get(error.code, "failed")
+    return RemovalError(paths=paths, code=code, detail=error.message)
 
 
 def remove_paths(paths: list[Path]) -> RemovalOutcome:
     """Borra `paths` con el nivel de privilegios que corresponde a cada uno.
 
     - Rutas de $HOME: `delete_path` directo.
-    - Rutas de sistema: UN solo `pkexec rm -rf` con todo el lote (una única
-      solicitud de autenticación para el lote).
+    - Rutas de sistema: UNA sola llamada al daemon D-Bus (con fallback a
+      `pkexec rm -rf`) con todo el lote (una única solicitud de autenticación
+      para el lote).
 
-    VALIDACIONES DE SEGURIDAD (Fase 1):
+    VALIDACIONES DE SEGURIDAD (Fase 1 + Fase 2):
     - Cada ruta de sistema debe pasar _validate_path (allowlist estricta)
     - Cada ruta de sistema debe pasar _reject_symlinks (no symlinks)
     - Rutas de $HOME deben pasar _is_path_denied_in_home (denylist)
     - Auditoría completa de cada operación
+    - **Fase 2**: Usa daemon D-Bus privilegiado con fallback a pkexec
     """
     outcome = RemovalOutcome()
     home_paths: list[Path] = []
@@ -342,7 +341,7 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
             _audit_log("remove_home", [path], "failed", str(exc))
 
     if system_paths:
-        # Validación estricta ANTES de invocar pkexec
+        # Validación estricta ANTES de invocar operación privilegiada
         validated_paths: list[Path] = []
         for path in system_paths:
             if _reject_symlinks(path):
@@ -358,13 +357,20 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
             validated_paths.append(path)
 
         if validated_paths:
-            error = _run_pkexec_rm(validated_paths)
-            if error is None:
+            # Usar API privilegiada unificada (daemon + fallback pkexec)
+            api = get_privileged_api()
+            result: OperationResult = api.clean_system_paths(validated_paths)
+            if result.success:
                 outcome.removed += len(validated_paths)
                 _audit_log("remove_system", validated_paths, "success")
             else:
-                outcome.errors.append(error)
-                _audit_log("remove_system", validated_paths, "failed", error.detail)
+                if result.error:
+                    outcome.errors.append(_convert_dbus_error_to_removal(validated_paths, result.error))
+                    _audit_log("remove_system", validated_paths, "failed", result.error.message)
+                else:
+                    err = RemovalError(paths=validated_paths, code="failed", detail="unknown_error")
+                    outcome.errors.append(err)
+                    _audit_log("remove_system", validated_paths, "failed", "unknown_error")
         elif not outcome.errors:
             # Todas las rutas de sistema fueron rechazadas por validación
             _audit_log("remove_system", system_paths, "rejected_all", "no_valid_paths_after_validation")

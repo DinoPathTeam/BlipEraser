@@ -20,8 +20,9 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 
-# PyQt6 se instala deliberadamente fuera de pip: en Arch Linux con
-# `sudo pacman -S python-pyqt6` para evitar conflictos con el runtime.
+# PyQt6 y PyGObject se instalan deliberadamente fuera de pip: en Arch Linux con
+# `sudo pacman -S python-pyqt6 python-gobject` para evitar conflictos con el runtime.
+# python-gobject provee gi.repository.Gio/GLib para D-Bus daemon y cliente (Fase 2).
 dependencies = []
 
 [project.optional-dependencies]
@@ -34,7 +35,20 @@ blip-eraser = "blip_eraser.main:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["packaging/polkit/*.policy"]
+"*" = [
+    "packaging/polkit/*.policy",
+    "packaging/dbus/*.xml",
+    "packaging/dbus/*.conf",
+    "packaging/systemd/*.service",
+]
+
+# Instalar archivos de sistema en las ubicaciones correctas
+[tool.setuptools.data-files]
+"/usr/share/polkit-1/actions" = ["packaging/polkit/com.dinopath.blip-eraser.policy"]
+"/usr/share/dbus-1/system.d" = ["packaging/dbus/blip-eraser-privileged.conf"]
+"/usr/share/dbus-1/interfaces" = ["packaging/dbus/com.dinopath.BlipEraser.Privileged.xml"]
+"/usr/lib/systemd/system" = ["packaging/systemd/blip-eraser-privileged.service"]
+"/usr/lib/blip-eraser" = ["packaging/scripts/blip-eraser-privileged"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

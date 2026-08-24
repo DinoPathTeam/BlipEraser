@@ -1,0 +1,53 @@
+[Unit]
+Description=BlipEraser Privileged Daemon
+Documentation=https://github.com/blip-eraser/blip-eraser
+After=dbus-daemon.service
+Requires=dbus-daemon.service
+
+[Service]
+Type=dbus
+BusName=com.dinopath.BlipEraser.Privileged
+ExecStart=/usr/lib/blip-eraser/blip-eraser-privileged
+User=root
+Group=root
+
+# Hardening estricto
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Solo permitimos escritura en las rutas necesarias para las operaciones
+ReadWritePaths=/var/cache/pacman/pkg /var/log /var/lib/pacman
+ReadOnlyPaths=/usr/bin/pacman /usr/bin/pacman-key /usr/bin/rm /usr/lib/blip-eraser
+
+# Capabilities mínimas necesarias
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_FOWNER
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=blip-eraser-privileged
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
+Also=dbus-daemon.service

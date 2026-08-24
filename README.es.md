@@ -35,15 +35,16 @@ gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz 
 ## 🛠️ Requisitos del sistema
 
 - CachyOS o cualquier distro basada en Arch (requiere `pacman`).
-- Python 3.11+ y PyQt6 (instalado vía `pacman`).
+- Python 3.11+, PyQt6 y **PyGObject** (instalados vía `pacman`).
 - `pkexec` / polkit para las acciones con privilegios de administrador.
+- `systemd` + D-Bus (bus de sistema) para el daemon privilegiado (Fase 2).
 
 ## 📦 Instalación
 
-**Muy importante:** PyQt6 se instala con el gestor del sistema, **no por pip**.
+**Muy importante:** PyQt6 y PyGObject se instalan con el gestor del sistema, **no por pip**.
 
 ```bash
-sudo pacman -S python-pyqt6 python-pytest
+sudo pacman -S python-pyqt6 python-gobject python-pytest
 ```
 
 Después clona el repo e instala el proyecto en modo editable:

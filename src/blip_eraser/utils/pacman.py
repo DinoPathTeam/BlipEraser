@@ -3,10 +3,11 @@
 Usa solo subprocess para que sea fácil de mockear y testear sin tener
 paquetes reales instalados (o siquiera estar en un sistema Arch).
 
-Seguridad (Fase 1):
+Seguridad (Fase 1 + Fase 2):
 - Validación de que los paquetes existen en la BD de pacman antes de desinstalar
 - Auditoría estructurada de cada operación
 - Caché de BD de paquetes con verificación de firmas (Supply chain #5)
+- **Fase 2**: Daemon D-Bus systemd con fallback a pkexec
 """
 
 from __future__ import annotations
@@ -16,6 +17,12 @@ import threading
 from pathlib import Path
 
 from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.dbus_client import (
+    PrivilegedAPI,
+    get_privileged_api,
+    DBusError,
+    OperationResult,
+)
 
 # =========================================================================
 # CACHÉ DE BD DE PAQUETES CON VERIFICACIÓN DE FIRMAS (Supply chain #5)
@@ -212,16 +219,18 @@ def uninstall_packages(
     packages: list[str],
     noconfirm: bool = True,
 ) -> str:
-    """Desinstala paquetes vía `pkexec pacman -Rns`.
+    """Desinstala paquetes vía daemon D-Bus (con fallback a `pkexec pacman -Rns`).
 
-    VALIDACIÓN DE SEGURIDAD (Fase 1):
+    VALIDACIÓN DE SEGURIDAD (Fase 1 + Fase 2):
     - Verifica que cada paquete existe en la BD de pacman antes de desinstalar
     - Rechaza paquetes que no están instalados (previene typosquatting, etc.)
     - Auditoría completa de la operación
     - Invalida caché tras desinstalación exitosa
+    - **Fase 2**: Usa daemon D-Bus privilegiado con fallback a pkexec
 
-    Devuelve la salida estándar del comando. Lanza CalledProcessError en
-    error y FileNotFoundError si el comando no está disponible.
+    Devuelve la salida estándar del comando.
+    Lanza ValueError si hay paquetes no válidos.
+    Lanza DBusError si la operación falla.
     """
     if not packages:
         return ""
@@ -234,20 +243,20 @@ def uninstall_packages(
 
     write_diagnostic(f"AUDIT action=uninstall_packages packages={valid} result=started")
 
-    cmd = ["pkexec", "pacman", "-Rns"]
-    if noconfirm:
-        cmd.append("--noconfirm")
-    cmd.extend(valid)
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    # Usar API privilegiada unificada (daemon + fallback pkexec)
+    api = get_privileged_api()
+    result: OperationResult = api.remove_packages(valid, noconfirm=noconfirm)
 
-    write_diagnostic(f"AUDIT action=uninstall_packages packages={valid} result=success")
+    if result.success:
+        write_diagnostic(f"AUDIT action=uninstall_packages packages={valid} result=success via={'daemon' if result.used_daemon else 'pkexec'}")
 
-    # Invalidar caché tras desinstalación exitosa
-    invalidate_package_cache()
+        # Invalidar caché tras desinstalación exitosa
+        invalidate_package_cache()
 
-    return result.stdout
+        return result.output
+    else:
+        if result.error:
+            write_diagnostic(f"AUDIT action=uninstall_packages packages={valid} result=failed error={result.error.code}")
+            raise result.error
+        else:
+            raise DBusError("INTERNAL", "Error desconocido en desinstalación")

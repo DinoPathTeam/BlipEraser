@@ -14,67 +14,68 @@
 </p>
 
 <p align="center">
-  <a href="README.es.md"><b>Español</b></a> • <a href="README.en.md"><b>English</b></a>
+  <a href="README.es.md"><b>Español</b></a> \u00b7 <a href="README.en.md"><b>English</b></a>
 </p>
 
 ---
 
-## 🚀 Acerca de BlipEraser
+## \uD83D\uDE80 Acerca de BlipEraser
 
-**BlipEraser** cubre el hueco que dejan los gestores gráficos tradicionales: detecta y gestiona aplicaciones instaladas **manualmente** (AppImages, lanzadores como Hydra, programas en `~/Games`, `~/.local/share` o `~/Descargas`) que **no quedan registradas en el gestor de paquetes**, combinándolas en una sola interfaz limpia junto con los paquetes de `pacman`.
+**BlipEraser** cubre el hueco que dejan los gestores gr\u00e1ficos tradicionales: detecta y gestiona aplicaciones instaladas **manualmente** (AppImages, lanzadores como Hydra, programas en `~/Games`, `~/.local/share` o `~/Descargas`) que **no quedan registradas en el gestor de paquetes**, combin\u00e1ndolas en una sola interfaz limpia junto con los paquetes de `pacman`.
 
-Además, incluye diagnóstico de salud del sistema, limpiador de caché y registros por categoría, optimizaciones de rendimiento probadas para CachyOS/Arch y personalización de temas.
+Adem\u00e1s, incluye diagn\u00f3stico de salud del sistema, limpiador de cach\u00e9 y registros por categor\u00eda, optimizaciones de rendimiento probadas para CachyOS/Arch y personalizaci\u00f3n de temas.
 
 ---
 
-## ✨ Características Principales
+## \u2728 Caracter\u00edsticas Principales
 
-- **📊 Vista General (Overview)**:
-  - Gauge radial de **Salud del Sistema** (*GOOD / FAIR / POOR*) con puntuación dinámica.
+- **\uD83D\uDCCA Vista General (Overview)**:
+  - Gauge radial de **Salud del Sistema** (*GOOD / FAIR / POOR*) con puntuaci\u00f3n din\u00e1mica.
   - Especificaciones en tiempo real: CPU, GPU, uso de RAM y espacio en disco.
-  - Resumen *"Limpieza del sistema recomendada"* con un clic para liberar basura, caché y registros.
-- **📦 Desinstalador Unificado**:
-  - Tabla multiselección con selección **manual por fila** (sin checkbox "seleccionar todo" en el encabezado, para evitar desinstalaciones masivas accidentales).
-  - Clasificación clara de tipo: **Aplicación** (pacman explícito), **Dependencia** o **Carpeta suelta** (manual).
-  - Botón dinámico *"Desinstalar seleccionados (N)"*.
-- **🧹 Limpiador del Sistema (2 Secciones Independientes)**:
-  - **Limpieza recomendada**: Detalle ítem por ítem de Basura (`~/.cache`), Caché de Pacman (`/var/cache/pacman/pkg`) y Registros (`/var/log`).
+  - Resumen *"Limpieza del sistema recomendada"* con un clic para liberar basura, cach\u00e9 y registros.
+- **\uD83D\uDCE6 Desinstalador Unificado**:
+  - Tabla multiselecci\u00f3n con selecci\u00f3n **manual por fila** (sin checkbox "seleccionar todo" en el encabezado, para evitar desinstalaciones masivas accidentales).
+  - Clasificaci\u00f3n clara de tipo: **Aplicaci\u00f3n** (pacman expl\u00edcito), **Dependencia** o **Carpeta suelta** (manual).
+  - Bot\u00f3n din\u00e1mico *"Desinstalar seleccionados (N)"*.
+- **\uD83E\uDDF9 Limpiador del Sistema (2 Secciones Independientes)**:
+  - **Limpieza recomendada**: Detalle \u00edtem por \u00edtem de Basura (`~/.cache`), Cach\u00e9 de Pacman (`/var/cache/pacman/pkg`) y Registros (`/var/log`).
   - **Aplicaciones instaladas (manual)**: Carpetas sueltas y AppImages detectados en las rutas de escaneo.
-- **🛡️ Confirmación de Seguridad y Umbral de Gran Tamaño**:
-  - Diálogo de confirmación con desglose de categorías y total a liberar.
-  - **Advertencia visual destacada (rojo / negrita)** para operaciones de gran tamaño (≥ 5 GiB).
-  - **Confirmación obligatoria sin excepción**: no existe opción de *"no volver a preguntar"*.
-- **⚡ Ajustes de Rendimiento**:
-  - Optimizaciones seguras de un solo clic para Arch/CachyOS: `fstrim` (SSD), compresión de RAM `zswap` y espejos de pacman ordenados por velocidad.
-  - Cada opción incluye un tooltip detallado (mecanismo, consecuencias y beneficio).
-- **🎨 Personalización e Idioma**:
+- **\uD83D\uDEE1\uFE0F Confirmaci\u00f3n de Seguridad y Umbral de Gran Tama\u00f1o**:
+  - Di\u00e1logo de confirmaci\u00f3n con desglose de categor\u00edas y total a liberar.
+  - **Advertencia visual destacada (rojo / negrita)** para operaciones de gran tama\u00f1o (\u2265 5 GiB).
+  - **Confirmaci\u00f3n obligatoria sin excepci\u00f3n**: no existe opci\u00f3n de *"no volver a preguntar"*.
+- **\u26A1 Ajustes de Rendimiento**:
+  - Optimizaciones seguras de un solo clic para Arch/CachyOS: `fstrim` (SSD), compresi\u00f3n de RAM `zswap` y espejos de pacman ordenados por velocidad.
+  - Cada opci\u00f3n incluye un tooltip detallado (mecanismo, consecuencias y beneficio).
+- **\uD83C\uDFA8 Personalizaci\u00f3n e Idioma**:
   - Selector de tema visual (Red, Blue, Green, Purple, Dark) y familias de fuentes del sistema.
-  - Soporte completo bilingüe (**Español** e **Inglés**) con cambio de idioma en caliente.
+  - Soporte completo biling\u00fce (**Espa\u00f1ol** e **Ingl\u00e9s**) con cambio de idioma en caliente.
 
 ---
 
-## 🛠️ Requisitos del Sistema
+## \uD83D\uDEE0 Requisitos del Sistema
 
-- **S.O.**: CachyOS o cualquier distribución basada en Arch Linux (requiere `pacman`).
+- **S.O.**: CachyOS o cualquier distribuci\u00f3n basada en Arch Linux (requiere `pacman`).
 - **Python**: 3.11 o superior.
-- **GUI**: PyQt6 (instalado vía `pacman`, no por `pip`).
-- **Privilegios**: `pkexec` / Polkit para acciones de desinstalación de paquetes del sistema.
+- **GUI**: PyQt6 y **PyGObject** (instalados v\u00eda `pacman`, no por `pip`).
+- **Privilegios**: `pkexec` / Polkit para acciones de desinstalaci\u00f3n de paquetes del sistema.
+- **Sistema**: `systemd` + D-Bus (bus de sistema) para daemon privilegiado (Fase 2).
 
 ---
 
-## 📦 Instalación
+## \uD83D\uDCE6 Instalaci\u00f3n
 
-> **IMPORTANTE**: Instala PyQt6 con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librerías Qt de CachyOS/Arch.
+> **IMPORTANTE**: Instala PyQt6 y PyGObject con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librer\u00edas de CachyOS/Arch.
 
 ```bash
 # 1. Instalar dependencias del sistema
-sudo pacman -S python-pyqt6 python-pytest
+sudo pacman -S python-pyqt6 python-gobject python-pytest
 
 # 2. Clonar el repositorio
 git clone https://github.com/DinoPathTeam/BlipEraser.git
 cd BlipEraser
 
-# 3. Instalación editable
+# 3. Instalaci\u00f3n editable
 pip install -e . --break-system-packages
 ```
 
@@ -90,15 +91,15 @@ pip install -e .
 
 ---
 
-## 🎮 Uso
+## \uD83C\uDFAE Uso
 
-Ejecuta la aplicación desde la terminal:
+Ejecuta la aplicaci\u00f3n desde la terminal:
 
 ```bash
 blip-eraser
 ```
 
-También puedes ejecutarla directamente con Python:
+Tambi\u00e9n puedes ejecutarla directamente con Python:
 
 ```bash
 python -m blip_eraser
@@ -106,9 +107,9 @@ python -m blip_eraser
 
 ---
 
-## 🧪 Desarrollo y Tests
+## \uD83E\uDDCA Desarrollo y Tests
 
-Toda la lógica pura (escaneo, categorización, umbral de confirmación, normalización de fechas de pacman) vive en `src/blip_eraser/utils/` sin dependencia de PyQt6. Esto permite ejecutar la suite de pruebas sin entorno gráfico:
+Toda la l\u00f3gica pura (escaneo, categorizaci\u00f3n, umbral de confirmaci\u00f3n, normalizaci\u00f3n de fechas de pacman) vive en `src/blip_eraser/utils/` sin dependencia de PyQt6. Esto permite ejecutar la suite de pruebas sin entorno gr\u00e1fico:
 
 ```bash
 pytest
@@ -116,6 +117,6 @@ pytest
 
 ---
 
-## 📄 Licencia
+## \uD83D\uDCC4 Licencia
 
-Este proyecto está bajo la Licencia [MIT](LICENSE).
+Este proyecto est\u00e1 bajo la Licencia [MIT](LICENSE).
