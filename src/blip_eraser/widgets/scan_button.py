@@ -1,8 +1,9 @@
-"""Botón pastilla 'SCAN NOW' con resplandor rojo e icono en badge.
+"""Botón pastilla 'SCAN NOW' con resplandor rojo e icono de lupa.
 
 Widget autocontenido: dibuja una cápsula con el acento del tema, texto
 principal (SCAN NOW) + subtítulo centrados, y una badge circular con
-icono de lupa a la derecha. Emite `clicked` (QPushButton).
+icono de lupa DEBAJO del texto (no a la derecha).
+Emite `clicked` (QPushButton).
 """
 
 from PyQt6.QtCore import QRectF, Qt
@@ -18,7 +19,8 @@ class ScanNowButton(QPushButton):
         self._icon = QIcon.fromTheme(icon_name)
         self._accent = QColor("#E53935")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumSize(240, 64)
+        # Altura mínima aumentada para acomodar título + subtítulo + ícono debajo
+        self.setMinimumSize(240, 96)
 
     def set_texts(self, title: str, subtitle: str):
         self._title = title
@@ -56,39 +58,51 @@ class ScanNowButton(QPushButton):
         painter.setBrush(fill)
         painter.drawRoundedRect(rect, 34, 34)
 
-        # Texto central
+        # Texto centrado en la parte superior (título + subtítulo)
         painter.setPen(QColor(255, 255, 255) if not disabled else QColor(255, 255, 255, 160))
+
+        # Título
         title_font = QFont(self.font())
         title_font.setPointSize(13)
         title_font.setBold(True)
         painter.setFont(title_font)
-        text_center = rect.center()
+        # Área superior para título + subtítulo (aprox. 60% de la altura)
+        text_top_rect = QRectF(rect.left(), rect.top() + 8, rect.width(), rect.height() * 0.55)
+        title_rect = QRectF(text_top_rect.left(), text_top_rect.top(), text_top_rect.width(), 26)
         painter.drawText(
-            QRectF(rect.left(), text_center.y() - 22, rect.width() - 52, 22),
-            Qt.AlignmentFlag.AlignCenter,
+            title_rect,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
             self._title,
         )
+
+        # Subtítulo
         sub_font = QFont(self.font())
         sub_font.setPointSize(8)
         painter.setFont(sub_font)
+        sub_rect = QRectF(text_top_rect.left(), title_rect.bottom() + 2, text_top_rect.width(), 20)
         painter.drawText(
-            QRectF(rect.left(), text_center.y(), rect.width() - 52, 18),
-            Qt.AlignmentFlag.AlignCenter,
+            sub_rect,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
             self._subtitle,
         )
 
-        # Badge circular con icono a la derecha
-        badge_x = rect.right() - 26
-        badge_center = (badge_x, rect.center().y())
-        badge_rect = QRectF(badge_center[0] - 18, badge_center[1] - 18, 36, 36)
+        # Badge circular con icono DEBAJO del texto (centrado horizontalmente)
+        # Colocado en la parte inferior (aprox. 40% de la altura)
+        icon_bottom_y = rect.top() + rect.height() * 0.72
+        badge_center_x = rect.center().x()
+        badge_center_y = icon_bottom_y
+        badge_rect = QRectF(badge_center_x - 18, badge_center_y - 18, 36, 36)
+
         painter.setBrush(QColor(255, 255, 255, 40))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(badge_rect)
+
         if not self._icon.isNull():
             pixmap = self._icon.pixmap(20, 20)
             painter.drawPixmap(
-                int(badge_center[0] - 10),
-                int(badge_center[1] - 10),
+                int(badge_center_x - 10),
+                int(badge_center_y - 10),
                 pixmap,
             )
+
         painter.end()

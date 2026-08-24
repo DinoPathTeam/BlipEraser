@@ -24,7 +24,7 @@ SUPPORTED_LANGUAGES = ("es", "en")
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "es": {
         # Ventana principal
-        "window_title": "BlipEraser — Desinstalador de CachyOS",
+        "window_title": "BlipEraser — Desinstalador de Arch Linux",
         "tab_packages": "Paquetes (pacman)",
         "tab_manual_scan": "Escaneo manual",
         # Pestaña pacman
@@ -85,8 +85,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "dep_install_command": "Instala con: {command}",
         "dep_pacman_incompatible": (
-            "BlipEraser está diseñado para distribuciones basadas en Arch "
-            "(como CachyOS). Si no estás en una de estas distros, la pestaña "
+            "BlipEraser está diseñado para distribuciones basadas en Arch Linux. "
+            "Si no estás en una de estas distros, la pestaña "
             "'Paquetes (pacman)' no estará disponible, pero el escaneo manual "
             "seguirá funcionando."
         ),
@@ -179,7 +179,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "performance_title": "Ajustes de rendimiento",
         "performance_hint": (
-            "Optimizaciones seguras y probadas para Arch/CachyOS. Cada cambio "
+            "Optimizaciones seguras y probadas para Arch Linux. Cada cambio "
             "se aplica al instante y se puede revertir."
         ),
         "perf_trim_mounts": "Activar récorte automático de SSD (fstrim)",
@@ -328,7 +328,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Ayuda
         "help_title": "Ayuda y documentación",
         "help_intro": (
-            "BlipEraser desinstala aplicaciones en CachyOS/Arch, incluidas las "
+            "BlipEraser desinstala aplicaciones en Arch Linux, incluidas las "
             "que los gestores gráficos no detectan (AppImages, carpetas "
             "sueltas, lanzadores de terceros)."
         ),
@@ -407,7 +407,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_about_body": (
             "BlipEraser {version} — Desinstalador y limpiador del sistema "
-            "para CachyOS / Arch Linux. Licencia MIT."
+            "para Arch Linux. Licencia MIT."
         ),
         # Registro (log)
         "log_started": "BlipEraser iniciado",
@@ -422,7 +422,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "en": {
         # Main window
-        "window_title": "BlipEraser — CachyOS Uninstaller",
+        "window_title": "BlipEraser — Arch Linux Uninstaller",
         "tab_packages": "Packages (pacman)",
         "tab_manual_scan": "Manual scan",
         # pacman tab
@@ -483,8 +483,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "dep_install_command": "Install with: {command}",
         "dep_pacman_incompatible": (
-            "BlipEraser is designed for Arch-based distributions (such as "
-            "CachyOS). If you are not on one of these distros, the 'Packages "
+            "BlipEraser is designed for Arch-based distributions. "
+            "If you are not on one of these distros, the 'Packages "
             "(pacman)' tab won't be available, but the manual scan will still "
             "work."
         ),
@@ -577,7 +577,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "performance_title": "Performance Tweaks",
         "performance_hint": (
-            "Safe, tested optimizations for Arch/CachyOS. Every change is "
+            "Safe, tested optimizations for Arch Linux. Every change is "
             "applied instantly and can be reverted."
         ),
         "perf_trim_mounts": "Enable automatic SSD trim (fstrim)",
@@ -725,7 +725,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Help
         "help_title": "Help and documentation",
         "help_intro": (
-            "BlipEraser uninstalls applications on CachyOS/Arch, including "
+            "BlipEraser uninstalls applications on Arch Linux, including "
             "the ones graphical managers don't detect (AppImages, loose "
             "folders, third-party launchers)."
         ),
@@ -803,7 +803,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_about_body": (
             "BlipEraser {version} — Uninstaller and system cleaner for "
-            "CachyOS / Arch Linux. MIT License."
+            "Arch Linux. MIT License."
         ),
         # Logging
         "log_started": "BlipEraser started",

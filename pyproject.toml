@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "blip-eraser"
 version = "0.1.0"
-description = "Desinstalador de aplicaciones para CachyOS / Arch Linux"
+description = "Desinstalador de aplicaciones para Arch Linux"
 readme = "README.es.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "BlipEraser contributors" }]
-keywords = ["cachyos", "arch", "uninstaller", "pyqt6", "pacman"]
+keywords = ["arch", "uninstaller", "pyqt6", "pacman"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: X11 Applications :: Qt",
@@ -20,7 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 
-# PyQt6 se instala deliberadamente fuera de pip: en Arch/CachyOS con
+# PyQt6 se instala deliberadamente fuera de pip: en Arch Linux con
 # `sudo pacman -S python-pyqt6` para evitar conflictos con el runtime.
 dependencies = []
 
