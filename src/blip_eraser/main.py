@@ -129,28 +129,24 @@ def main() -> int:
         # en el cierre programático del camino de éxito.
         splash.hide()
 
-        # Refresco completo de apariencia tras el primer pintado: los iconos
-        # del sidebar (QIcon.fromTheme) y la fuente configurada pueden no
-        # resolverse si se aplican antes de que el QIconLoader esté listo.
-        # Tras el refresco, iniciar el primer escaneo de Overview para evitar
-        # carrera con StartupWorker (que también ejecuta list_installed_apps())
-        # y con el unpolish/polish de refresh_appearance().
-        def _post_refresh():
+        # Orden invertido: PRIMERO escaneo, LUEGO refresh_appearance().
+        # Esto evita que _apply_appearance() (unpolish/polish global) deje
+        # widgets en estado inconsistente antes de que el escaneo entregue
+        # su resultado. El refresco de apariencia corre SOLO tras completar
+        # el primer escaneo, encadenado vía callback.
+        def _post_scan():
             window.refresh_appearance()
-            window._overview.start_initial_scan()
 
-        QTimer.singleShot(0, _post_refresh)
+            # Aviso de binarios faltantes, calculado durante el splash.
+            if worker.missing_lines:
+                _warn_missing_dependencies(window, worker.missing_lines)
 
-        # Aviso de binarios faltantes, calculado durante el splash (no se
-        # duplica el chequeo). Se muestra tras el primer pintado.
-        if worker.missing_lines:
-            QTimer.singleShot(
-                0, lambda: _warn_missing_dependencies(window, worker.missing_lines)
-            )
+            # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
+            if worker.show_permissions_notice:
+                show_permissions_dialog(window)
 
-        # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
-        if worker.show_permissions_notice:
-            QTimer.singleShot(0, lambda: show_permissions_dialog(window))
+        # Disparar escaneo PRIMERO, encadenar refresh_appearance() al final
+        window._overview.start_initial_scan(on_finished=_post_scan)
 
     splash.closed.connect(_on_splash_closed)
     worker.message.connect(splash.set_message)

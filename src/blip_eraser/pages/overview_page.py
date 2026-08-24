@@ -87,13 +87,18 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             f"cleanup_logs_label_id={id(self.cleanup_logs_label)}"
         )
 
-    def start_initial_scan(self) -> None:
+    def start_initial_scan(self, on_finished=None) -> None:
         """Inicia el primer escaneo tras completarse la inicialización completa.
 
-        Llamado desde MainWindow tras refresh_appearance() para evitar
-        condiciones de carrera con StartupWorker y con el unpolish/polish
-        de la primera aplicación de tema/fuente.
+        Llamado desde MainWindow para evitar condiciones de carrera con
+        StartupWorker y con el unpolish/polish de la primera aplicación
+        de tema/fuente.
+
+        Args:
+            on_finished: Callback opcional que se ejecuta cuando el escaneo
+            termina (éxito o fallo). Se llama desde _on_scan_done.
         """
+        self._initial_scan_callback = on_finished
         self._scan()
 
     # ------------------------------------------------------------------
@@ -306,6 +311,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
 
             self._apply_metrics(cleanup)
             self.refresh()
+            # Ejecutar callback de finalización si existe
+            callback = getattr(self, "_initial_scan_callback", None)
+            if callable(callback):
+                callback()
         except RuntimeError as exc:
             self._render_failure(
                 "overview_page._on_scan_done",
@@ -316,6 +325,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                 cleanup_junk_label=self.cleanup_junk_label,
                 extra={"apps_total": len(self._apps)},
             )
+            # Ejecutar callback incluso en caso de error
+            callback = getattr(self, "_initial_scan_callback", None)
+            if callable(callback):
+                callback()
 
     def _apply_cleanup(self, cleanup: dict):
         """Renderiza los tres labels 'SYSTEM CLEANUP RECOMMENDED' desde `scan_cleanup()`.
