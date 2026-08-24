@@ -197,7 +197,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Sincroniza los listados de los espejos de pacman y los ordena "
             "por velocidad para acelerar las descargas."
         ),
-        "perf_trim_mounts_tip": (
+"perf_trim_mounts_tip": (
             "<b>Mecanismo:</b> TRIM es un comando ATA/NVMe con el que el "
             "sistema avisa al SSD qué bloques ya no se usan. Sin él, la "
             "controladora no sabe qué celdas liberar y su recolección de "
@@ -243,6 +243,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_effect_disk": "Disco",
         "perf_effect_ram": "RAM",
         "perf_effect_network": "Red",
+        "perf_reboot_recommended": (
+            "Se recomienda reiniciar el equipo para que este cambio se aplique "
+            "correctamente. Algunos ajustes (fstrim, zswap, espejos de pacman) "
+            "requieren reinicio para tomar efecto completo."
+        ),
         "tools_title": "Configuración",
         "tools_hint": (
             "Configuración y utilidades auxiliares: personalización, tema "
@@ -259,6 +264,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_weight": "Peso",
         "col_date": "Fecha",
         "select_all_tooltip": "Seleccionar o desmarcar todas las filas",
+        # Filtros de columna
+        "filter_type_label": "Tipo:",
+        "filter_type_all": "Todos",
+        "filter_type_app": "Aplicación",
+        "filter_type_dep": "Dependencia",
+        "filter_type_folder": "Carpeta suelta",
+        "filter_weight_label": "Peso:",
+        "filter_weight_all": "Todos",
+        "filter_weight_heaviest": "Más pesados primero",
+        "filter_weight_lightest": "Menos pesados primero",
+        "filter_weight_only_heavy": "Solo > umbral",
+        "filter_weight_only_light": "Solo < umbral",
+        "filter_weight_threshold": "Umbral (ej. 100 MB):",
+        "filter_date_label": "Fecha:",
+        "filter_date_all": "Todas",
+        "filter_date_newest": "Más nuevos primero",
+        "filter_date_oldest": "Más viejos primero",
+        "filter_date_custom": "Rango personalizado…",
+        "filter_date_from": "Desde:",
+        "filter_date_to": "Hasta:",
+        "filter_date_format_hint": "Formato: DD/MM/AAAA o MM/DD/AAAA",
+        "filter_category_label": "Categoría:",
+        "filter_category_all": "Todas",
+        "filter_clear": "Limpiar filtros",
         # Tipos de aplicación
         "kind_app": "Aplicación",
         "kind_dependency": "Dependencia",
@@ -611,6 +640,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_effect_disk": "Disk",
         "perf_effect_ram": "RAM",
         "perf_effect_network": "Network",
+        "perf_reboot_recommended": (
+            "A reboot is recommended for this change to take full effect. "
+            "Some settings (fstrim, zswap, pacman mirrors) require a reboot "
+            "to be fully applied."
+        ),
         "tools_title": "Settings",
         "tools_hint": (
             "App configuration and utilities: personalization, appearance "
@@ -627,6 +661,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "col_weight": "Weight",
         "col_date": "Date",
         "select_all_tooltip": "Check or uncheck all rows",
+        # Column filters
+        "filter_type_label": "Type:",
+        "filter_type_all": "All",
+        "filter_type_app": "Application",
+        "filter_type_dep": "Dependency",
+        "filter_type_folder": "Loose folder",
+        "filter_weight_label": "Weight:",
+        "filter_weight_all": "All",
+        "filter_weight_heaviest": "Heaviest first",
+        "filter_weight_lightest": "Lightest first",
+        "filter_weight_only_heavy": "Only > threshold",
+        "filter_weight_only_light": "Only < threshold",
+        "filter_weight_threshold": "Threshold (e.g. 100 MB):",
+        "filter_date_label": "Date:",
+        "filter_date_all": "All",
+        "filter_date_newest": "Newest first",
+        "filter_date_oldest": "Oldest first",
+        "filter_date_custom": "Custom range…",
+        "filter_date_from": "From:",
+        "filter_date_to": "To:",
+        "filter_date_format_hint": "Format: DD/MM/YYYY or MM/DD/YYYY",
+        "filter_category_label": "Category:",
+        "filter_category_all": "All",
+        "filter_clear": "Clear filters",
         # App types
         "kind_app": "Application",
         "kind_dependency": "Dependency",

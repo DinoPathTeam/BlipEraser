@@ -4,6 +4,9 @@ Por ahora es presentación con interruptores visibles; las acciones
 efectivas llegarán en fases posteriores (solo estética, sin ejecutar nada
 todavía). Cada opción muestra un ícono de ayuda (?) con tooltip explicativo
 y un mini gráfico de vista previa del recurso que afecta (disco/RAM/red).
+
+Al activar cualquiera de las opciones, se muestra un aviso informativo
+recomendando reiniciar para que el cambio tome efecto completo.
 """
 
 from PyQt6.QtCore import QRectF, QTimer, Qt
@@ -129,6 +132,7 @@ class PerformancePage(BasePage):
         super().__init__()
         self._rows: list[tuple[QCheckBox, str, QLabel, QToolButton, str, str, _EffectPreview, str]] = []
         self._previews: list[_EffectPreview] = []
+        self._reboot_banner: QLabel | None = None
         accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._build_ui(accent)
 
@@ -144,6 +148,13 @@ class PerformancePage(BasePage):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
+        # Banner de aviso de reinicio (inicialmente oculto)
+        self._reboot_banner = QLabel(tr("perf_reboot_recommended"))
+        self._reboot_banner.setObjectName("RebootBanner")
+        self._reboot_banner.setWordWrap(True)
+        self._reboot_banner.setVisible(False)
+        layout.addWidget(self._reboot_banner)
+
         layout.addSpacing(16)
 
         for opt in _PERF_OPTIONS:
@@ -155,6 +166,8 @@ class PerformancePage(BasePage):
 
             box = QCheckBox(tr(opt["key"]))
             box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+            # Conectar cambio de estado para mostrar/ocultar banner
+            box.stateChanged.connect(self._update_reboot_banner)
             header_row.addWidget(box, 1)
 
             preview = _EffectPreview(tr(opt["effect"]), opt["level"], accent)
@@ -193,6 +206,13 @@ class PerformancePage(BasePage):
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._animate_previews)
 
+    def _update_reboot_banner(self) -> None:
+        """Muestra u oculta el banner de reinicio según el estado de los checkboxes."""
+        if self._reboot_banner is None:
+            return
+        any_checked = any(box.isChecked() for box, *_ in self._rows)
+        self._reboot_banner.setVisible(any_checked)
+
     def showEvent(self, event):
         super().showEvent(event)
         if hasattr(self, "_anim"):
@@ -217,3 +237,5 @@ class PerformancePage(BasePage):
             desc.setText(tr(desc_key))
             help_btn.setToolTip(tr(tip_key))
             preview.set_label(tr(effect_key))
+        if self._reboot_banner is not None:
+            self._reboot_banner.setText(tr("perf_reboot_recommended"))
