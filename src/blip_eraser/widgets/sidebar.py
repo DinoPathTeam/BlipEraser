@@ -5,6 +5,8 @@ etiqueta (estilo de la imagen de referencia) y una barra de acento a la
 izquierda en el elemento activo. Todos los colores se toman del tema.
 """
 
+from pathlib import Path
+
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyledItemDelegate
@@ -13,6 +15,16 @@ from blip_eraser.utils.i18n import tr
 
 _ICON_FALLBACK = "applications-other"
 _ICON_SIZE = QSize(26, 26)
+
+# Assets propios para sidebar (opcionales, fallback silencioso si faltan)
+_ASSETS_DIR = Path(__file__).parent.parent / "assets"
+_SIDEBAR_ASSETS = {
+    "overview": _ASSETS_DIR / "sidebar-overview.jpg",
+    "uninstaller": _ASSETS_DIR / "sidebar-uninstaller.png",
+    "system_cleaner": _ASSETS_DIR / "sidebar-system-cleaner.jpg",
+    "performance": _ASSETS_DIR / "sidebar-performance.jpg",
+    "tools": _ASSETS_DIR / "sidebar-tools.jpg",
+}
 
 
 def tint_icon(icon: QIcon, color: str, size: QSize = _ICON_SIZE) -> QIcon:
@@ -132,26 +144,37 @@ class Sidebar(QListWidget):
         self.setCurrentRow(0)
 
     def refresh_icons(self) -> None:
-        """Recarga los iconos del tema del sistema, recoloreados por tema.
+        """Recarga los iconos: primero assets propios (color completo, sin tinte),
+        luego tema del sistema con tinte por paleta.
 
-        Al construir, `QIcon.fromTheme` puede resolverse antes de que el
-        QIconLoader esté listo (sin window aún, sin event loop) y devolver
-        iconos vacíos que el delegate no pinta. Este método re-ejecuta la
-        resolución y se invoca como parte del refresco completo de
-        apariencia al arrancar y al cambiar tema/idioma.
-
-        Además tiñe cada ícono con el color de ícono de la paleta activa:
-        los íconos *symbolic* del tema del sistema ya heredan la paleta,
-        pero los de color fijo (como `edit-clear`) se verían en blanco
-        sobre los fondos claros (Azul/Morado). El tinte garantiza
-        legibilidad en los 4 temas.
+        Los assets propios (en `src/blip_eraser/assets/sidebar-*.jpg|png`) son
+        opcionales. Si existen y cargan, se usan TAL CUAL (sin tint_icon),
+        para que se vean igual en los 4 temas. Si no existen o fallan,
+        caen al comportamiento original: QIcon.fromTheme con tint_icon.
         """
-        for row, (_section, _key, icon_name) in enumerate(self.SECTIONS):
+        for row, (section, _key, icon_name) in enumerate(self.SECTIONS):
             item = self.item(row)
             if item is None:
                 continue
-            icon = QIcon.fromTheme(icon_name, QIcon.fromTheme(_ICON_FALLBACK))
-            item.setIcon(tint_icon(icon, self._icon_color))
+
+            asset_path = _SIDEBAR_ASSETS.get(section)
+            icon = None
+            if asset_path and asset_path.exists():
+                pixmap = QPixmap(str(asset_path))
+                if not pixmap.isNull():
+                    scaled = pixmap.scaled(
+                        _ICON_SIZE,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                    icon = QIcon(scaled)
+
+            if icon is None:
+                theme_icon = QIcon.fromTheme(icon_name, QIcon.fromTheme(_ICON_FALLBACK))
+                icon = tint_icon(theme_icon, self._icon_color)
+
+            item.setIcon(icon)
+
         self.viewport().update()
 
     def set_icon_color(self, color: str) -> None:

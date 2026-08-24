@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 
 class SortOrder(Enum):
@@ -57,6 +57,8 @@ class FilterState:
     date_mode: DateFilterMode = DateFilterMode.ALL
     date_range_start: str | None = None  # YYYY-MM-DD
     date_range_end: str | None = None    # YYYY-MM-DD
+    # Formato de fecha elegido por el usuario en la UI (manda sobre auto-detección)
+    date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "AUTO"] = "AUTO"
     
     # Categoría (para Limpiador)
     category_filter: set[str] | None = None  # None = todas
@@ -80,20 +82,42 @@ class FilterState:
             date_mode=self.date_mode,
             date_range_start=self.date_range_start,
             date_range_end=self.date_range_end,
+            date_format=self.date_format,
             category_filter=self.category_filter.copy() if self.category_filter else None,
         )
 
 
-def parse_date_flexible(date_str: str) -> datetime | None:
+def parse_date_flexible(date_str: str, preferred_format: str | None = None) -> datetime | None:
     """Parsea fecha aceptando DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, MM/DD/YYYY.
     
     Retorna datetime si parsea, None si no puede.
-    NO adivina en silencio: el formato se detecta por patrón.
+    
+    Si se proporciona `preferred_format` (distinto de "AUTO" y None),
+    se usa EXCLUSIVAMENTE ese formato — el selector de la UI manda.
+    Solo si es "AUTO" o None se hace auto-detección por patrón.
     """
     if not date_str:
         return None
     
-    # Patrones soportados (formato, regex)
+    s = date_str.strip()
+    
+    # Si el usuario eligió un formato explícito, usarlo SIN fallback a otros
+    if preferred_format and preferred_format != "AUTO":
+        fmt_map = {
+            "DD/MM/YYYY": "%d/%m/%Y",
+            "MM/DD/YYYY": "%m/%d/%Y",
+            "YYYY-MM-DD": "%Y-%m-%d",
+            "DD-MM-YYYY": "%d-%m-%Y",
+        }
+        fmt = fmt_map.get(preferred_format)
+        if fmt:
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                return None
+        return None
+    
+    # Auto-detección (comportamiento original): orden de prioridad fijo
     patterns = [
         ("%d/%m/%Y", r"^\d{2}/\d{2}/\d{4}$"),      # DD/MM/YYYY
         ("%d-%m-%Y", r"^\d{2}-\d{2}-\d{4}$"),      # DD-MM-YYYY
@@ -101,17 +125,17 @@ def parse_date_flexible(date_str: str) -> datetime | None:
         ("%m/%d/%Y", r"^\d{2}/\d{2}/\d{4}$"),      # MM/DD/YYYY
     ]
     
+    import re
     for fmt, pattern in patterns:
-        import re
-        if re.match(pattern, date_str.strip()):
+        if re.match(pattern, s):
             try:
-                return datetime.strptime(date_str.strip(), fmt)
+                return datetime.strptime(s, fmt)
             except ValueError:
                 continue
     return None
 
 
-def parse_date_range(date_str: str) -> tuple[datetime | None, datetime | None]:
+def parse_date_range(date_str: str, preferred_format: str | None = None) -> tuple[datetime | None, datetime | None]:
     """Parsea un rango de fechas tipo 'DD/MM/YYYY - DD/MM/YYYY' o 'DD/MM/YYYY to DD/MM/YYYY'.
     
     Retorna (inicio, fin) como datetime, o (None, None) si falla.
@@ -128,8 +152,8 @@ def parse_date_range(date_str: str) -> tuple[datetime | None, datetime | None]:
     if not parts or len(parts) != 2:
         return None, None
     
-    start = parse_date_flexible(parts[0].strip())
-    end = parse_date_flexible(parts[1].strip())
+    start = parse_date_flexible(parts[0].strip(), preferred_format)
+    end = parse_date_flexible(parts[1].strip(), preferred_format)
     
     # Para el final del día, ajustar a 23:59:59
     if end:
@@ -228,15 +252,15 @@ def filter_apps(
         # Filtro por fecha (rango personalizado)
         if filter_state.date_mode == DateFilterMode.CUSTOM_RANGE:
             date_str = get_date(item)
-            dt = parse_date_flexible(date_str)
+            dt = parse_date_flexible(date_str, filter_state.date_format)
             if dt is None:
                 continue
             if filter_state.date_range_start:
-                start_dt = parse_date_flexible(filter_state.date_range_start)
+                start_dt = parse_date_flexible(filter_state.date_range_start, filter_state.date_format)
                 if start_dt and dt < start_dt:
                     continue
             if filter_state.date_range_end:
-                end_dt = parse_date_flexible(filter_state.date_range_end)
+                end_dt = parse_date_flexible(filter_state.date_range_end, filter_state.date_format)
                 if end_dt and dt > end_dt:
                     continue
         
@@ -248,9 +272,9 @@ def filter_apps(
     elif filter_state.weight_mode == WeightFilterMode.LIGHTEST_FIRST:
         result.sort(key=lambda x: get_size_bytes(x))
     elif filter_state.date_mode == DateFilterMode.NEWEST_FIRST:
-        result.sort(key=lambda x: parse_date_flexible(get_date(x)) or datetime.min, reverse=True)
+        result.sort(key=lambda x: parse_date_flexible(get_date(x), filter_state.date_format) or datetime.min, reverse=True)
     elif filter_state.date_mode == DateFilterMode.OLDEST_FIRST:
-        result.sort(key=lambda x: parse_date_flexible(get_date(x)) or datetime.max)
+        result.sort(key=lambda x: parse_date_flexible(get_date(x), filter_state.date_format) or datetime.max)
     
     return result
 

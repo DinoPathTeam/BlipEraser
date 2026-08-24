@@ -3,15 +3,56 @@
 from pathlib import Path
 
 from blip_eraser.utils import apps
+from blip_eraser.utils import pacman
+from blip_eraser.utils import scan
+
+
+def _mock_pacman_explicit(monkeypatch, return_value):
+    """Mockea list_explicit_packages tanto en pacman como en apps (import binding).
+
+    `return_value` puede ser un valor o un callable. Si es callable, se usa directamente.
+    """
+    if callable(return_value):
+        mock_fn = return_value
+    else:
+        mock_fn = lambda: return_value
+    monkeypatch.setattr(pacman, "list_explicit_packages", mock_fn)
+    monkeypatch.setattr(apps, "list_explicit_packages", mock_fn)
+
+
+def _mock_pacman_deps(monkeypatch, return_value):
+    """Mockea list_dependency_packages tanto en pacman como en apps."""
+    if callable(return_value):
+        mock_fn = return_value
+    else:
+        mock_fn = lambda: return_value
+    monkeypatch.setattr(pacman, "list_dependency_packages", mock_fn)
+    monkeypatch.setattr(apps, "list_dependency_packages", mock_fn)
+
+
+def _mock_pacman_installed_info(monkeypatch, return_value):
+    """Mockea pacman_installed_info tanto en scan como en apps."""
+    if callable(return_value):
+        mock_fn = return_value
+    else:
+        mock_fn = lambda: return_value
+    monkeypatch.setattr(scan, "pacman_installed_info", mock_fn)
+    monkeypatch.setattr(apps, "pacman_installed_info", mock_fn)
+
+
+def _raise_file_not_found():
+    raise FileNotFoundError()
+
+
+def _raise_os_error():
+    raise OSError()
 
 
 class TestListInstalledApps:
     def test_combines_pacman_and_manual(self, monkeypatch):
-        monkeypatch.setattr(
-            apps,
-            "list_explicit_packages",
-            lambda: [("firefox", "1.0"), ("spotify", "2.0")],
-        )
+        _mock_pacman_explicit(monkeypatch, [("firefox", "1.0"), ("spotify", "2.0")])
+        _mock_pacman_deps(monkeypatch, [])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
@@ -26,11 +67,9 @@ class TestListInstalledApps:
         assert result[2].source == "manual"
 
     def test_manual_duplicates_are_skipped(self, monkeypatch):
-        monkeypatch.setattr(
-            apps,
-            "list_explicit_packages",
-            lambda: [("firefox", "1.0")],
-        )
+        _mock_pacman_explicit(monkeypatch, [("firefox", "1.0")])
+        _mock_pacman_deps(monkeypatch, [])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
@@ -43,9 +82,9 @@ class TestListInstalledApps:
         assert result[0].source == "pacman"
 
     def test_pacman_missing_only_manual(self, monkeypatch):
-        monkeypatch.setattr(
-            apps, "list_explicit_packages", lambda: (_ for _ in ()).throw(FileNotFoundError())
-        )
+        _mock_pacman_explicit(monkeypatch, _raise_file_not_found)
+        _mock_pacman_deps(monkeypatch, [])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
@@ -58,9 +97,9 @@ class TestListInstalledApps:
         assert result[0].source == "manual"
 
     def test_pacman_error_does_not_raise(self, monkeypatch):
-        monkeypatch.setattr(
-            apps, "list_explicit_packages", lambda: (_ for _ in ()).throw(OSError())
-        )
+        _mock_pacman_explicit(monkeypatch, _raise_os_error)
+        _mock_pacman_deps(monkeypatch, [])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(apps, "scan_manual_entries", lambda paths, ignore: [])
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
         assert apps.list_installed_apps() == []
@@ -69,7 +108,9 @@ class TestListInstalledApps:
         base = tmp_path / "scan"
         (base / "keep").mkdir(parents=True)
         (base / "junk").mkdir()
-        monkeypatch.setattr(apps, "list_explicit_packages", lambda: [])
+        _mock_pacman_explicit(monkeypatch, [])
+        _mock_pacman_deps(monkeypatch, [])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(apps, "get_scan_paths", lambda: [str(base)])
         monkeypatch.setattr(apps, "get_scan_ignore", lambda: ["junk"])
 
@@ -79,26 +120,18 @@ class TestListInstalledApps:
 
 class TestAppKinds:
     def test_classifies_kinds_and_sizes(self, monkeypatch):
-        monkeypatch.setattr(
-            apps, "list_explicit_packages", lambda: [("firefox", "1.0")]
-        )
-        monkeypatch.setattr(
-            apps, "list_dependency_packages", lambda: [("libfoo", "2.0")]
-        )
+        _mock_pacman_explicit(monkeypatch, [("firefox", "1.0")])
+        _mock_pacman_deps(monkeypatch, [("libfoo", "2.0")])
+        _mock_pacman_installed_info(monkeypatch, {
+            "firefox": {"size": 1024, "date": "2024-01-01"},
+            "libfoo": {"size": 2048, "date": "2024-02-02"},
+        })
         monkeypatch.setattr(
             apps,
             "scan_manual_entries",
             lambda paths, ignore: [Path("/x/MyApp.AppImage")],
         )
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
-        monkeypatch.setattr(
-            apps,
-            "pacman_installed_info",
-            lambda: {
-                "firefox": {"size": 1024, "date": "2024-01-01"},
-                "libfoo": {"size": 2048, "date": "2024-02-02"},
-            },
-        )
 
         result = apps.list_installed_apps()
         by_name = {a.name: a for a in result}
@@ -117,12 +150,9 @@ class TestAppKinds:
         assert by_name["MyApp.AppImage"].source == "manual"
 
     def test_dependency_duplicate_with_explicit_skipped(self, monkeypatch):
-        monkeypatch.setattr(
-            apps, "list_explicit_packages", lambda: [("firefox", "1.0")]
-        )
-        monkeypatch.setattr(
-            apps, "list_dependency_packages", lambda: [("Firefox", "2.0")]
-        )
+        _mock_pacman_explicit(monkeypatch, [("firefox", "1.0")])
+        _mock_pacman_deps(monkeypatch, [("Firefox", "2.0")])
+        _mock_pacman_installed_info(monkeypatch, {})
         monkeypatch.setattr(apps, "scan_manual_entries", lambda paths, ignore: [])
         monkeypatch.setattr(apps, "get_scan_paths", lambda: ["/x"])
 

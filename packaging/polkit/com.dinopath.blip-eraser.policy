@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+"http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>BlipEraser</vendor>
+  <vendor_url>https://github.com/blip-eraser/blip-eraser</vendor_url>
+  <icon_name>blip-eraser</icon_name>
+
+  <action id="com.dinopath.blip-eraser.pacman-remove">
+    <description>Desinstalar paquetes con pacman -Rns</description>
+    <description xml:lang="en">Uninstall packages with pacman -Rns</description>
+    <message>Se requiere autenticación para desinstalar paquetes del sistema</message>
+    <message xml:lang="en">Authentication required to uninstall system packages</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/pacman</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">-Rns</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv2">--noconfirm</annotate>
+  </action>
+
+  <action id="com.dinopath.blip-eraser.system-clean">
+    <description>Limpiar rutas del sistema (cache pacman, logs)</description>
+    <description xml:lang="en">Clean system paths (pacman cache, logs)</description>
+    <message>Se requiere autenticación para limpiar rutas del sistema</message>
+    <message xml:lang="en">Authentication required to clean system paths</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rm</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">-rf</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv2">--</annotate>
+  </action>
+</policyconfig>

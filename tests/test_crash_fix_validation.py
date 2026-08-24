@@ -387,25 +387,36 @@ class TestEdgeCases:
         page.refresh = lambda: None
         return page
 
-    def test_refresh_timer_callback_not_protected(self, app, prefs_tmp, monkeypatch, diag_path):
-        """ADVERTENCIA: refresh() (timer cada 2s) NO tiene try/except.
-        Si un widget muere durante refresh(), la app crashearía.
-        Este test documenta el gap actual."""
-        page = self._make_overview_page(monkeypatch)
+    def _make_overview_page_with_real_refresh(self, monkeypatch):
+        """Crea OverviewPage SIN mockear refresh() - para tests que necesitan el método real."""
+        monkeypatch.setattr(overview_mod.OverviewPage, "_scan", lambda self: None)
+        page = overview_mod.OverviewPage()
+        page._apps = []
+        # NO mockear refresh - usar el método real
+        return page
 
-        def kill_during_refresh():
-            page.cleanup_junk_label.deleteLater()
-            app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+    def test_refresh_timer_callback_is_protected(self, app, prefs_tmp, monkeypatch, diag_path):
+        """refresh() (timer cada 2s) TIENE protección: guard _widget_is_alive() 
+        al inicio + try/except RuntimeError alrededor del cuerpo.
 
-        monkeypatch.setattr(page, "cleanup_junk_label", page.cleanup_junk_label)
-        # El timer no se dispara en test (no hay event loop corriendo),
-        # pero el método refresh() existe sin protección.
-        # Verificamos que refresh() existe y toca labels sin try/except.
-        import inspect
-        source = inspect.getsource(page.refresh)
-        assert "try:" not in source  # confirma que NO hay protección
-        # NOTA: En producción, si un label muere, refresh() crashearía.
-        # Mitigación: el timer solo toca labels de info del sistema, no layouts.
+        Verifica que si un widget del panel de info muere, refresh() no crashea
+        sino que registra el fallo en diagnóstico y continúa.
+        """
+        page = self._make_overview_page_with_real_refresh(monkeypatch)
+
+        # Simular que un widget del panel de info (p.ej. cpu_row) muere
+        page.cpu_row.deleteLater()
+        app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+        assert sip.isdeleted(page.cpu_row)
+
+        # refresh() NO debe crashear - tiene try/except que captura RuntimeError
+        page.refresh()  # Debe completarse sin excepción
+
+        # Verificar que se registró el fallo en diagnóstico
+        content = _diag_text(diag_path)
+        assert "RENDER_FAILED overview_page.refresh" in content
+        assert "TRACEBACK:" in content
+        assert "cpu_row" in content
 
     def test_retranslate_calls_rebuild_apps_protected(self, app, prefs_tmp, monkeypatch, diag_path):
         """retranslate() llama a _rebuild_apps() que SÍ está protegido."""

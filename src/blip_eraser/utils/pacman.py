@@ -138,6 +138,17 @@ def invalidate_package_cache() -> None:
         write_diagnostic("AUDIT action=pacman_cache_invalidate result=success")
 
 
+def reset_package_cache_state() -> None:
+    """Resetea el estado de la caché para tests (NO usar en producción).
+
+    Fuerza la re-inicialización completa ignorando el estado previo.
+    """
+    global _PACKAGE_CACHE, _CACHE_INITIALIZED
+    with _CACHE_LOCK:
+        _PACKAGE_CACHE = None
+        _CACHE_INITIALIZED = False
+
+
 def _query_packages(flag: str) -> list[tuple[str, str]]:
     """[(nombre, versión), ...] desde `pacman <flag>`.
 
