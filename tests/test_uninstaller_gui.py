@@ -8,6 +8,7 @@ import pytest
 
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 QtCore = pytest.importorskip("PyQt6.QtCore")
+QtTest = pytest.importorskip("PyQt6.QtTest")
 
 from blip_eraser.pages.uninstaller_page import UninstallerPage
 from blip_eraser.utils.table_filters import (
@@ -47,7 +48,13 @@ def page(app, monkeypatch):
     p = UninstallerPage()
     # Cargar apps directamente en lugar de esperar al background scan
     p._on_apps_loaded(mock_apps)
-    QtWidgets.QApplication.processEvents()
+    # Mostrar la página para que la cadena de visibilidad de Qt funcione correctamente
+    # (isVisible() requiere que la ventana y ancestros estén mostrados)
+    p.show()
+    # Esperar a que la ventana se exponga (procesar eventos múltiples veces)
+    for _ in range(5):
+        QtWidgets.QApplication.processEvents()
+        QtCore.QThread.msleep(10)
     return p
 
 
@@ -137,14 +144,15 @@ class TestUninstallerFilters:
         QtWidgets.QApplication.processEvents()
         assert page.filter_weight_threshold.isVisible()
 
-        # Umbral 150 MB -> solo Firefox (100M), VLC (200M), MyApp (500M) pasan
+        # Umbral 150 MB -> solo VLC (200M), MyApp (500M) pasan
+        # Firefox (100M) NO pasa porque es menor al umbral
         page.filter_weight_threshold.setText("150 MB")
         page.filter_weight_threshold.editingFinished.emit()
         QtWidgets.QApplication.processEvents()
 
-        assert len(page._visible) == 3
+        assert len(page._visible) == 2
         names = {a.name for a in page._visible}
-        assert names == {"Firefox", "VLC", "MyApp.AppImage"}
+        assert names == {"VLC", "MyApp.AppImage"}
 
     def test_weight_filter_only_light(self, page):
         """Peso: 'Solo < umbral' filtra por umbral."""
@@ -183,8 +191,27 @@ class TestUninstallerFilters:
         dates = [a.install_date for a in page._visible]
         assert dates == sorted(dates)
 
-    def test_date_filter_custom_range_with_format(self, page):
+    def test_date_filter_custom_range_with_format(self, app, monkeypatch):
         """Fecha: Rango personalizado con selector de formato MM/DD/YYYY."""
+        # Crear apps con fechas en formato MM/DD/YYYY para coincidir con el formato del filtro
+        mock_apps = [
+            _make_app("Firefox", KIND_APP, "pacman", 100_000_000, "01/15/2024"),
+            _make_app("libfoo", KIND_DEPENDENCY, "pacman", 10_000_000, "02/20/2024"),
+            _make_app("MyApp.AppImage", KIND_FOLDER, "manual", 500_000_000, "03/10/2024"),
+            _make_app("VLC", KIND_APP, "pacman", 200_000_000, "04/05/2024"),
+            _make_app("libbar", KIND_DEPENDENCY, "pacman", 5_000_000, "05/01/2024"),
+        ]
+        monkeypatch.setattr(
+            "blip_eraser.pages.uninstaller_page.list_installed_apps",
+            lambda: mock_apps,
+        )
+        page = UninstallerPage()
+        page._on_apps_loaded(mock_apps)
+        page.show()
+        for _ in range(5):
+            QtWidgets.QApplication.processEvents()
+            QtCore.QThread.msleep(10)
+
         page.filter_date_combo.setCurrentIndex(
             page.filter_date_combo.findData(DateFilterMode.CUSTOM_RANGE)
         )
@@ -211,8 +238,27 @@ class TestUninstallerFilters:
         names = {a.name for a in page._visible}
         assert names == {"Firefox", "libfoo"}
 
-    def test_date_filter_custom_range_dd_mm_yyyy(self, page):
+    def test_date_filter_custom_range_dd_mm_yyyy(self, app, monkeypatch):
         """Fecha: Rango personalizado con formato DD/MM/YYYY (distinto resultado)."""
+        # Crear apps con fechas en formato DD/MM/YYYY para coincidir con el formato del filtro
+        mock_apps = [
+            _make_app("Firefox", KIND_APP, "pacman", 100_000_000, "15/01/2024"),
+            _make_app("libfoo", KIND_DEPENDENCY, "pacman", 10_000_000, "20/02/2024"),
+            _make_app("MyApp.AppImage", KIND_FOLDER, "manual", 500_000_000, "10/03/2024"),
+            _make_app("VLC", KIND_APP, "pacman", 200_000_000, "05/04/2024"),
+            _make_app("libbar", KIND_DEPENDENCY, "pacman", 5_000_000, "01/05/2024"),
+        ]
+        monkeypatch.setattr(
+            "blip_eraser.pages.uninstaller_page.list_installed_apps",
+            lambda: mock_apps,
+        )
+        page = UninstallerPage()
+        page._on_apps_loaded(mock_apps)
+        page.show()
+        for _ in range(5):
+            QtWidgets.QApplication.processEvents()
+            QtCore.QThread.msleep(10)
+
         page.filter_date_combo.setCurrentIndex(
             page.filter_date_combo.findData(DateFilterMode.CUSTOM_RANGE)
         )

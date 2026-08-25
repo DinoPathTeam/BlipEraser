@@ -336,10 +336,21 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         self._render()
 
     def _on_date_range_changed(self):
-        """Aplica el rango de fechas al cambiar los QDateEdit."""
+        """Aplica el rango de fechas al cambiar los QDateEdit.
+
+        Guarda el rango en el formato preferido por el usuario para que
+        parse_date_flexible pueda parsearlo correctamente con el mismo formato.
+        """
         if self._filter_state.date_mode == DateFilterMode.CUSTOM_RANGE:
-            self._filter_state.date_range_start = self.filter_date_from.date().toString("yyyy-MM-dd")
-            self._filter_state.date_range_end = self.filter_date_to.date().toString("yyyy-MM-dd")
+            fmt_map = {
+                "DD/MM/YYYY": "dd/MM/yyyy",
+                "MM/DD/YYYY": "MM/dd/yyyy",
+                "YYYY-MM-DD": "yyyy-MM-dd",
+                "DD-MM-YYYY": "dd-MM-yyyy",
+            }
+            fmt = fmt_map.get(self._filter_state.date_format, "yyyy-MM-dd")
+            self._filter_state.date_range_start = self.filter_date_from.date().toString(fmt)
+            self._filter_state.date_range_end = self.filter_date_to.date().toString(fmt)
             self._render()
 
     def _clear_filters(self):
