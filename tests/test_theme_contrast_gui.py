@@ -108,7 +108,7 @@ class TestSidebarIconTint:
         painter.fillRect(2, 2, 20, 20, QtGui.QColor("#000000"))
         painter.end()
         # Usar tamaño explícito 26x26 para test unitario (no depender de _ICON_SIZE del sidebar)
-        tinted = tint_icon(QIcon(src), "#00C853", QSize(26, 26))
+        tinted = tint_icon(QIcon(src), "#00C853", QtCore.QSize(26, 26))
         image = tinted.pixmap(26, 26).toImage()
         assert image.pixelColor(1, 1).alpha() == 0
         c = image.pixelColor(13, 13)
