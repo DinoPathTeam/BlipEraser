@@ -23,6 +23,10 @@ PREFS_DEFAULTS: dict = {
         "~/Applications",
     ],
     "scan_ignore": ["applications", "icons", "mime", "fonts", "sounds"],
+    # Performance tweaks (persist user selection)
+    "perf_trim_mounts": False,
+    "perf_compress_ram": False,
+    "perf_mirror_sort": False,
 }
 
 

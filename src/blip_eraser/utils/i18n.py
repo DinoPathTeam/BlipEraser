@@ -248,6 +248,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "correctamente. Algunos ajustes (fstrim, zswap, espejos de pacman) "
             "requieren reinicio para tomar efecto completo."
         ),
+        "perf_reboot_required": (
+            "Este cambio requiere reiniciar el equipo para tomar efecto completo."
+        ),
         "tools_title": "Configuración",
         "tools_hint": (
             "Configuración y utilidades auxiliares: personalización, tema "
@@ -644,6 +647,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "A reboot is recommended for this change to take full effect. "
             "Some settings (fstrim, zswap, pacman mirrors) require a reboot "
             "to be fully applied."
+        ),
+        "perf_reboot_required": (
+            "This change requires a reboot to take full effect."
         ),
         "tools_title": "Settings",
         "tools_hint": (

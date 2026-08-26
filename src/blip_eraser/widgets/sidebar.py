@@ -14,14 +14,14 @@ from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyledItemDel
 from blip_eraser.utils.i18n import tr
 
 _ICON_FALLBACK = "applications-other"
-_ICON_SIZE = QSize(26, 26)
+_ICON_SIZE = QSize(28, 28)
 
 # Assets propios para sidebar (opcionales, fallback silencioso si faltan)
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
 _SIDEBAR_ASSETS = {
-    "overview": _ASSETS_DIR / "sidebar-overview.jpg",
+    "overview": _ASSETS_DIR / "sidebar-overview.png",
     "uninstaller": _ASSETS_DIR / "sidebar-uninstaller.png",
-    "system_cleaner": _ASSETS_DIR / "sidebar-system-cleaner.jpg",
+    "system_cleaner": _ASSETS_DIR / "sidebar-system-cleaner.png",
     "performance": _ASSETS_DIR / "sidebar-performance.jpg",
     "tools": _ASSETS_DIR / "sidebar-tools.jpg",
 }

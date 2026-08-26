@@ -23,8 +23,15 @@ from PyQt6.QtWidgets import (
 
 from blip_eraser.pages.base import BasePage
 from blip_eraser.utils import theme as theme_mod
-from blip_eraser.utils.config import load_prefs
+from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
+from blip_eraser.utils.performance import (
+    TWEAKS,
+    check_tweak_state,
+    apply_tweak,
+    get_all_tweak_states,
+    TweakResult,
+)
 
 _PERF_OPTIONS = [
     {
@@ -130,11 +137,14 @@ class _EffectPreview(QWidget):
 class PerformancePage(BasePage):
     def __init__(self):
         super().__init__()
-        self._rows: list[tuple[QCheckBox, str, QLabel, QToolButton, str, str, _EffectPreview, str]] = []
+        self._rows: list[dict] = []
         self._previews: list[_EffectPreview] = []
         self._reboot_banner: QLabel | None = None
+        self._applying: set[str] = set()  # keys being applied (prevent re-entry)
         accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._build_ui(accent)
+        # Cargar estado persistido y sincronizar con sistema real
+        self._sync_initial_state()
 
     def _build_ui(self, accent: str):
         layout = QVBoxLayout(self)
@@ -148,7 +158,7 @@ class PerformancePage(BasePage):
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
-        # Banner de aviso de reinicio (inicialmente oculto)
+        # Banner de aviso (inicialmente oculto)
         self._reboot_banner = QLabel(tr("perf_reboot_recommended"))
         self._reboot_banner.setObjectName("RebootBanner")
         self._reboot_banner.setWordWrap(True)
@@ -166,8 +176,8 @@ class PerformancePage(BasePage):
 
             box = QCheckBox(tr(opt["key"]))
             box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-            # Conectar cambio de estado para mostrar/ocultar banner
-            box.stateChanged.connect(self._update_reboot_banner)
+            # Conectar cambio de estado real (usuario hace clic)
+            box.toggled.connect(lambda checked, k=opt["key"]: self._on_tweak_toggled(k, checked))
             header_row.addWidget(box, 1)
 
             preview = _EffectPreview(tr(opt["effect"]), opt["level"], accent)
@@ -188,7 +198,6 @@ class PerformancePage(BasePage):
 
             block.addLayout(header_row)
 
-            # Descripción breve visible bajo el nombre de la opción.
             desc = QLabel(tr(opt["desc"]))
             desc.setObjectName("SubText")
             desc.setWordWrap(True)
@@ -196,22 +205,136 @@ class PerformancePage(BasePage):
             block.addWidget(desc)
 
             layout.addLayout(block)
-            self._rows.append((box, opt["key"], desc, help_btn, tip_key, desc_key, preview, opt["effect"]))
+            self._rows.append({
+                "key": opt["key"],
+                "checkbox": box,
+                "desc": desc,
+                "help_btn": help_btn,
+                "tip_key": tip_key,
+                "desc_key": desc_key,
+                "preview": preview,
+                "effect_key": opt["effect"],
+            })
 
         layout.addStretch(1)
 
-        # El timer solo avanza mientras la página es visible: se arranca en
-        # showEvent y se detiene en hideEvent para no animar en segundo plano
-        # cuando el usuario navega a otra sección del QStackedWidget.
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._animate_previews)
 
-    def _update_reboot_banner(self) -> None:
-        """Muestra u oculta el banner de reinicio según el estado de los checkboxes."""
+    def _sync_initial_state(self) -> None:
+        """Carga estado persistido y verifica estado real en el sistema."""
+        prefs = load_prefs()
+        system_states = get_all_tweak_states()
+
+        for row in self._rows:
+            key = row["key"]
+            checkbox = row["checkbox"]
+            
+            # Estado persistido en config
+            persisted = prefs.get(key, False)
+            # Estado real en el sistema
+            actual = system_states.get(key, False)
+            
+            # Usar estado real como fuente de verdad, pero persistir la intención del usuario
+            checkbox.blockSignals(True)
+            checkbox.setChecked(actual)
+            checkbox.blockSignals(False)
+            
+            # Si config dice True pero sistema dice False, sincronizar config
+            if persisted != actual:
+                save_prefs({key: actual})
+
+        self._update_reboot_banner()
+
+    def _on_tweak_toggled(self, key: str, checked: bool) -> None:
+        """Maneja toggle de checkbox: aplica tweak real y actualiza UI/config."""
+        if key in self._applying:
+            return  # Evitar re-entrada si la operación tarda
+        
+        self._applying.add(key)
+        
+        # Encontrar row
+        row = next((r for r in self._rows if r["key"] == key), None)
+        if not row:
+            self._applying.discard(key)
+            return
+        
+        checkbox = row["checkbox"]
+        
+        # Deshabilitar checkbox durante la operación
+        checkbox.setEnabled(False)
+        
+        # Ejecutar en hilo para no bloquear UI (operaciones systemd/pkexec pueden tardar)
+        from PyQt6.QtCore import QThread, pyqtSignal
+        
+        class TweakWorker(QThread):
+            finished = pyqtSignal(object)  # TweakResult
+            
+            def __init__(self, k: str, enable: bool):
+                super().__init__()
+                self._key = k
+                self._enable = enable
+            
+            def run(self):
+                result = apply_tweak(self._key, self._enable)
+                self.finished.emit(result)
+        
+        def on_finished(result: TweakResult):
+            self._applying.discard(key)
+            checkbox.setEnabled(True)
+            
+            if result.success:
+                # Guardar intención del usuario en config
+                save_prefs({key: checked})
+                # Verificar estado real post-operación
+                actual = check_tweak_state(key)
+                checkbox.blockSignals(True)
+                checkbox.setChecked(actual)
+                checkbox.blockSignals(False)
+                
+                # Mostrar mensaje de éxito
+                msg = result.message
+                if result.installed_deps:
+                    msg += " (dependencias instaladas)"
+                if result.needs_reboot:
+                    msg += " — " + tr("perf_reboot_required")
+                self._show_status(msg, success=True)
+            else:
+                # Revertir checkbox si falló
+                checkbox.blockSignals(True)
+                checkbox.setChecked(not checked)
+                checkbox.blockSignals(False)
+                self._show_status(f"Error: {result.message}", success=False)
+            
+            self._update_reboot_banner()
+            worker.deleteLater()
+        
+        worker = TweakWorker(key, checked)
+        worker.finished.connect(on_finished)
+        worker.start()
+
+    def _show_status(self, message: str, success: bool) -> None:
+        """Muestra mensaje temporal en el banner (reusa reboot_banner)."""
         if self._reboot_banner is None:
             return
-        any_checked = any(box.isChecked() for box, *_ in self._rows)
-        self._reboot_banner.setVisible(any_checked)
+        self._reboot_banner.setText(message)
+        self._reboot_banner.setObjectName("StatusBanner" if success else "ErrorBanner")
+        self._reboot_banner.setVisible(True)
+        # Volver al estado normal tras 5s
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(5000, self._update_reboot_banner)
+
+    def _update_reboot_banner(self) -> None:
+        """Muestra u oculta el banner según checkboxes marcados."""
+        if self._reboot_banner is None:
+            return
+        any_checked = any(r["checkbox"].isChecked() for r in self._rows)
+        if any_checked:
+            self._reboot_banner.setText(tr("perf_reboot_recommended"))
+            self._reboot_banner.setObjectName("RebootBanner")
+            self._reboot_banner.setVisible(True)
+        else:
+            self._reboot_banner.setVisible(False)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -232,10 +355,10 @@ class PerformancePage(BasePage):
             preview.tick()
 
     def retranslate(self):
-        for box, box_key, desc, help_btn, tip_key, desc_key, preview, effect_key in self._rows:
-            box.setText(tr(box_key))
-            desc.setText(tr(desc_key))
-            help_btn.setToolTip(tr(tip_key))
-            preview.set_label(tr(effect_key))
+        for row in self._rows:
+            row["checkbox"].setText(tr(row["key"]))
+            row["desc"].setText(tr(row["desc_key"]))
+            row["help_btn"].setToolTip(tr(row["tip_key"]))
+            row["preview"].set_label(tr(row["effect_key"]))
         if self._reboot_banner is not None:
             self._reboot_banner.setText(tr("perf_reboot_recommended"))

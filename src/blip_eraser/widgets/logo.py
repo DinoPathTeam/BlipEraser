@@ -21,7 +21,7 @@ ASSET_ICON_PATH = Path(__file__).parent.parent / "assets" / "desktopiconBlip.png
 # Altura objetivo del logotipo dentro del HeaderBar (px). El asset es
 # 2816x1536 y el emblema de fallback se dibuja a 64x64, así que este
 # escalado no produce borrosidad.
-LOGO_HEIGHT = 48
+LOGO_HEIGHT = 56
 
 
 def app_icon() -> QIcon:
