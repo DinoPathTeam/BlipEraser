@@ -16,6 +16,19 @@ from typing import Callable, Optional
 
 from blip_eraser.utils.log import write_diagnostic
 
+# Import GLib and Gio lazily to avoid hard dependency at import time
+try:
+    import gi
+    gi.require_version("GLib", "2.0")
+    gi.require_version("Gio", "2.0")
+    from gi.repository import GLib, Gio
+except (ImportError, ValueError):
+    GLib = None
+    Gio = None
+
+# Ensure GLib is available for variant construction when daemon path is used
+# (will raise DaemonUnavailable in _ensure_gi if not available)
+
 # ─── Excepciones ────────────────────────────────────────────────────────
 
 class DBusError(Exception):
@@ -67,13 +80,7 @@ class PrivilegedClient:
 
     def _ensure_gi(self) -> bool:
         """Verifica que PyGObject está disponible."""
-        try:
-            import gi
-            gi.require_version("Gio", "2.0")
-            from gi.repository import Gio
-            return True
-        except (ImportError, ValueError):
-            return False
+        return GLib is not None and Gio is not None
 
     def _get_proxy(self) -> "Gio.DBusProxy":
         """Obtiene (o crea) el proxy D-Bus."""
@@ -82,8 +89,6 @@ class PrivilegedClient:
                 return self._proxy
             if not self._ensure_gi():
                 raise DaemonUnavailable("PyGObject (gi) no disponible")
-            import gi
-            from gi.repository import Gio
             try:
                 self._proxy = Gio.DBusProxy.new_sync(
                     Gio.bus_get_sync(Gio.BusType.SYSTEM, None),
@@ -101,21 +106,32 @@ class PrivilegedClient:
                 raise DaemonUnavailable(f"No se pudo conectar al daemon: {e}")
 
     def is_available(self) -> bool:
-        """Verifica si el daemon está disponible (no bloqueante)."""
+        """Verifica si el daemon está disponible (no bloqueante).
+        
+        Hace un health-check real llamando a Ping() con timeout corto.
+        Captura CUALQUIER excepción como "no disponible" — no solo DaemonUnavailable.
+        """
         if self._connected and self._proxy:
-            return True
+            # Already connected, do a quick ping to verify still alive
+            try:
+                return self.ping()
+            except Exception:
+                self._connected = False
+                self._proxy = None
+                return False
         try:
             self._get_proxy()
-            return True
-        except DaemonUnavailable:
+            # Proxy created, now verify daemon actually responds with Ping
+            return self.ping()
+        except Exception:
             return False
 
     def ping(self) -> bool:
-        """Ping al daemon para verificar disponibilidad."""
+        """Ping al daemon para verificar disponibilidad con timeout corto."""
         proxy = self._get_proxy()
         result = proxy.call_sync(
             "Ping", None,  # parámetros
-            Gio.DBusCallFlags.NONE, -1, None  # timeout, cancellable
+            Gio.DBusCallFlags.NONE, 2000, None  # timeout 2s, cancellable
         )
         return result[0]  # bool
 
@@ -249,7 +265,11 @@ class PrivilegedAPI:
                 return OperationResult(success=True, output=output, used_daemon=True)
             except (DaemonUnavailable, ValidationFailed, ExecutionFailed, CommandNotFound) as e:
                 write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_failed error={e.code}")
-                # Caer a pkexec
+            except Exception as e:
+                # Defensa en profundidad: captura CUALQUIER excepción inesperada del daemon
+                # (ej. NameError por import faltante, bugs futuros, etc.)
+                # Registra en bitácora forense y SIEMPRE cae al fallback pkexec
+                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_crashed error={type(e).__name__}: {e}")
 
         # Fallback pkexec
         try:
@@ -276,6 +296,11 @@ class PrivilegedAPI:
                 return OperationResult(success=True, output=output, used_daemon=True)
             except (DaemonUnavailable, ValidationFailed, ExecutionFailed, CommandNotFound) as e:
                 write_diagnostic(f"AUDIT action=clean_system_paths paths={str_paths} result=daemon_failed error={e.code}")
+            except Exception as e:
+                # Defensa en profundidad: captura CUALQUIER excepción inesperada del daemon
+                # (ej. NameError por import faltante, bugs futuros, etc.)
+                # Registra en bitácora forense y SIEMPRE cae al fallback pkexec
+                write_diagnostic(f"AUDIT action=clean_system_paths paths={str_paths} result=daemon_crashed error={type(e).__name__}: {e}")
 
         # Fallback pkexec con validación local
         validated = []
@@ -312,8 +337,14 @@ class PrivilegedAPI:
 _default_api: Optional[PrivilegedAPI] = None
 
 
-def get_privileged_api(prefer_daemon: bool = True) -> PrivilegedAPI:
-    """Obtiene la instancia singleton de la API privilegiada."""
+def get_privileged_api(prefer_daemon: bool = False) -> PrivilegedAPI:
+    """Obtiene la instancia singleton de la API privilegiada.
+
+    El daemon está deshabilitado por defecto (prefer_daemon=False) hasta que
+    esté correctamente implementado y verificado con autorización polkit.
+    Actualmente el daemon no está desplegado (no hay systemd unit ni binario
+    instalados) y el cliente falla con NameError si se intenta usar.
+    """
     global _default_api
     if _default_api is None:
         _default_api = PrivilegedAPI(prefer_daemon=prefer_daemon)

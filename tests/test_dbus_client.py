@@ -247,4 +247,99 @@ class TestGetPrivilegedApi:
         assert api1 is api2
         reset_privileged_api()
 
+    def test_default_prefer_daemon_is_false(self):
+        """El daemon está deshabilitado por defecto hasta que esté listo con polkit."""
+        reset_privileged_api()
+        api = get_privileged_api()
+        assert api._client is None  # prefer_daemon=False por defecto
+        reset_privileged_api()
+
+
+class TestDaemonFailureFallback:
+    """Tests de defensa en profundidad: si el daemon falla inesperadamente,
+    la operación debe caer a pkexec sin crashear la app."""
+
+    def test_clean_system_paths_daemon_raises_unexpected_exception_falls_back_to_pkexec(
+        self, monkeypatch
+    ):
+        """Simula: is_available() reporta True pero la llamada real lanza NameError.
+        
+        Debe caer a pkexec sin propagar la excepción ni crashear.
+        """
+        reset_privileged_api()
+        api = PrivilegedAPI(prefer_daemon=True)  # Forzar uso de daemon para test
+        
+        # Mock: is_available() devuelve True (daemon "disponible")
+        def mock_is_available(self):
+            return True
+        monkeypatch.setattr(PrivilegedClient, "is_available", mock_is_available)
+        
+        # Mock: clean_system_paths del cliente lanza NameError (simula bug real)
+        def mock_clean_system_paths(self, paths):
+            raise NameError("name 'GLib' is not defined")
+        monkeypatch.setattr(PrivilegedClient, "clean_system_paths", mock_clean_system_paths)
+        
+        # Mock: pkexec rm funciona
+        def fake_run(cmd, **kwargs):
+            return MagicMock(returncode=0, stdout="Eliminadas 1 ruta(s)", stderr="")
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", fake_run)
+        
+        # La operación NO debe crashear, debe caer a pkexec
+        result = api.clean_system_paths([Path("/var/log/test.log")])
+        
+        assert result.success
+        assert not result.used_daemon
+        assert "Eliminadas 1 ruta(s)" in result.output
+        reset_privileged_api()
+
+    def test_remove_packages_daemon_raises_unexpected_exception_falls_back_to_pkexec(
+        self, monkeypatch
+    ):
+        """Simula: is_available() reporta True pero la llamada real lanza excepción genérica.
+        
+        Debe caer a pkexec sin propagar la excepción ni crashear.
+        """
+        reset_privileged_api()
+        api = PrivilegedAPI(prefer_daemon=True)  # Forzar uso de daemon para test
+        
+        # Mock: is_available() devuelve True (daemon "disponible")
+        def mock_is_available(self):
+            return True
+        monkeypatch.setattr(PrivilegedClient, "is_available", mock_is_available)
+        
+        # Mock: remove_packages del cliente lanza RuntimeError (bug inesperado)
+        def mock_remove_packages(self, packages):
+            raise RuntimeError("Daemon internal error")
+        monkeypatch.setattr(PrivilegedClient, "remove_packages", mock_remove_packages)
+        
+        # Mock: pkexec pacman funciona
+        def fake_run(cmd, **kwargs):
+            return MagicMock(returncode=0, stdout="removed", stderr="")
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", fake_run)
+        
+        # La operación NO debe crashear, debe caer a pkexec
+        result = api.remove_packages(["foo", "bar"])
+        
+        assert result.success
+        assert not result.used_daemon
+        assert result.output == "removed"
+        reset_privileged_api()
+
+    def test_is_available_pings_daemon_with_timeout(self, monkeypatch):
+        """is_available() debe hacer health-check real (Ping con timeout)."""
+        reset_privileged_api()
+        client = PrivilegedClient()
+        
+        # Mock: proxy creation succeeds but Ping fails (daemon no responde)
+        mock_proxy = MagicMock()
+        mock_proxy.call_sync.side_effect = Exception("Timeout")
+        
+        def mock_get_proxy(self):
+            return mock_proxy
+        monkeypatch.setattr(PrivilegedClient, "_get_proxy", mock_get_proxy)
+        
+        # Debe devolver False (no disponible) sin crashear
+        assert not client.is_available()
+        reset_privileged_api()
+
 
