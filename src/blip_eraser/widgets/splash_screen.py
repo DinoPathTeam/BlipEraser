@@ -1,9 +1,16 @@
-"""Pantalla de arranque (splash): logo animado + mensaje de progreso.
+"""Pantalla de arranque (splash): video de intro + mensaje de progreso.
 
-Animación de entrada: el logo y el título "BLIPERASER" se deslizan desde
-la derecha con fade-in. Los mensajes de progreso del StartupWorker se
-encolan mientras la animación de entrada corre y se muestran (con su
-propio fade) apenas esta termina, para no competir visualmente con ella.
+- Reproduce un video de introducción (splash-intro.mp4) si QtMultimedia
+  está disponible y el archivo existe.
+- Fallback silencioso a animación original (logo + fade) si falta
+  QtMultimedia, el video no carga, o cualquier error en la reproducción.
+- Comportamiento de timing:
+  * El video se reproduce UNA vez a su duración natural.
+  * El StartupWorker corre en paralelo.
+  * Si el worker termina ANTES que el video: el video sigue hasta su fin.
+  * Si el video termina ANTES que el worker: se PAUSA en el último frame
+    (no loop, no negro) y espera al worker.
+  * Los mensajes de progreso se superponen en la parte inferior con fade.
 """
 
 from __future__ import annotations
@@ -12,15 +19,22 @@ from PyQt6.QtCore import (
     QEasingCurve,
     QParallelAnimationGroup,
     QPoint,
-    QRect,
+    QPropertyAnimation,
     QSequentialAnimationGroup,
     QThread,
     Qt,
+    QTimer,
+    QUrl,
     pyqtSignal,
 )
-from PyQt6.QtCore import QPropertyAnimation
 from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
-from PyQt6.QtWidgets import QGraphicsOpacityEffect, QLabel, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QGraphicsOpacityEffect,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.i18n import tr
@@ -30,8 +44,6 @@ from blip_eraser.widgets.logo import ASSET_LOGO_PATH, app_icon
 SPLASH_WIDTH = 560
 SPLASH_HEIGHT = 360
 SPLASH_LOGO_HEIGHT = 150
-
-# Altura del área donde viven logo + título, animados a mano (sin layout).
 _HERO_HEIGHT = 210
 
 _STEP_PAUSE_MS = 400
@@ -44,9 +56,23 @@ _INTRO_TITLE_DELAY_MS = 200
 _MSG_FADE_OUT_MS = 200
 _MSG_FADE_IN_MS = 300
 
+ASSET_SPLASH_VIDEO = (
+    __file__.rsplit("\\", 1)[0] if "\\" in __file__ else __file__.rsplit("/", 1)[0]
+) + "/../assets/splash-intro.mp4"
+
+_QMULTIMEDIA_AVAILABLE = False
+try:
+    from PyQt6.QtMultimedia import QMediaPlayer
+    from PyQt6.QtMultimediaWidgets import QVideoWidget
+
+    _QMULTIMEDIA_AVAILABLE = True
+except ImportError:
+    QMediaPlayer = None
+    QVideoWidget = None
+
 
 class SplashScreen(QWidget):
-    """Ventana sin marco: logo+título animados de entrada, mensaje debajo."""
+    """Ventana sin marco: video de intro (o logo animado) + mensaje debajo."""
 
     closed = pyqtSignal()
 
@@ -57,8 +83,6 @@ class SplashScreen(QWidget):
         )
         self.setFixedSize(SPLASH_WIDTH, SPLASH_HEIGHT)
         self.setObjectName("Splash")
-        # Ícono del splash (barra de tareas). Fallback a QIcon() vacío si el
-        # asset no existe (ver widgets/logo.py).
         self.setWindowIcon(app_icon())
 
         theme_key = load_prefs().get("theme", "red")
@@ -75,14 +99,12 @@ class SplashScreen(QWidget):
         outer.setSpacing(20)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Área "hero" (logo + título) SIN layout: los widgets hijos se
-        # posicionan a mano con setGeometry/move, porque un QVBoxLayout
-        # activo pelearía contra cualquier QPropertyAnimation sobre `pos`
-        # (el layout reimpone su propia posición en cada recálculo).
+        # Área "hero" donde va el video o el logo animado
         self._hero = QWidget()
         self._hero.setFixedSize(SPLASH_WIDTH - 64, _HERO_HEIGHT)
         outer.addWidget(self._hero)
 
+        # Componentes de fallback (logo animado original)
         self._logo = QLabel(self._hero)
         self._logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -93,6 +115,15 @@ class SplashScreen(QWidget):
             "letter-spacing: 2px;"
         )
 
+        # Componentes de video
+        self._video_widget: QVideoWidget | None = None
+        self._media_player: QMediaPlayer | None = None
+        self._video_loaded = False
+        self._video_ended = False
+        self._worker_finished = False
+        self._waiting_for_worker = False
+
+        # Mensaje de progreso (común a ambos modos)
         self._message = QLabel("")
         self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._message.setWordWrap(True)
@@ -101,7 +132,13 @@ class SplashScreen(QWidget):
         )
         outer.addWidget(self._message)
 
-        # Opacidad animable para logo, título y mensaje.
+        self._message_effect = QGraphicsOpacityEffect(self._message)
+        self._message.setGraphicsEffect(self._message_effect)
+        self._message_effect.setOpacity(0.0)
+
+        self._load_logo(accent)
+        self._center_on_screen()
+
         self._logo_effect = QGraphicsOpacityEffect(self._logo)
         self._logo.setGraphicsEffect(self._logo_effect)
         self._logo_effect.setOpacity(0.0)
@@ -110,31 +147,17 @@ class SplashScreen(QWidget):
         self._title.setGraphicsEffect(self._title_effect)
         self._title_effect.setOpacity(0.0)
 
-        self._message_effect = QGraphicsOpacityEffect(self._message)
-        self._message.setGraphicsEffect(self._message_effect)
-        self._message_effect.setOpacity(0.0)
-
-        self._load_logo(accent)
-        self._center_on_screen()
-
-        # Referencias vivas: sin esto, el GC de Python puede destruir las
-        # QPropertyAnimation a mitad de vuelo y la animación se corta.
         self._intro_anim: QSequentialAnimationGroup | None = None
         self._msg_fade_out: QPropertyAnimation | None = None
         self._msg_fade_in: QPropertyAnimation | None = None
 
-        # Mientras la animación de entrada corre, cualquier set_message()
-        # que llegue del StartupWorker se guarda aquí en vez de mostrarse
-        # de inmediato, para no competir visualmente con la entrada.
         self._intro_done = False
         self._pending_message: str | None = None
 
         self._layout_hero_positions()
-        self._start_intro_animation()
+        self._setup_video_or_fallback()
+        self._start_intro()
 
-    # ------------------------------------------------------------------
-    # Construcción
-    # ------------------------------------------------------------------
     def _load_logo(self, accent: str) -> None:
         if ASSET_LOGO_PATH.exists():
             pixmap = QPixmap(str(ASSET_LOGO_PATH))
@@ -164,14 +187,6 @@ class SplashScreen(QWidget):
         self._logo.resize(pm.size())
 
     def _layout_hero_positions(self) -> None:
-        """Coloca logo y título en sus posiciones FINALES (centradas).
-
-        Usa sizeHint()/resize() en vez de width()/height() leídos antes de
-        mostrar el widget: para un QLabel con pixmap o texto ya asignado,
-        el tamaño de contenido está disponible de inmediato, sin depender
-        de que la ventana se haya pintado (a diferencia de leer width() de
-        un widget recién construido, que devuelve el tamaño por defecto).
-        """
         self._title.adjustSize()
 
         hero_w = self._hero.width()
@@ -184,7 +199,6 @@ class SplashScreen(QWidget):
         self._logo_end_pos = QPoint((hero_w - logo_w) // 2, logo_y)
         self._title_end_pos = QPoint((hero_w - title_w) // 2, title_y)
 
-        # Posición de arranque: fuera del hero, a la derecha.
         self._logo_start_pos = QPoint(hero_w + 60, logo_y)
         self._title_start_pos = QPoint(hero_w + 40, title_y)
 
@@ -203,11 +217,61 @@ class SplashScreen(QWidget):
             geometry.center().y() - self.height() // 2,
         )
 
-    # ------------------------------------------------------------------
-    # Animación de entrada
-    # ------------------------------------------------------------------
-    def _start_intro_animation(self) -> None:
-        """Logo desde la derecha (800ms), luego título (600ms, +200ms delay)."""
+    def _setup_video_or_fallback(self) -> None:
+        """Intenta configurar video; si falla, usa fallback de logo animado."""
+        self._video_loaded = False
+
+        if not _QMULTIMEDIA_AVAILABLE:
+            self._video_widget = None
+            self._media_player = None
+            return
+
+        try:
+            from pathlib import Path
+
+            video_path = Path(ASSET_SPLASH_VIDEO)
+            if not video_path.exists():
+                return
+
+            self._video_widget = QVideoWidget(self._hero)
+            self._video_widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            self._video_widget.setFixedSize(self._hero.size())
+            self._video_widget.setStyleSheet("background: transparent;")
+            self._video_widget.hide()
+
+            self._media_player = QMediaPlayer(self)
+            self._media_player.setVideoOutput(self._video_widget)
+            self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
+            self._media_player.mediaStatusChanged.connect(self._on_media_status_changed)
+            self._media_player.errorOccurred.connect(self._on_media_error)
+
+            self._video_loaded = True
+
+        except Exception:
+            self._video_widget = None
+            self._media_player = None
+            self._video_loaded = False
+
+    def _start_intro(self) -> None:
+        if self._video_loaded and self._media_player and self._video_widget:
+            self._logo.hide()
+            self._title.hide()
+            self._video_widget.show()
+            self._media_player.play()
+        else:
+            self._start_fallback_animation()
+
+    def _start_fallback_animation(self) -> None:
+        """Animación original: logo+título deslizándose desde la derecha."""
+        self._video_widget = None
+        self._media_player = None
+        self._video_loaded = False
+
+        self._logo.show()
+        self._title.show()
+
         logo_pos = QPropertyAnimation(self._logo, b"pos", self)
         logo_pos.setDuration(_INTRO_LOGO_MS)
         logo_pos.setEasingCurve(QEasingCurve.Type.OutQuart)
@@ -238,9 +302,6 @@ class SplashScreen(QWidget):
         title_group.addAnimation(title_pos)
         title_group.addAnimation(title_opacity)
 
-        # Secuencial real (no QTimer suelto): logo primero, título después,
-        # con un pequeño respiro entre ambos vía una animación "puente" de
-        # opacidad nula sobre el propio efecto del título (duración = delay).
         delay_bridge = QPropertyAnimation(self._title_effect, b"opacity", self)
         delay_bridge.setDuration(_INTRO_TITLE_DELAY_MS)
         delay_bridge.setStartValue(0.0)
@@ -255,23 +316,49 @@ class SplashScreen(QWidget):
         self._intro_anim = sequence
         sequence.start()
 
+    def _on_media_status_changed(self, status) -> None:
+        if not self._media_player:
+            return
+
+        if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self._video_ended = True
+            # Pausar en último frame (no detener)
+            self._media_player.pause()
+            self._check_both_finished()
+
+    def _on_media_error(self, error, error_string) -> None:
+        # Fallback silencioso a animación original
+        self._video_loaded = False
+        if self._video_widget:
+            self._video_widget.hide()
+        if self._media_player:
+            self._media_player.stop()
+            self._media_player.deleteLater()
+            self._media_player = None
+        self._start_fallback_animation()
+
+    def _check_both_finished(self) -> None:
+        """Verifica si ambos (video + worker) han terminado para cerrar."""
+        if self._video_ended and self._worker_finished:
+            self.close()
+        elif self._video_ended and not self._worker_finished:
+            self._waiting_for_worker = True
+        elif self._worker_finished and not self._video_ended:
+            self._waiting_for_worker = False
+            # El video sigue reproduciéndose; se cerrará en _on_media_status_changed
+
+    def notify_worker_finished(self) -> None:
+        """Llamado desde main cuando StartupWorker termina."""
+        self._worker_finished = True
+        self._check_both_finished()
+
     def _on_intro_finished(self) -> None:
         self._intro_done = True
         if self._pending_message is not None:
             text, self._pending_message = self._pending_message, None
             self._animate_message(text)
 
-    # ------------------------------------------------------------------
-    # Mensajes de progreso
-    # ------------------------------------------------------------------
     def set_message(self, text: str) -> None:
-        """Actualiza el mensaje de progreso.
-
-        Si la animación de entrada todavía está corriendo, el mensaje se
-        guarda y se muestra apenas termine (no se pisan las dos animaciones
-        a la vez). Una vez terminada la entrada, cada mensaje nuevo hace
-        fade-out del anterior y fade-in del nuevo.
-        """
         if not self._intro_done:
             self._pending_message = text
             return
@@ -302,17 +389,13 @@ class SplashScreen(QWidget):
         fade_out.start()
 
     def closeEvent(self, event) -> None:
+        if self._media_player:
+            self._media_player.stop()
         self.closed.emit()
         super().closeEvent(event)
 
 
 class StartupWorker(QThread):
-    """Ejecuta los pasos de arranque y emite el mensaje de cada uno.
-
-    Los resultados de los chequeos se guardan como atributos para que
-    `main` los consuma sin repetir el trabajo.
-    """
-
     message = pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -327,22 +410,18 @@ class StartupWorker(QThread):
         from blip_eraser.utils.ui_text import localized_missing_lines
         from blip_eraser.utils.updates import check_for_updates
 
-        # 1. Actualizaciones: stub sin red, avanza casi de inmediato.
         if self.isInterruptionRequested():
             return
         self.message.emit(tr("splash_check_updates"))
         check_for_updates()
         QThread.msleep(_STEP_PAUSE_MS)
 
-        # 2. Permisos: se comprueba, pero el diálogo se muestra al final.
         if self.isInterruptionRequested():
             return
         self.message.emit(tr("splash_check_permissions"))
         self.show_permissions_notice = should_show_permissions_notice()
         QThread.msleep(_STEP_PAUSE_MS)
 
-        # 3. Dependencias: el chequeo de binarios vive aquí (no se duplica
-        #    en MainWindow); el aviso se muestra cuando la ventana esté lista.
         if self.isInterruptionRequested():
             return
         self.message.emit(tr("splash_check_dependencies"))
@@ -350,14 +429,12 @@ class StartupWorker(QThread):
         self.missing_lines = localized_missing_lines(["pacman", "pkexec"])
         QThread.msleep(_STEP_PAUSE_MS)
 
-        # 4. Escaneo de referencia: trabajo real, resultado descartado.
         if self.isInterruptionRequested():
             return
         self.message.emit(tr("splash_scanning"))
         list_installed_apps()
         QThread.msleep(_STEP_PAUSE_MS)
 
-        # 5. Bienvenida.
         if self.isInterruptionRequested():
             return
         self.message.emit(tr("splash_welcome"))
