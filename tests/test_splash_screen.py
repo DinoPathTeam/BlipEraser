@@ -1,14 +1,34 @@
-"""Tests para widgets/splash_screen.py — video de intro + fallback."""
+"""Tests para widgets/splash_screen.py — video de intro + fallback.
+
+Patrón del proyecto: pytest.importorskip + fixture app manual (QApplication.instance).
+"""
 
 import pytest
 
-pytest.importorskip("PyQt6.QtWidgets")
+QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
+QtCore = pytest.importorskip("PyQt6.QtCore")
+QtMultimedia = pytest.importorskip("PyQt6.QtMultimedia", reason="QtMultimedia opcional")
+QtMultimediaWidgets = pytest.importorskip(
+    "PyQt6.QtMultimediaWidgets", reason="QtMultimediaWidgets opcional"
+)
+
+from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
+
+
+@pytest.fixture(scope="module")
+def app():
+    from PyQt6.QtWidgets import QApplication
+
+    instance = QApplication.instance()
+    if instance is None:
+        instance = QApplication([])
+    return instance
 
 
 class TestSplashScreenConstruction:
     """SplashScreen se construye sin excepción con y sin video/QtMultimedia."""
 
-    def test_splash_constructs_without_pyqt6_multimedia(self, monkeypatch):
+    def test_splash_constructs_without_pyqt6_multimedia(self, monkeypatch, app):
         """Si QtMultimedia no está disponible, fallback a animación de logo."""
         import sys
         import blip_eraser.widgets.splash_screen as splash_mod
@@ -27,23 +47,21 @@ class TestSplashScreenConstruction:
         assert splash._media_player is None
         splash.close()
 
-    def test_splash_constructs_with_video_missing(self, monkeypatch):
+    def test_splash_constructs_with_video_missing(self, monkeypatch, app):
         """Si el archivo de video no existe, fallback silencioso."""
         from blip_eraser.widgets.splash_screen import SplashScreen
 
         splash = SplashScreen()
         assert splash is not None
-        # En entorno sin video real, _video_loaded será False
+        assert splash._video_loaded is False
         splash.close()
 
-    def test_splash_constructs_with_mock_video_available(self, monkeypatch):
+    def test_splash_constructs_with_mock_video_available(self, monkeypatch, app):
         """Simula video disponible: verifica que _video_loaded=True y media_player creado."""
         from blip_eraser.widgets.splash_screen import SplashScreen
+        from pathlib import Path
 
-        # Mock: video file exists
-        monkeypatch.setattr(
-            "blip_eraser.widgets.splash_screen.Path.exists", lambda self: True
-        )
+        monkeypatch.setattr(Path, "exists", lambda self: True)
 
         splash = SplashScreen()
         assert splash is not None
@@ -54,14 +72,9 @@ class TestSplashScreenConstruction:
 class TestSplashScreenFallbackBehavior:
     """Comportamiento del fallback (animación logo) cuando no hay video."""
 
-    def test_fallback_animation_runs(self, monkeypatch, qtbot):
+    def test_fallback_animation_runs(self, monkeypatch, app):
         """La animación de logo+título se ejecuta en fallback."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
         splash = SplashScreen()
-        qtbot.addWidget(splash)
-
-        # Forzar fallback
         splash._video_loaded = False
         splash._media_player = None
         splash._video_widget = None
@@ -73,13 +86,9 @@ class TestSplashScreenFallbackBehavior:
         assert splash._title.isVisible()
         splash.close()
 
-    def test_fallback_message_queue(self, monkeypatch, qtbot):
+    def test_fallback_message_queue(self, monkeypatch, app):
         """Mensajes se encolan durante animación de entrada y se muestran al terminar."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
         splash = SplashScreen()
-        qtbot.addWidget(splash)
-
         splash._video_loaded = False
         splash._intro_done = False
 
@@ -99,50 +108,87 @@ class TestSplashScreenFallbackBehavior:
 class TestVideoTimingBehavior:
     """Comportamiento de timing: video + worker coordination."""
 
-    def test_video_ended_pauses_on_last_frame(self, monkeypatch):
-        """Al terminar video, media player se pausa (no stop/loop)."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
+    def test_media_status_changed_sets_video_ended_flag(self, monkeypatch, app):
+        """_on_media_status_changed pone _video_ended=True al recibir EndOfMedia."""
+        from PyQt6.QtMultimedia import QMediaPlayer
 
         splash = SplashScreen()
         splash._video_loaded = True
         splash._video_ended = False
 
         # Mock media player
-        mock_player = monkeypatch.setattr(splash, "_media_player", None)
-        # No podemos probar QMediaPlayer real sin QtMultimedia,
-        # pero verificamos que el flag _video_ended se maneja
+        mock_player = QtWidgets.QWidget()  # dummy para evitar None
+        monkeypatch.setattr(splash, "_media_player", mock_player)
 
-        # Simular fin de video
-        splash._video_ended = True
+        # Simular señal mediaStatusChanged con EndOfMedia
+        splash._on_media_status_changed(QMediaPlayer.MediaStatus.EndOfMedia)
+
         assert splash._video_ended is True
+        assert splash._waiting_for_worker is False  # worker no terminado aún
         splash.close()
 
-    def test_worker_finished_before_video_waits_for_video(self, monkeypatch):
-        """Worker termina antes que video -> espera fin natural del video."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
+    def test_media_status_changed_ignores_other_statuses(self, monkeypatch, app):
+        """Otros MediaStatus no marcan _video_ended."""
+        from PyQt6.QtMultimedia import QMediaPlayer
 
+        splash = SplashScreen()
+        splash._video_loaded = True
+        splash._video_ended = False
+
+        mock_player = QtWidgets.QWidget()
+        monkeypatch.setattr(splash, "_media_player", mock_player)
+
+        # Loading, Buffering, etc. no deben marcar video_ended
+        for status in (
+            QMediaPlayer.MediaStatus.LoadingMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+            QMediaPlayer.MediaStatus.StalledMedia,
+        ):
+            splash._video_ended = False
+            splash._on_media_status_changed(status)
+            assert splash._video_ended is False, f"Status {status} no debería marcar video_ended"
+
+        splash.close()
+
+    def test_media_error_fallbacks_to_animation(self, monkeypatch, app):
+        """Error en media player -> fallback silencioso a animación logo."""
+        splash = SplashScreen()
+        splash._video_loaded = True
+
+        mock_player = QtWidgets.QWidget()
+        monkeypatch.setattr(splash, "_media_player", mock_player)
+        splash._video_widget = QtWidgets.QWidget()
+
+        # Simular error
+        splash._on_media_error(QMediaPlayer.Error.ResourceError, "test error")
+
+        assert splash._video_loaded is False
+        assert splash._media_player is None
+        assert splash._video_widget is None or not splash._video_widget.isVisible()
+        # Debe haber iniciado fallback (logo visible)
+        assert splash._logo.isVisible() or splash._title.isVisible()
+        splash.close()
+
+    def test_worker_finished_before_video_waits_for_video(self, app):
+        """Worker termina antes que video -> espera fin natural del video."""
         splash = SplashScreen()
         splash._video_loaded = True
         splash._video_ended = False
         splash._worker_finished = False
 
-        # Worker termina, video NO
         splash.notify_worker_finished()
         assert splash._worker_finished is True
         assert splash._video_ended is False
         assert splash._waiting_for_worker is False
         splash.close()
 
-    def test_video_ended_before_worker_pauses_and_waits(self, monkeypatch):
+    def test_video_ended_before_worker_pauses_and_waits(self, app):
         """Video termina antes que worker -> pausa en último frame y espera worker."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
         splash = SplashScreen()
         splash._video_loaded = True
         splash._video_ended = False
         splash._worker_finished = False
 
-        # Video termina, worker NO
         splash._video_ended = True
         splash._check_both_finished()
 
@@ -151,16 +197,13 @@ class TestVideoTimingBehavior:
         assert splash._waiting_for_worker is True
         splash.close()
 
-    def test_both_finished_closes_splash(self, monkeypatch):
+    def test_both_finished_closes_splash(self, monkeypatch, app):
         """Ambos terminados -> cierra splash."""
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
         splash = SplashScreen()
         splash._video_loaded = True
         splash._video_ended = True
         splash._worker_finished = True
 
-        # Mock close para verificar que se llama
         closed = []
 
         def mock_close():
@@ -176,11 +219,8 @@ class TestVideoTimingBehavior:
 class TestSplashScreenMessages:
     """Tests de mensajes de progreso (comunes a video y fallback)."""
 
-    def test_set_message_after_intro_shows_immediately(self, qtbot):
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
+    def test_set_message_after_intro_shows_immediately(self, app):
         splash = SplashScreen()
-        qtbot.addWidget(splash)
         splash._intro_done = True
 
         splash.set_message("Hello")
@@ -188,17 +228,13 @@ class TestSplashScreenMessages:
         assert splash._message_effect.opacity() > 0
         splash.close()
 
-    def test_multiple_messages_fade_transition(self, qtbot):
-        from blip_eraser.widgets.splash_screen import SplashScreen
-
+    def test_multiple_messages_fade_transition(self, app):
         splash = SplashScreen()
-        qtbot.addWidget(splash)
         splash._intro_done = True
 
         splash.set_message("First")
         splash.set_message("Second")
 
-        # El último mensaje debe prevalecer tras fade
         assert splash._message.text() == "Second"
         splash.close()
 
@@ -206,9 +242,7 @@ class TestSplashScreenMessages:
 class TestStartupWorker:
     """Tests del StartupWorker (sin cambios en lógica)."""
 
-    def test_worker_emits_messages_in_order(self, qtbot):
-        from blip_eraser.widgets.splash_screen import StartupWorker
-
+    def test_worker_emits_messages_in_order(self, app):
         worker = StartupWorker()
         messages = []
 
