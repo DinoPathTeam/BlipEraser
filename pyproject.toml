@@ -31,7 +31,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-qt>=4.2"]
+dev = ["pytest>=7.0"]
 
 [project.scripts]
 blip-eraser = "blip_eraser.main:main"
