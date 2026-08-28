@@ -115,6 +115,19 @@ class _VideoWidget(QWidget):
             # Centrar el recorte
             x = target_rect.x() + (target_rect.width() - scaled.width()) // 2
             y = target_rect.y() + (target_rect.height() - scaled.height()) // 2
+            
+            # DIAGNÓSTICO: loguear dimensiones reales
+            try:
+                from blip_eraser.utils.log import write_diagnostic
+                write_diagnostic(
+                    f"SPLASH_PAINT: widget_rect={target_rect.width()}x{target_rect.height()} "
+                    f"image={self._current_image.width()}x{self._current_image.height()} "
+                    f"scaled={scaled.width()}x{scaled.height()} "
+                    f"draw_pos=({x},{y})"
+                )
+            except Exception:
+                pass
+            
             painter.drawImage(x, y, scaled)
         else:
             # Sin frame aún: fondo oscuro neutro
@@ -322,6 +335,16 @@ class SplashScreen(QWidget):
         # Convertir a QImage para pintar en paintEvent
         image = frame.toImage()
         if not image.isNull():
+            try:
+                from blip_eraser.utils.log import write_diagnostic
+                write_diagnostic(
+                    f"SPLASH_FRAME: frame_size={frame.width()}x{frame.height()} "
+                    f"image_size={image.width()}x{image.height()} "
+                    f"video_widget_size={self._video_widget.width()}x{self._video_widget.height()} "
+                    f"hero_size={self._hero.width()}x{self._hero.height()}"
+                )
+            except Exception:
+                pass
             self._video_widget.set_frame(image)
 
     def _start_intro(self) -> None:
@@ -446,6 +469,18 @@ class SplashScreen(QWidget):
         if self._video_loaded:
             self._message.show()
             self._message.raise_()  # asegurar que queda por encima del video widget
+            
+            try:
+                from blip_eraser.utils.log import write_diagnostic
+                write_diagnostic(
+                    f"SPLASH_MSG: msg_geometry={self._message.geometry().width()}x{self._message.geometry().height()} "
+                    f"at=({self._message.x()},{self._message.y()}) "
+                    f"video_widget_geom=({self._video_widget.x()},{self._video_widget.y()}) "
+                    f"video_widget_size={self._video_widget.width()}x{self._video_widget.height()} "
+                    f"hero_size={self._hero.width()}x{self._hero.height()}"
+                )
+            except Exception:
+                pass
 
         fade_out = QPropertyAnimation(self._message_effect, b"opacity", self)
         fade_out.setDuration(_MSG_FADE_OUT_MS)
