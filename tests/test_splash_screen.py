@@ -7,12 +7,15 @@ import pytest
 
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 QtCore = pytest.importorskip("PyQt6.QtCore")
+QtGui = pytest.importorskip("PyQt6.QtGui")
+
+# QtMultimedia es opcional
 QtMultimedia = pytest.importorskip("PyQt6.QtMultimedia", reason="QtMultimedia opcional")
 QtMultimediaWidgets = pytest.importorskip(
     "PyQt6.QtMultimediaWidgets", reason="QtMultimediaWidgets opcional"
 )
 
-from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
+from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker, _VideoWidget
 
 
 @pytest.fixture(scope="module")
@@ -23,6 +26,64 @@ def app():
     if instance is None:
         instance = QApplication([])
     return instance
+
+
+class TestVideoWidget:
+    """Tests del widget de renderizado de video (_VideoWidget)."""
+
+    def test_video_widget_constructs(self, app):
+        widget = _VideoWidget()
+        assert widget is not None
+        assert widget._current_image is None
+        widget.close()
+
+    def test_video_widget_set_frame_triggers_update(self, app, monkeypatch):
+        """set_frame guarda la imagen y llama update()."""
+        widget = _VideoWidget()
+        widget.resize(320, 180)
+
+        # Mock update para verificar que se llama
+        updated = []
+        monkeypatch.setattr(widget, "update", lambda: updated.append(True))
+
+        # Crear QImage de prueba
+        image = QtGui.QImage(100, 100, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("#FF0000"))
+
+        widget.set_frame(image)
+
+        assert widget._current_image is not None
+        assert not widget._current_image.isNull()
+        assert len(updated) == 1
+        widget.close()
+
+    def test_video_widget_ignores_null_frame(self, app):
+        """Frames nulos no rompen el widget."""
+        widget = _VideoWidget()
+        null_image = QtGui.QImage()
+        assert null_image.isNull()
+
+        widget.set_frame(null_image)
+        assert widget._current_image is None
+        widget.close()
+
+    def test_video_widget_paint_event_no_crash(self, app):
+        """paintEvent no crashea sin frame ni con frame."""
+        widget = _VideoWidget()
+        widget.resize(100, 100)
+
+        # Sin frame - no debe crashear
+        from PyQt6.QtGui import QPaintEvent, QRect
+        event = QPaintEvent(QRect(0, 0, 100, 100))
+        widget.paintEvent(event)
+
+        # Con frame - no debe crashear
+        image = QtGui.QImage(100, 100, QtGui.QImage.Format.Format_RGB32)
+        image.fill(QtGui.QColor("#00FF00"))
+        widget.set_frame(image)
+        widget.paintEvent(event)
+
+        widget.close()
 
 
 class TestSplashScreenConstruction:
@@ -81,7 +142,6 @@ class TestSplashScreenFallbackBehavior:
         splash._logo.show()
         splash._title.show()
 
-        # Verificar estado inicial
         assert splash._logo.isVisible()
         assert splash._title.isVisible()
         splash.close()
@@ -92,15 +152,12 @@ class TestSplashScreenFallbackBehavior:
         splash._video_loaded = False
         splash._intro_done = False
 
-        # Enviar mensaje durante intro (debe encolarse)
         splash.set_message("Test message")
         assert splash._pending_message == "Test message"
 
-        # Simular fin de intro
         splash._intro_done = True
         splash._on_intro_finished()
 
-        # Mensaje debe haberse mostrado
         assert splash._pending_message is None
         splash.close()
 
@@ -116,15 +173,13 @@ class TestVideoTimingBehavior:
         splash._video_loaded = True
         splash._video_ended = False
 
-        # Mock media player
-        mock_player = QtWidgets.QWidget()  # dummy para evitar None
+        mock_player = QtWidgets.QWidget()
         monkeypatch.setattr(splash, "_media_player", mock_player)
 
-        # Simular señal mediaStatusChanged con EndOfMedia
         splash._on_media_status_changed(QMediaPlayer.MediaStatus.EndOfMedia)
 
         assert splash._video_ended is True
-        assert splash._waiting_for_worker is False  # worker no terminado aún
+        assert splash._waiting_for_worker is False
         splash.close()
 
     def test_media_status_changed_ignores_other_statuses(self, monkeypatch, app):
@@ -138,7 +193,6 @@ class TestVideoTimingBehavior:
         mock_player = QtWidgets.QWidget()
         monkeypatch.setattr(splash, "_media_player", mock_player)
 
-        # Loading, Buffering, etc. no deben marcar video_ended
         for status in (
             QMediaPlayer.MediaStatus.LoadingMedia,
             QMediaPlayer.MediaStatus.BufferedMedia,
@@ -152,6 +206,8 @@ class TestVideoTimingBehavior:
 
     def test_media_error_fallbacks_to_animation(self, monkeypatch, app):
         """Error en media player -> fallback silencioso a animación logo."""
+        from PyQt6.QtMultimedia import QMediaPlayer
+
         splash = SplashScreen()
         splash._video_loaded = True
 
@@ -159,13 +215,10 @@ class TestVideoTimingBehavior:
         monkeypatch.setattr(splash, "_media_player", mock_player)
         splash._video_widget = QtWidgets.QWidget()
 
-        # Simular error
         splash._on_media_error(QMediaPlayer.Error.ResourceError, "test error")
 
         assert splash._video_loaded is False
         assert splash._media_player is None
-        assert splash._video_widget is None or not splash._video_widget.isVisible()
-        # Debe haber iniciado fallback (logo visible)
         assert splash._logo.isVisible() or splash._title.isVisible()
         splash.close()
 
@@ -236,6 +289,25 @@ class TestSplashScreenMessages:
         splash.set_message("Second")
 
         assert splash._message.text() == "Second"
+        splash.close()
+
+    def test_message_visible_over_video_widget(self, monkeypatch, app):
+        """En modo video, el mensaje se muestra y raise_() lo pone por encima."""
+        splash = SplashScreen()
+        splash._intro_done = True
+        splash._video_loaded = True
+
+        mock_widget = QtWidgets.QWidget()
+        monkeypatch.setattr(splash, "_video_widget", mock_widget)
+        raised = []
+        monkeypatch.setattr(mock_widget, "raise_", lambda: raised.append(True))
+
+        splash.set_message("Test over video")
+
+        assert splash._message.text() == "Test over video"
+        assert splash._message.isVisible()
+        # raise_ se llama en _animate_message cuando hay video
+        assert len(raised) == 1
         splash.close()
 
 

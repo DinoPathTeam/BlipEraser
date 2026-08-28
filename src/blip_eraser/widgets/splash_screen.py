@@ -2,8 +2,13 @@
 
 - Reproduce un video de introducción (splash-intro.mp4) si QtMultimedia
   está disponible y el archivo existe.
+- Renderiza frames de video manualmente via QVideoSink + paintEvent(),
+  lo que permite superponer el mensaje de progreso con z-order normal
+  (sin la limitación de superficie nativa de QVideoWidget).
+- Usa KeepAspectRatioByExpanding para llenar el área hero sin barras
+  negras (recorta el sobrante del video 16:9).
 - Fallback silencioso a animación original (logo + fade) si falta
-  QtMultimedia, el video no carga, o cualquier error en la reproducción.
+  QtMultimedia/QVideoSink, el video no carga, o cualquier error.
 - Comportamiento de timing:
   * El video se reproduce UNA vez a su duración natural.
   * El StartupWorker corre en paralelo.
@@ -20,6 +25,7 @@ from PyQt6.QtCore import (
     QParallelAnimationGroup,
     QPoint,
     QPropertyAnimation,
+    QRect,
     QSequentialAnimationGroup,
     QThread,
     Qt,
@@ -27,7 +33,7 @@ from PyQt6.QtCore import (
     QUrl,
     pyqtSignal,
 )
-from PyQt6.QtGui import QColor, QFont, QPainter, QPixmap
+from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QGraphicsOpacityEffect,
     QLabel,
@@ -61,14 +67,63 @@ ASSET_SPLASH_VIDEO = (
 ) + "/../assets/splash-intro.mp4"
 
 _QMULTIMEDIA_AVAILABLE = False
+_QVIDEOSINK_AVAILABLE = False
 try:
-    from PyQt6.QtMultimedia import QMediaPlayer
-    from PyQt6.QtMultimediaWidgets import QVideoWidget
+    from PyQt6.QtMultimedia import QMediaPlayer, QVideoSink
 
     _QMULTIMEDIA_AVAILABLE = True
+    _QVIDEOSINK_AVAILABLE = True
 except ImportError:
     QMediaPlayer = None
-    QVideoWidget = None
+    QVideoSink = None
+
+
+class _VideoWidget(QWidget):
+    """Widget que pinta frames de video recibidos de un QVideoSink.
+
+    Permite z-order normal con otros widgets hijos (mensaje de progreso).
+    Usa KeepAspectRatioByExpanding: llena el widget recortando el video
+    si la relación de aspecto no coincide (sin letterboxing).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._current_image: QImage | None = None
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def set_frame(self, image: QImage) -> None:
+        """Recibe un nuevo frame y programa repintado."""
+        if image.isNull():
+            return
+        self._current_image = image
+        # Repintado inmediato (no acumulativo)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        if self._current_image and not self._current_image.isNull():
+            # Escalar con KeepAspectRatioByExpanding: llena el rectángulo,
+            # recortando el video si la proporción no coincide (16:9 vs contenedor).
+            target_rect = self.rect()
+            scaled = self._current_image.scaled(
+                target_rect.size(),
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            # Centrar el recorte
+            x = target_rect.x() + (target_rect.width() - scaled.width()) // 2
+            y = target_rect.y() + (target_rect.height() - scaled.height()) // 2
+            painter.drawImage(x, y, scaled)
+        else:
+            # Sin frame aún: fondo oscuro neutro
+            painter.fillRect(self.rect(), QColor("#1a1a22"))
+        painter.end()
+
+    def clear_frame(self) -> None:
+        self._current_image = None
+        self.update()
 
 
 class SplashScreen(QWidget):
@@ -115,22 +170,25 @@ class SplashScreen(QWidget):
             "letter-spacing: 2px;"
         )
 
-        # Componentes de video
-        self._video_widget: QVideoWidget | None = None
+        # Componentes de video (QVideoSink + widget personalizado)
+        self._video_widget: _VideoWidget | None = None
+        self._video_sink = None
         self._media_player: QMediaPlayer | None = None
         self._video_loaded = False
         self._video_ended = False
         self._worker_finished = False
         self._waiting_for_worker = False
 
-        # Mensaje de progreso (común a ambos modos)
-        self._message = QLabel("")
-        self._message.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Mensaje de progreso (común a ambos modos) — ahora hijo del _hero
+        # para que quede por encima del video con z-order normal
+        self._message = QLabel("", self._hero)
+        self._message.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
         self._message.setWordWrap(True)
         self._message.setStyleSheet(
             f"color: {accent}; font-size: 15px; font-weight: bold;"
         )
-        outer.addWidget(self._message)
+        self._message.setContentsMargins(8, 8, 8, 16)
+        self._message.hide()  # se muestra cuando hay mensaje
 
         self._message_effect = QGraphicsOpacityEffect(self._message)
         self._message.setGraphicsEffect(self._message_effect)
@@ -218,11 +276,12 @@ class SplashScreen(QWidget):
         )
 
     def _setup_video_or_fallback(self) -> None:
-        """Intenta configurar video; si falla, usa fallback de logo animado."""
+        """Intenta configurar video con QVideoSink; si falla, usa fallback de logo animado."""
         self._video_loaded = False
 
-        if not _QMULTIMEDIA_AVAILABLE:
+        if not _QMULTIMEDIA_AVAILABLE or not _QVIDEOSINK_AVAILABLE:
             self._video_widget = None
+            self._video_sink = None
             self._media_player = None
             return
 
@@ -233,16 +292,17 @@ class SplashScreen(QWidget):
             if not video_path.exists():
                 return
 
-            self._video_widget = QVideoWidget(self._hero)
-            self._video_widget.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-            )
+            # Widget personalizado que pinta frames
+            self._video_widget = _VideoWidget(self._hero)
             self._video_widget.setFixedSize(self._hero.size())
-            self._video_widget.setStyleSheet("background: transparent;")
             self._video_widget.hide()
 
+            # QVideoSink para recibir frames
+            self._video_sink = QVideoSink(self)
+            self._video_sink.videoFrameChanged.connect(self._on_video_frame_changed)
+
             self._media_player = QMediaPlayer(self)
-            self._media_player.setVideoOutput(self._video_widget)
+            self._media_player.setVideoSink(self._video_sink)
             self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
             self._media_player.mediaStatusChanged.connect(self._on_media_status_changed)
             self._media_player.errorOccurred.connect(self._on_media_error)
@@ -251,8 +311,18 @@ class SplashScreen(QWidget):
 
         except Exception:
             self._video_widget = None
+            self._video_sink = None
             self._media_player = None
             self._video_loaded = False
+
+    def _on_video_frame_changed(self, frame) -> None:
+        """Callback cuando llega un nuevo frame del QVideoSink."""
+        if not frame.isValid() or not self._video_widget:
+            return
+        # Convertir a QImage para pintar en paintEvent
+        image = frame.toImage()
+        if not image.isNull():
+            self._video_widget.set_frame(image)
 
     def _start_intro(self) -> None:
         if self._video_loaded and self._media_player and self._video_widget:
@@ -266,6 +336,7 @@ class SplashScreen(QWidget):
     def _start_fallback_animation(self) -> None:
         """Animación original: logo+título deslizándose desde la derecha."""
         self._video_widget = None
+        self._video_sink = None
         self._media_player = None
         self._video_loaded = False
 
@@ -335,6 +406,7 @@ class SplashScreen(QWidget):
             self._media_player.stop()
             self._media_player.deleteLater()
             self._media_player = None
+        self._video_sink = None
         self._start_fallback_animation()
 
     def _check_both_finished(self) -> None:
@@ -369,6 +441,11 @@ class SplashScreen(QWidget):
             self._msg_fade_out.stop()
         if self._msg_fade_in is not None:
             self._msg_fade_in.stop()
+
+        # Mostrar label si estaba oculto
+        if self._video_loaded:
+            self._message.show()
+            self._message.raise_()  # asegurar que queda por encima del video widget
 
         fade_out = QPropertyAnimation(self._message_effect, b"opacity", self)
         fade_out.setDuration(_MSG_FADE_OUT_MS)
