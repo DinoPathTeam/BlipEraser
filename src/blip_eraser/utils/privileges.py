@@ -36,14 +36,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
 
-from blip_eraser.utils.file_utils import delete_path
-from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.validation import (
+    validate_path,
+    reject_symlinks,
+    is_symlink_or_reparse,
+    ALLOWED_SYSTEM_PREFIXES,
+    HOME_DENYLIST_PREFIXES,
+)
 from blip_eraser.utils.dbus_client import (
     PrivilegedAPI,
     get_privileged_api,
     DBusError,
     OperationResult,
 )
+from blip_eraser.utils.file_utils import delete_path
+from blip_eraser.utils.log import write_diagnostic
+
+# Backward compatibility aliases for tests and legacy code
+_validate_path = validate_path
+_reject_symlinks = reject_symlinks
+_is_symlink_or_reparse = is_symlink_or_reparse
 
 # Rutas de sistema cuyo borrado requiere privilegios. Un path que no cae en
 # $HOME y empieza por uno de estos prefijos se considera privilegiado.
@@ -143,83 +155,7 @@ def get_allowed_operation(op_id: str) -> Callable | None:
     return ALLOWED_OPERATIONS.get(op_id)
 
 
-def _validate_path(path: Path) -> bool:
-    """Valida que una ruta está dentro de los prefijos permitidos.
 
-    Usa `resolve()` en POSIX para seguir symlinks y obtener la ruta canónica,
-    luego verifica que empiece por uno de los prefijos de la allowlist.
-    En Windows (tests), valida contra el string original normalizado.
-    """
-    # Normalizar separadores para comparación consistente
-    path_str = str(path).replace("\\", "/")
-
-    # Verificación rápida del prefijo en el string original
-    # (funciona en cualquier plataforma)
-    if not any(path_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES):
-        return False
-
-    # En POSIX (Linux), resolver y verificar de nuevo para detectar
-    # path traversal via symlinks. En Windows, saltar resolve.
-    if os.name == "posix":
-        try:
-            resolved = path.resolve(strict=False)
-        except OSError:
-            return False
-        resolved_str = str(resolved).replace("\\", "/")
-        return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
-
-    return True
-
-
-def _reject_symlinks(path: Path) -> bool:
-    """True si la ruta o cualquiera de sus padres es un symlink/reparse point.
-
-    Previene ataques de symlink donde un path válido apunta a
-    ubicaciones sensibles (/etc/passwd, /etc/shadow, etc.).
-
-    En Windows, detecta symlinks (Python 3.8+) y reparse points
-    (junctions, mount points) vía GetFileAttributesW.
-    """
-    # Comprobación rápida en la ruta dada
-    if _is_symlink_or_reparse(path):
-        return True
-    # Comprobar padres
-    for parent in path.parents:
-        if _is_symlink_or_reparse(parent):
-            return True
-    return False
-
-
-def _is_symlink_or_reparse(path: Path) -> bool:
-    """Detecta symlinks (POSIX/Windows) y reparse points (Windows)."""
-    try:
-        # POSIX y Windows 3.8+: Path.is_symlink() detecta symlinks propiamente dichos
-        if path.is_symlink():
-            return True
-    except OSError:
-        return True  # Error al acceder = sospechoso
-
-    # Windows: detectar reparse points (junctions, mount points)
-    # que NO son symlinks pero sí redirigen a otra ubicación
-    if os.name == "nt":
-        try:
-            import ctypes
-            from ctypes import wintypes
-
-            kernel32 = ctypes.windll.kernel32
-            GetFileAttributesW = kernel32.GetFileAttributesW
-            GetFileAttributesW.argtypes = [wintypes.LPCWSTR]
-            GetFileAttributesW.restype = wintypes.DWORD
-
-            FILE_ATTRIBUTE_REPARSE_POINT = 0x400
-            attrs = GetFileAttributesW(str(path))
-            if attrs != 0xFFFFFFFF and (attrs & FILE_ATTRIBUTE_REPARSE_POINT):
-                return True
-        except Exception:
-            # Si falla la API de Windows, asumir seguro (no bloquear por false positive)
-            pass
-
-    return False
 
 
 def _audit_log(action: str, paths: list[Path], result: str, detail: str = "") -> None:

@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from blip_eraser.daemon.privileged_daemon import (
     ALLOWED_SYSTEM_PREFIXES,
-    _validate_path_str,
-    _reject_symlinks_atomic,
-    _validate_path_resolved,
+    validate_path_str as _validate_path_str,
+    reject_symlinks_atomic as _reject_symlinks_atomic,
+    validate_path_resolved as _validate_path_resolved,
     _validate_clean_paths,
     _hash_path,
     _verify_package_signatures,

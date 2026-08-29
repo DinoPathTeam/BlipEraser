@@ -68,14 +68,54 @@ _CACHE_VERIFICATION_DONE = False  # Para verificación async de firmas
 
 # ─── Auditoría ──────────────────────────────────────────────────────────
 
-def _audit_log(action: str, detail: str = "") -> None:
-    """Registra auditoría en journal (systemd) con campos estructurados."""
+# Intentar usar systemd journal nativo para logging estructurado
+try:
+    import systemd.journal
+    _HAVE_JOURNAL = True
+except ImportError:
+    _HAVE_JOURNAL = False
+
+
+def _audit_log(action: str, detail: str = "", **fields) -> None:
+    """Registra auditoría en journal (systemd) con campos estructurados.
+    
+    Si systemd.journal no está disponible, cae a print con formato clave=valor.
+    """
     # Sanitizar detail: reemplazar newlines y limitar longitud
     safe_detail = detail.replace("\n", " ").replace("\r", " ")[:500] if detail else ""
-    msg = f"AUDIT action={action}"
+    
+    # Construir campos base
+    log_fields = {
+        "ACTION": action,
+        "DETAIL": safe_detail,
+    }
+    # Añadir campos extra
+    for k, v in fields.items():
+        # Sanitizar clave: solo alfanumérico y underscore, mayúsculas
+        safe_key = "".join(c if c.isalnum() or c == "_" else "_" for c in str(k)).upper()
+        safe_val = str(v).replace("\n", " ").replace("\r", " ")[:1000]
+        log_fields[safe_key] = safe_val
+    
+    if _HAVE_JOURNAL:
+        try:
+            # Enviar a systemd journal con campos estructurados
+            systemd.journal.send(
+                f"AUDIT action={action}",
+                PRIORITY=6,  # INFO
+                **log_fields
+            )
+            return
+        except Exception:
+            pass  # Caer a fallback
+    
+    # Fallback: formato clave=valor para parsing fácil
+    parts = [f"AUDIT action={action}"]
     if safe_detail:
-        msg += f" {safe_detail}"
-    print(msg, flush=True)
+        parts.append(f"detail={safe_detail}")
+    for k, v in log_fields.items():
+        if k not in ("ACTION", "DETAIL"):
+            parts.append(f"{k.lower()}={v}")
+    print(" ".join(parts), flush=True)
 
 
 def _hash_path(path: str) -> str:
@@ -86,37 +126,15 @@ def _hash_path(path: str) -> str:
 
 # ─── Validaciones ──────────────────────────────────────────────────────
 
-def _validate_path_str(path: str) -> bool:
-    """Valida que una ruta string está dentro de los prefijos permitidos (sin resolve)."""
-    path_str = str(path).replace("\\", "/")
-    return any(path_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
-
-
-def _reject_symlinks_atomic(path: Path) -> bool:
-    """Verifica symlinks sin seguir resolve - usa lstat en cada componente."""
-    try:
-        # Verificar el path mismo
-        if path.is_symlink():
-            return True
-        # Verificar cada padre
-        for parent in path.parents:
-            if parent == Path("/"):
-                break
-            if parent.is_symlink():
-                return True
-    except OSError:
-        return True  # Error al acceder = sospechoso
-    return False
-
-
-def _validate_path_resolved(path: Path) -> bool:
-    """Valida path resuelto contra allowlist (usa resolve real)."""
-    try:
-        resolved = path.resolve(strict=False)
-        resolved_str = str(resolved).replace("\\", "/")
-        return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
-    except OSError:
-        return False
+from blip_eraser.utils.validation import (
+    validate_path_str,
+    validate_path_str as _validate_path_str,
+    reject_symlinks_atomic,
+    reject_symlinks_atomic as _reject_symlinks_atomic,
+    validate_path_resolved,
+    validate_path_resolved as _validate_path_resolved,
+    ALLOWED_SYSTEM_PREFIXES,
+)
 
 
 # ─── Operación atómica rm -rf usando fd ────────────────────────────────
@@ -204,6 +222,15 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str) -> None:
                         try:
                             subdir_fd = os.openat(dir_fd, entry.name, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
                         except OSError:
+                            continue
+                        # Validar que el fd abierto es efectivamente un directorio
+                        try:
+                            st = os.fstat(subdir_fd)
+                            if not stat.S_ISDIR(st.st_mode):
+                                os.close(subdir_fd)
+                                continue
+                        except OSError:
+                            os.close(subdir_fd)
                             continue
                         try:
                             _rm_rf_dir_atomic(subdir_fd, entry.name)
@@ -406,7 +433,26 @@ def clean_system_paths(paths: list[str]) -> str:
 
 # ─── Implementación D-Bus ──────────────────────────────────────────────
 
-INTERFACE_XML = """
+def _load_interface_xml() -> str:
+    """Carga la definición de interfaz D-Bus desde el archivo de packaging.
+    
+    Evita duplicación entre daemon y packaging.
+    """
+    # Buscar el archivo XML en ubicaciones conocidas
+    import os
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent  # repo root
+    xml_paths = [
+        base_dir / "packaging" / "dbus" / "com.dinopath.BlipEraser.Privileged.xml",
+        Path("/usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml"),
+    ]
+    for xml_path in xml_paths:
+        if xml_path.exists():
+            try:
+                return xml_path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+    # Fallback: XML embebido (debe coincidir con packaging/dbus/...)
+    return """
 <node name="/com/dinopath/BlipEraser/Privileged">
   <interface name="com.dinopath.BlipEraser.Privileged">
     <method name="RemovePackages">
@@ -423,6 +469,9 @@ INTERFACE_XML = """
   </interface>
 </node>
 """
+
+
+INTERFACE_XML = _load_interface_xml()
 
 
 class PrivilegedService:
@@ -508,26 +557,44 @@ class PrivilegedService:
                     f"Método desconocido: {method_name}"
                 )
         except ValueError as e:
+            # Error de validación: path no permitido, paquete no instalado, etc.
             invocation.return_dbus_error(
-                "com.dinopath.BlipEraser.Privileged.Error.ValidationFailed",
+                "org.freedesktop.DBus.Error.InvalidArgs",
                 str(e)
             )
         except subprocess.CalledProcessError as e:
             _audit_log("operation_failed",
                 f"method={method_name} returncode={e.returncode} stderr={e.stderr.strip()[:200]}")
-            invocation.return_dbus_error(
-                "com.dinopath.BlipEraser.Privileged.Error.ExecutionFailed",
-                f"Comando falló (código {e.returncode}): {e.stderr.strip()[:200]}"
-            )
+            # Mapear códigos de retorno comunes a errores D-Bus estándar
+            if e.returncode == 126:  # pkexec auth cancelled
+                invocation.return_dbus_error(
+                    "org.freedesktop.DBus.Error.AuthFailed",
+                    "Autenticación cancelada o fallida"
+                )
+            elif e.returncode == 127:  # command not found
+                invocation.return_dbus_error(
+                    "org.freedesktop.DBus.Error.FileNotFound",
+                    f"Comando no encontrado: {e.stderr.strip()[:200]}"
+                )
+            else:
+                invocation.return_dbus_error(
+                    "org.freedesktop.DBus.Error.Failed",
+                    f"Comando falló (código {e.returncode}): {e.stderr.strip()[:200]}"
+                )
         except FileNotFoundError as e:
             invocation.return_dbus_error(
-                "com.dinopath.BlipEraser.Privileged.Error.CommandNotFound",
+                "org.freedesktop.DBus.Error.FileNotFound",
                 f"Comando no encontrado: {e.filename}"
+            )
+        except PermissionError as e:
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.AccessDenied",
+                f"Permiso denegado: {e}"
             )
         except Exception as e:  # noqa: BLE001
             _audit_log("operation_error", f"method={method_name} error={type(e).__name__}: {e}")
             invocation.return_dbus_error(
-                "com.dinopath.BlipEraser.Privileged.Error.Internal",
+                "org.freedesktop.DBus.Error.Failed",
                 f"Error interno: {e}"
             )
 
