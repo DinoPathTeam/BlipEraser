@@ -23,6 +23,9 @@ import sys
 from blip_eraser.utils.dependency_check import (
     PYQT6_MISSING_MESSAGE,
     check_pyqt6_available,
+    check_daemon_dependencies,
+    install_daemon_dependency,
+    DAEMON_DEPENDENCIES,
 )
 from blip_eraser.utils.i18n import (
     load_saved_language,
@@ -84,6 +87,16 @@ def main() -> int:
     if not check_pyqt6_available():
         print(PYQT6_MISSING_MESSAGE, file=sys.stderr)
         return EXIT_PYQT6_MISSING
+
+    # Verificar e instalar dependencias del daemon privilegiado (Fase 2)
+    # antes de crear la aplicación Qt (necesita QMessageBox)
+    restart_required, installed = _check_and_install_daemon_deps()
+    if installed:
+        from PyQt6.QtWidgets import QMessageBox
+        msg = "Se instalaron las siguientes dependencias:\n" + "\n".join(f"• {d}" for d in installed)
+        if restart_required:
+            msg += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
+        QMessageBox.information(None, "Dependencias instaladas", msg)
 
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QTimer

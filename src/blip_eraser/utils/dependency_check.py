@@ -116,6 +116,100 @@ def find_missing_dependencies(
     return [dep for dep in dependencies if not check_binary_available(dep.binary)]
 
 
+# ----------------------------------------------------------------------
+# Nivel 3 — Dependencias del Daemon Privilegiado (Fase 2)
+# ----------------------------------------------------------------------
+@dataclass(frozen=True)
+class DaemonDependency:
+    """Metadatos de una dependencia del daemon privilegiado."""
+    name: str                    # Nombre legible
+    check_cmd: str               # Comando para verificar si está instalado/activo
+    install_cmd: str             # Comando para instalar (con pkexec)
+    check_active_cmd: str        # Comando para verificar si está activo
+    requires_restart: bool = False  # Si requiere reinicio del sistema
+
+# Dependencias del daemon privilegiado (Fase 2)
+DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
+    DaemonDependency(
+        name="Python GObject (PyGObject)",
+        check_cmd="python3 -c 'import gi; gi.require_version(\"GLib\", \"2.0\"); from gi.repository import GLib'",
+        install_cmd="pkexec pacman -S --noconfirm python-gobject",
+        check_active_cmd="python3 -c 'import gi; gi.require_version(\"GLib\", \"2.0\"); from gi.repository import GLib'",
+    ),
+    DaemonDependency(
+        name="GStreamer libav (gst-libav)",
+        check_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
+        install_cmd="pkexec pacman -S --noconfirm gst-libav",
+        check_active_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
+    ),
+    DaemonDependency(
+        name="AppArmor",
+        check_cmd="systemctl is-active apparmor 2>/dev/null",
+        install_cmd="pkexec pacman -S --noconfirm apparmor",
+        check_active_cmd="systemctl is-active apparmor 2>/dev/null",
+        requires_restart=True,
+    ),
+    DaemonDependency(
+        name="D-Bus System Bus (dbus.service)",
+        check_cmd="systemctl is-active dbus 2>/dev/null",
+        install_cmd="pkexec pacman -S --noconfirm dbus",
+        check_active_cmd="systemctl is-active dbus 2>/dev/null",
+    ),
+)
+
+
+def check_daemon_dependencies() -> list[DaemonDependency]:
+    """Verifica qué dependencias del daemon faltan o están inactivas.
+    
+    Returns:
+        Lista de dependencias que faltan o están inactivas (vacío si todo OK).
+    """
+    import subprocess
+    missing = []
+    for dep in DAEMON_DEPENDENCIES:
+        try:
+            result = subprocess.run(
+                dep.check_cmd, shell=True, capture_output=True, timeout=5
+            )
+            if result.returncode != 0:
+                # No instalado o no activo
+                missing.append(dep)
+                continue
+            
+            # Verificar si está activo (para los que tienen check_active_cmd)
+            if dep.check_active_cmd:
+                active_result = subprocess.run(
+                    dep.check_active_cmd, shell=True, capture_output=True, timeout=5
+                )
+                if active_result.returncode != 0:
+                    missing.append(dep)
+                    continue
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+            missing.append(dep)
+    return missing
+
+
+def install_daemon_dependency(dep) -> tuple[bool, str]:
+    """Instala una dependencia del daemon usando pkexec.
+    
+    Returns:
+        (success, message)
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            dep.install_cmd, shell=True, capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            return True, f"{dep.name} instalado correctamente"
+        else:
+            return False, f"Error instalando {dep.name}: {dep.stderr.strip()}"
+    except subprocess.TimeoutExpired:
+        return False, f"Timeout instalando {dep.name}"
+    except Exception as e:
+        return False, f"Error instalando {dep.name}: {e}"
+
+
 def missing_binary_banner(binaries: Sequence[str]) -> str:
     """Texto corto (para una etiqueta de GUI) con los binarios ausentes y su hint.
 
