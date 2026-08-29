@@ -11,6 +11,19 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🎬 Splash Screen con video de intro + migración a QVideoSink
+
+- **Qué**: sustituye la animación de logo del splash por un video real (6.2s, 1080p, H.264) con mensajes de progreso superpuestos.
+- **Problema resuelto**: el video no se decodificaba en CachyOS por falta de codecs H.264 → `gst-plugins-good` no los incluye (licencias). La app caía en fallback silencioso a logo animado (con borde visible = "barras negras" reportadas).
+- **Fix**:
+  1. `pyproject.toml`: documenta `gst-libav` como dependencia **requerida** (`sudo pacman -S gst-libav`).
+  2. `splash_screen.py`: migración de `QVideoWidget` (superficie nativa que tapa widgets hermanos) a `QVideoSink` + `_VideoWidget` con `paintEvent` manual. Esto permite:
+     - `KeepAspectRatioByExpanding` sin letterboxing (recorta 16:9 al contenedor).
+     - z-order normal: mensaje de progreso como hijo del mismo padre, `raise_()` en cada frame.
+  3. `_on_media_error`: detecta errores de "shared library"/"plugin"/"decoder" y loggea hint automático: `SPLASH_CODEC_HINT: sudo pacman -S gst-libav`.
+- **Archivos**: `src/blip_eraser/widgets/splash_screen.py`, `pyproject.toml`, `src/blip_eraser/assets/splash-intro.mp4` (nuevo, sin marca de agua).
+- **Tests**: `tests/test_splash_screen.py` extendido (`TestVideoWidget`, `test_message_visible_over_video_widget`).
+
 ### 🛡️ Firmwall/Firewall de seguridad (implementado - Fase 1 completada ~100%)
 
 - **Objetivo**: restringir operaciones privilegiadas (`pkexec pacman -Rns`, `pkexec rm -rf`) a allowlist estricta y validar paths antes de ejecutar.

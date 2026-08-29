@@ -44,7 +44,8 @@ gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz 
 **Muy importante:** PyQt6 y PyGObject se instalan con el gestor del sistema, **no por pip**.
 
 ```bash
-sudo pacman -S python-pyqt6 python-gobject python-pytest
+# Incluye gst-libav para el video de intro del splash
+sudo pacman -S python-pyqt6 python-gobject gst-libav
 ```
 
 Después clona el repo e instala el proyecto en modo editable:
