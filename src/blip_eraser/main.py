@@ -145,8 +145,18 @@ def main() -> int:
         print(PYQT6_MISSING_MESSAGE, file=sys.stderr)
         return EXIT_PYQT6_MISSING
 
+    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QTimer
+
+    app = QApplication(sys.argv)
+    # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a
+    # QIcon() vacío si el asset no existe (ver widgets/logo.py).
+    from blip_eraser.widgets.logo import app_icon
+
+    app.setWindowIcon(app_icon())
+
     # Verificar e instalar dependencias del daemon privilegiado (Fase 2)
-    # antes de crear la aplicación Qt (necesita QMessageBox)
+    # ahora que QApplication existe (necesario para QMessageBox)
     restart_required, installed = _check_and_install_daemon_deps()
     if installed:
         from PyQt6.QtWidgets import QMessageBox
@@ -154,9 +164,6 @@ def main() -> int:
         if restart_required:
             msg += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
         QMessageBox.information(None, "Dependencias instaladas", msg)
-
-    from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtCore import QTimer
 
     app = QApplication(sys.argv)
     # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a
