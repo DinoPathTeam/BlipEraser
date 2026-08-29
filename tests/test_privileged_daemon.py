@@ -235,20 +235,20 @@ class TestSignatureVerification:
         assert failed == []
 
     @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
-    @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
+    @patch("blip_eraser.daemon.privileged_daemon.Path.rglob")
     @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_verify_missing_signature_fails(self, mock_run, mock_glob, mock_exists):
+    def test_verify_missing_signature_fails(self, mock_run, mock_rglob, mock_exists):
         pkg_file = MagicMock()
         pkg_file.name = "pkg-1.0-1-x86_64.pkg.tar.zst"
         pkg_file.suffix = ".pkg.tar.zst"
         sig_file = MagicMock()
         sig_file.exists.return_value = False
         pkg_file.with_suffix.return_value = sig_file
-        mock_glob.return_value = [pkg_file]
+        mock_rglob.return_value = [pkg_file]
         
         valid, failed = _verify_package_signatures()
         assert valid is False
-        assert len(failed) == 4  # 4 patterns globbed
+        assert len(failed) == 1
         assert "pkg-1.0-1-x86_64.pkg.tar.zst" in failed[0]
 
 

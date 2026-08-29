@@ -1,0 +1,79 @@
+# AppArmor profile for BlipEraser Privileged Daemon
+# Install to: /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
+# Enable with: sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
+
+#include <tunables/global>
+
+/usr/lib/blip-eraser/blip-eraser-privileged {
+  #include <abstractions/base>
+  #include <abstractions/dbus>
+
+  # Basic execution
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability setuid,
+  capability setgid,
+
+  # D-Bus communication
+  dbus (send, receive) bus=system
+    peer=(label=unconfined),
+
+  # Filesystem access - read-only
+  /usr/bin/pacman      r,
+  /usr/bin/pacman-key  r,
+  /usr/bin/rm          r,
+  /usr/lib/blip-eraser/blip-eraser-privileged r,
+
+  # Read-only system directories
+  /etc/group r,
+  /etc/passwd r,
+  /etc/machine-id r,
+
+  # Read-write paths for privileged operations
+  /var/cache/pacman/pkg/** rw,
+  /var/log/** rw,
+  /var/lib/pacman/** rw,
+
+  # D-Bus socket
+  /run/dbus/system_bus_socket rw,
+
+  # Network access (if needed for pacman mirror sorting via reflector)
+  # network inet,
+  # network inet6,
+
+  # Deny by default
+  deny /** w,
+
+  # Audit
+  audit deny /** w,
+}
+
+# Profile for the BlipEraser UI (unprivileged)
+/usr/bin/blip-eraser {
+  #include <abstractions/base>
+  #include <abstractions/dbus>
+
+  # D-Bus communication with privileged daemon
+  dbus (send, receive) bus=system
+    peer=(label="/usr/lib/blip-eraser/blip-eraser-privileged"),
+
+  # Read-only access to system info
+  /proc/cpuinfo r,
+  /proc/meminfo r,
+  /proc/stat r,
+  /proc/version r,
+  /etc/os-release r,
+  /etc/machine-id r,
+
+  # User home directory access
+  owner @{HOME}/ r,
+  owner @{HOME}/** r,
+
+  # Config and cache
+  owner @{HOME}/.config/blip-eraser/** rw,
+  owner @{HOME}/.cache/blip-eraser/** rw,
+
+  # No privileged operations
+  deny /** wx,
+}

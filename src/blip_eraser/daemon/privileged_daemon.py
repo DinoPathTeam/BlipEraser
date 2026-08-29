@@ -81,6 +81,12 @@ def _audit_log(action: str, detail: str = "", **fields) -> None:
     
     Si systemd.journal no está disponible, cae a print con formato clave=valor.
     """
+    def _escape_val(v: str) -> str:
+        """Escapa valor para formato clave=valor: escapa =, espacios, y newlines."""
+        v = str(v).replace("\n", " ").replace("\r", " ")[:1000]
+        # Escapar = y espacios para parsing seguro
+        return v.replace("=", r"\=").replace(" ", r"\ ")
+    
     # Sanitizar detail: reemplazar newlines y limitar longitud
     safe_detail = detail.replace("\n", " ").replace("\r", " ")[:500] if detail else ""
     
@@ -108,13 +114,13 @@ def _audit_log(action: str, detail: str = "", **fields) -> None:
         except Exception:
             pass  # Caer a fallback
     
-    # Fallback: formato clave=valor para parsing fácil
+    # Fallback: formato clave=valor con escaping para parsing seguro
     parts = [f"AUDIT action={action}"]
     if safe_detail:
-        parts.append(f"detail={safe_detail}")
+        parts.append(f"detail={_escape_val(safe_detail)}")
     for k, v in log_fields.items():
         if k not in ("ACTION", "DETAIL"):
-            parts.append(f"{k.lower()}={v}")
+            parts.append(f"{k.lower()}={_escape_val(v)}")
     print(" ".join(parts), flush=True)
 
 
@@ -327,11 +333,8 @@ def _verify_package_signatures() -> tuple[bool, list[str]]:
     if not cache_dir.exists():
         return True, []
     try:
-        # Buscar todos los formatos de paquete válidos
-        pkg_patterns = ["*.pkg.tar.zst", "*.pkg.tar.xz", "*.pkg.tar.lz4", "*.pkg.tar.gz"]
-        pkg_files = []
-        for pattern in pkg_patterns:
-            pkg_files.extend(cache_dir.glob(pattern))
+        # Buscar todos los formatos de paquete válidos con un solo rglob
+        pkg_files = list(cache_dir.rglob("*.pkg.tar.*"))
         
         if not pkg_files:
             return True, []
@@ -479,9 +482,15 @@ def _load_interface_xml() -> str:
     """Carga la definición de interfaz D-Bus desde el archivo de packaging.
     
     Evita duplicación entre daemon y packaging.
+    Requiere que el archivo XML esté instalado en el sistema (packaging).
+    
+    Returns:
+        str: XML de la interfaz D-Bus
+    
+    Raises:
+        RuntimeError: Si no se encuentra el archivo XML en las ubicaciones esperadas
     """
     # Buscar el archivo XML en ubicaciones conocidas
-    import os
     base_dir = Path(__file__).resolve().parent.parent.parent.parent  # repo root
     xml_paths = [
         base_dir / "packaging" / "dbus" / "com.dinopath.BlipEraser.Privileged.xml",
@@ -493,24 +502,12 @@ def _load_interface_xml() -> str:
                 return xml_path.read_text(encoding="utf-8")
             except OSError:
                 continue
-    # Fallback: XML embebido (debe coincidir con packaging/dbus/...)
-    return """
-<node name="/com/dinopath/BlipEraser/Privileged">
-  <interface name="com.dinopath.BlipEraser.Privileged">
-    <method name="RemovePackages">
-      <arg name="packages" type="as" direction="in"/>
-      <arg name="result" type="s" direction="out"/>
-    </method>
-    <method name="CleanSystemPaths">
-      <arg name="paths" type="as" direction="in"/>
-      <arg name="result" type="s" direction="out"/>
-    </method>
-    <method name="Ping">
-      <arg name="result" type="b" direction="out"/>
-    </method>
-  </interface>
-</node>
-"""
+    # Sin fallback hardcoded: el XML debe estar instalado via packaging
+    raise RuntimeError(
+        "D-Bus interface XML not found. "
+        "Install packaging files: packaging/dbus/com.dinopath.BlipEraser.Privileged.xml "
+        "to /usr/share/dbus-1/interfaces/ or run from repo root."
+    )
 
 
 INTERFACE_XML = _load_interface_xml()
