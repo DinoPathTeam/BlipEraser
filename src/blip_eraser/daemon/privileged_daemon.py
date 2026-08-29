@@ -842,13 +842,24 @@ class PrivilegedService:
 
 def main() -> int:
     """Punto de entrada del daemon."""
-    # Verificar que somos root
-    if os.geteuid() != 0:
-        print("ERROR: El daemon debe ejecutarse como root", file=sys.stderr)
+    import traceback
+    
+    try:
+        # Verificar que somos root
+        if os.geteuid() != 0:
+            print("ERROR: El daemon debe ejecutarse como root", file=sys.stderr)
+            return 1
+        
+        # Log startup info
+        _audit_log("daemon_starting", f"pid={os.getpid()} uid={os.geteuid()} python={sys.version}")
+        
+        service = PrivilegedService()
+        return service.run()
+    except Exception as e:
+        # Log any unhandled exceptions
+        _audit_log("daemon_crashed", f"error={type(e).__name__}: {e}")
+        traceback.print_exc(file=sys.stderr)
         return 1
-
-    service = PrivilegedService()
-    return service.run()
 
 
 if __name__ == "__main__":

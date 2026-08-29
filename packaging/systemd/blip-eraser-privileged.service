@@ -11,6 +11,12 @@ ExecStart=/usr/lib/blip-eraser/blip-eraser-privileged
 User=root
 Group=root
 
+# Working directory
+WorkingDirectory=/usr/lib/blip-eraser
+
+# Environment
+Environment=PYTHONPATH=/usr/lib/python3.11/site-packages:/usr/lib/python3.12/site-packages:/usr/lib/python3.13/site-packages
+
 # Hardening estricto
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -26,7 +32,10 @@ RestrictNamespaces=yes
 RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
-SystemCallFilter=@system-service
+
+# System call filter - permitir operaciones necesarias
+# @system-service + llamadas necesarias para subprocess y D-Bus
+SystemCallFilter=@system-service @clock @cpu-emulation @debug @module @obsolete @raw-io @system-service
 SystemCallErrorNumber=EPERM
 
 # Solo permitimos escritura en las rutas necesarias para las operaciones
