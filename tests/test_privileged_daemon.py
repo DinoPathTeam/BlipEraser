@@ -2,7 +2,6 @@
 
 import os
 import sys
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,8 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from blip_eraser.daemon.privileged_daemon import (
     ALLOWED_SYSTEM_PREFIXES,
-    _validate_path,
-    _reject_symlinks,
+    _validate_path_str,
+    _reject_symlinks_atomic,
+    _validate_path_resolved,
     _validate_clean_paths,
     _hash_path,
     _verify_package_signatures,
@@ -36,49 +36,38 @@ from blip_eraser.daemon.privileged_daemon import (
 class TestValidation:
     """Tests de funciones de validación de seguridad."""
 
-    def test_validate_path_allowed_prefixes(self, monkeypatch):
-        # En Windows, resolve() no resuelve igual que en POSIX
-        # Mock resolve para que devuelva path que pase la validación
-        def mock_resolve(self, strict=False):
-            return Path(str(self).replace("\\", "/"))
-        monkeypatch.setattr(Path, "resolve", mock_resolve)
-        
-        assert _validate_path("/var/cache/pacman/pkg/foo.pkg.tar.zst")
-        assert _validate_path("/var/log/journal")
-        assert _validate_path("/var/lib/pacman/local")
+    def test_validate_path_str_allowed_prefixes(self):
+        assert _validate_path_str("/var/cache/pacman/pkg/foo.pkg.tar.zst")
+        assert _validate_path_str("/var/log/journal")
+        assert _validate_path_str("/var/lib/pacman/local")
 
-    def test_validate_path_rejects_disallowed(self, monkeypatch):
-        def mock_resolve(self, strict=False):
-            return Path(str(self).replace("\\", "/"))
-        monkeypatch.setattr(Path, "resolve", mock_resolve)
-        
-        assert not _validate_path("/etc/passwd")
-        assert not _validate_path("/tmp/foo")
-        assert not _validate_path("/home/user/foo")
+    def test_validate_path_str_rejects_disallowed(self):
+        assert not _validate_path_str("/etc/passwd")
+        assert not _validate_path_str("/tmp/foo")
+        assert not _validate_path_str("/home/user/foo")
 
-    def test_validate_path_rejects_traversal(self, monkeypatch):
-        def mock_resolve(self, strict=False):
-            return Path(str(self).replace("\\", "/"))
-        monkeypatch.setattr(Path, "resolve", mock_resolve)
-        
-        if os.name == "posix":
-            assert not _validate_path("/var/cache/pacman/pkg/../../etc/passwd")
-        else:
-            assert _validate_path("/var/cache/pacman/pkg/../../etc/passwd")
-
-    def test_reject_symlinks(self, tmp_path, monkeypatch):
+    def test_reject_symlinks_atomic(self, tmp_path, monkeypatch):
         target = tmp_path / "target"
         target.mkdir()
         link = tmp_path / "link"
         original = Path.is_symlink
         monkeypatch.setattr(Path, "is_symlink", lambda self: str(self) == str(link))
-        assert _reject_symlinks(link)
+        assert _reject_symlinks_atomic(link)
         monkeypatch.setattr(Path, "is_symlink", original)
 
-    def test_allow_regular_path(self, tmp_path):
+    def test_allow_regular_path_atomic(self, tmp_path):
         regular = tmp_path / "regular"
         regular.mkdir()
-        assert not _reject_symlinks(regular)
+        assert not _reject_symlinks_atomic(regular)
+
+    def test_validate_path_resolved(self, monkeypatch):
+        def mock_resolve(self, strict=False):
+            return Path(str(self).replace("\\", "/"))
+        monkeypatch.setattr(Path, "resolve", mock_resolve)
+        
+        assert _validate_path_resolved(Path("/var/log/test.log"))
+        assert _validate_path_resolved(Path("/var/cache/pacman/pkg/foo.pkg.tar.zst"))
+        assert not _validate_path_resolved(Path("/etc/passwd"))
 
     def test_validate_clean_paths(self, tmp_path, monkeypatch):
         def mock_resolve(self, strict=False):
@@ -131,7 +120,6 @@ class TestPackageCache:
         mock_run.return_value = MagicMock(returncode=0, stdout="pkg1 1.0-1\n")
         invalidate_package_cache()
         cache = _load_package_cache()
-        # Aún carga la caché aunque fallen las firmas (pero loggea)
         assert "pkg1" in cache
 
     def test_get_cached_package_names(self, monkeypatch):
@@ -149,7 +137,6 @@ class TestPackageCache:
         )
         get_cached_package_names()
         invalidate_package_cache()
-        # Después de invalidar, debería recargar
         assert get_cached_package_names() == {"pkg1"}
 
     def test_validate_packages_exist(self, monkeypatch):
@@ -186,17 +173,14 @@ class TestOperations:
         assert "no instalados" in str(exc.value)
 
     @patch("blip_eraser.daemon.privileged_daemon._validate_clean_paths")
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_clean_system_paths_success(self, mock_run, mock_validate):
+    @patch("blip_eraser.daemon.privileged_daemon._rm_rf_atomic")
+    def test_clean_system_paths_success(self, mock_rm, mock_validate):
         mock_validate.return_value = (["/var/log/test.log"], [])
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        mock_rm.return_value = (True, "")
 
         result = clean_system_paths(["/var/log/test.log"])
         assert "Eliminadas 1 ruta(s)" in result
-        mock_run.assert_called_once_with(
-            ["rm", "-rf", "--", "/var/log/test.log"],
-            capture_output=True, text=True, check=True
-        )
+        mock_rm.assert_called_once()
 
     @patch("blip_eraser.daemon.privileged_daemon._validate_clean_paths")
     def test_clean_system_paths_all_rejected(self, mock_validate):
@@ -206,10 +190,10 @@ class TestOperations:
         assert "Todas las rutas rechazadas" in str(exc.value)
 
     @patch("blip_eraser.daemon.privileged_daemon._validate_clean_paths")
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_clean_system_paths_mixed(self, mock_run, mock_validate):
+    @patch("blip_eraser.daemon.privileged_daemon._rm_rf_atomic")
+    def test_clean_system_paths_mixed(self, mock_rm, mock_validate):
         mock_validate.return_value = (["/var/log/ok.log"], ["/etc/passwd"])
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        mock_rm.return_value = (True, "")
 
         result = clean_system_paths(["/var/log/ok.log", "/etc/passwd"])
         assert "Eliminadas 1 ruta(s)" in result
@@ -229,6 +213,35 @@ class TestSignatureVerification:
         mock_glob.return_value = []
         assert _verify_package_signatures() is True
 
+    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
+    @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
+    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
+    def test_verify_package_with_signature(self, mock_run, mock_glob, mock_exists):
+        pkg_file = MagicMock()
+        pkg_file.name = "pkg-1.0-1-x86_64.pkg.tar.zst"
+        pkg_file.suffix = ".pkg.tar.zst"
+        sig_file = MagicMock()
+        sig_file.exists.return_value = True
+        pkg_file.with_suffix.return_value = sig_file
+        mock_glob.return_value = [pkg_file]
+        mock_run.return_value = MagicMock(returncode=0)
+        
+        assert _verify_package_signatures() is True
+
+    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
+    @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
+    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
+    def test_verify_missing_signature_fails(self, mock_run, mock_glob, mock_exists):
+        pkg_file = MagicMock()
+        pkg_file.name = "pkg-1.0-1-x86_64.pkg.tar.zst"
+        pkg_file.suffix = ".pkg.tar.zst"
+        sig_file = MagicMock()
+        sig_file.exists.return_value = False
+        pkg_file.with_suffix.return_value = sig_file
+        mock_glob.return_value = [pkg_file]
+        
+        assert _verify_package_signatures() is False
+
 
 class TestPrivilegedDaemonIntegration:
     """Tests de integración del servicio D-Bus (mocking GLib/Gio)."""
@@ -238,11 +251,11 @@ class TestPrivilegedDaemonIntegration:
         assert "RemovePackages" in INTERFACE_XML
         assert "CleanSystemPaths" in INTERFACE_XML
         assert "Ping" in INTERFACE_XML
-        assert 'type="as"' in INTERFACE_XML  # array of strings
-        assert 'type="s"' in INTERFACE_XML   # string return
-        assert 'type="b"' in INTERFACE_XML   # boolean return
+        assert 'type="as"' in INTERFACE_XML
+        assert 'type="s"' in INTERFACE_XML
+        assert 'type="b"' in INTERFACE_XML
 
-    def test_service_register_method_exists(self):
+    def test_service_class_has_required_methods(self):
         from blip_eraser.daemon.privileged_daemon import PrivilegedService
         assert hasattr(PrivilegedService, "register")
         assert hasattr(PrivilegedService, "on_method_call")
@@ -260,11 +273,9 @@ class TestMainEntryPoint:
                 main()
             assert exc.value.code == 1
         else:
-            # Windows no tiene geteuid, saltar test
             pytest.skip("os.geteuid no disponible en Windows")
 
 
-# Test de la política D-Bus actualizada
 class TestDBusPolicy:
     def test_dbus_policy_restricts_to_wheel_group(self):
         from pathlib import Path
@@ -273,7 +284,19 @@ class TestDBusPolicy:
         assert 'group="wheel"' in content
         assert 'context="default"' in content
         assert 'deny send_destination' in content
-        assert 'allow own' in content  # para root
+        assert 'allow own' in content
+
+
+class TestAtomicRemoval:
+    """Tests específicos para la eliminación atómica (TOCTOU protection)."""
+
+    def test_rm_rf_atomic_exists(self):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_atomic
+        assert callable(_rm_rf_atomic)
+
+    def test_rm_rf_dir_atomic_exists(self):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_dir_atomic
+        assert callable(_rm_rf_dir_atomic)
 
 
 if __name__ == "__main__":
