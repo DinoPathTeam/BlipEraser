@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""
+Instalador de dependencias para BlipEraser Phase 2 Daemon.
+
+Valida si las dependencias están instaladas y activadas.
+Si no lo están, pide permiso para instalarlas y notifica si se requiere reinicio.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import shutil
+from pathlib import Path
+from typing import NamedTuple
+
+# Colores para terminal
+class Colors:
+    RED = '\033[0;31m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[1;33m'
+    BLUE = '\033[0;34m'
+    CYAN = '\033[0;36m'
+    BOLD = '\033[1m'
+    RESET = '\033[0m'
+
+def print_info(msg: str) -> None:
+    print(f"{Colors.CYAN}[INFO]{Colors.RESET} {msg}")
+
+def print_ok(msg: str) -> None:
+    print(f"{Colors.GREEN}[OK]{Colors.RESET} {msg}")
+
+def print_warn(msg: str) -> None:
+    print(f"{Colors.YELLOW}[WARN]{Colors.RESET} {msg}")
+
+def print_error(msg: str) -> None:
+    print(f"{Colors.RED}[ERROR]{Colors.RESET} {msg}")
+
+def print_bold(msg: str) -> None:
+    print(f"{Colors.BOLD}{msg}{Colors.RESET}")
+
+class DependencyStatus(NamedTuple):
+    name: str
+    installed: bool
+    active: bool
+    package_name: str
+    install_cmd: str
+    check_cmd: str
+    requires_restart: bool = False
+
+DEPENDENCIES = [
+    DependencyStatus(
+        name="Python GObject (PyGObject)",
+        installed=False,
+        active=False,
+        package_name="python-gobject",
+        install_cmd="sudo pacman -S python-gobject",
+        check_cmd="python3 -c 'import gi; gi.require_version(\"GLib\", \"2.0\"); from gi.repository import GLib'",
+        requires_restart=False,
+    ),
+    DependencyStatus(
+        name="GStreamer libav (gst-libav)",
+        installed=False,
+        active=False,
+        package_name="gst-libav",
+        install_cmd="sudo pacman -S gst-libav",
+        check_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
+        requires_restart=False,
+    ),
+    DependencyStatus(
+        name="AppArmor",
+        installed=False,
+        active=False,
+        package_name="apparmor",
+        install_cmd="sudo pacman -S apparmor",
+        check_cmd="systemctl is-active apparmor 2>/dev/null",
+        requires_restart=True,
+    ),
+    DependencyStatus(
+        name="Systemd D-Bus Daemon (dbus.service)",
+        installed=False,
+        active=False,
+        package_name="dbus",
+        install_cmd="sudo pacman -S dbus",
+        check_cmd="systemctl is-active dbus 2>/dev/null",
+        requires_restart=False,
+    ),
+]
+
+def run_check(cmd: str) -> tuple[bool, str]:
+    """Ejecuta un comando de verificación y retorna (éxito, salida)."""
+    try:
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, timeout=10
+        )
+        return result.returncode == 0, result.stdout.strip()
+    except subprocess.TimeoutExpired:
+        return False, "Timeout"
+    except Exception as e:
+        return False, str(e)
+
+def check_dependency(dep: DependencyStatus) -> DependencyStatus:
+    """Verifica una dependencia y actualiza su estado."""
+    installed, _ = run_check(dep.check_cmd)
+    active = installed  # Para la mayoría, instalado = activo (excepto apparmor)
+    
+    # Caso especial: AppArmor puede estar instalado pero no activo
+    if dep.name == "AppArmor":
+        active, _ = run_check("systemctl is-active apparmor 2>/dev/null")
+        installed = active or os.path.exists("/etc/apparmor.d")
+    
+    # Para dbus, verificar systemd service
+    if dep.name == "Systemd D-Bus Daemon (dbus.service)":
+        active, _ = run_check("systemctl is-active dbus 2>/dev/null")
+        installed = active
+    
+    return DependencyStatus(
+        name=dep.name,
+        installed=installed,
+        active=active,
+        package_name=dep.package_name,
+        install_cmd=dep.install_cmd,
+        check_cmd=dep.check_cmd,
+        requires_restart=dep.requires_restart,
+    )
+
+def check_all_dependencies() -> list[DependencyStatus]:
+    """Verifica todas las dependencias."""
+    results = []
+    for dep in DEPENDENCIES:
+        status = check_dependency(dep)
+        results.append(status)
+    return results
+
+def print_dependency_table(statuses: list[DependencyStatus]) -> None:
+    """Imprime una tabla con el estado de las dependencias."""
+    print_bold("\n=== Estado de Dependencias Fase 2 ===\n")
+    print(f"{'Dependencia':<35} {'Instalada':<12} {'Activa':<10} {'Reinicio':<8}")
+    print("-" * 70)
+    
+    for dep in statuses:
+        inst = f"{Colors.GREEN}✓{Colors.RESET}" if dep.installed else f"{Colors.RED}✗{Colors.RESET}"
+        act = f"{Colors.GREEN}✓{Colors.RESET}" if dep.active else f"{Colors.RED}✗{Colors.RESET}"
+        restart = f"{Colors.YELLOW}↻{Colors.RESET}" if dep.requires_restart else " "
+        print(f"{dep.name:<35} {inst:<12} {act:<10} {restart:<8}")
+
+def ask_install_missing(statuses: list[DependencyStatus]) -> bool:
+    """Pregunta si instalar las dependencias faltantes."""
+    missing = [d for d in statuses if not d.installed or not d.active]
+    
+    if not missing:
+        print_ok("\nTodas las dependencias están instaladas y activas.")
+        return False
+    
+    print_warn(f"\nFaltan {len(missing)} dependencia(s):")
+    for dep in missing:
+        status = "no instalada" if not dep.installed else "no activa"
+        print(f"  - {dep.name}: {status}")
+        print(f"    Comando: {dep.install_cmd}")
+    
+    print()
+    try:
+        response = input(f"{Colors.CYAN}¿Instalar dependencias faltantes? [s/N]: {Colors.RESET}").strip().lower()
+        return response in ('s', 'si', 'sí', 'y', 'yes')
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
+
+def install_dependencies(deps: list[DependencyStatus]) -> tuple[bool, list[str]]:
+    """Instala las dependencias seleccionadas."""
+    installed_any = False
+    restarted_services = []
+    
+    for dep in deps:
+        if dep.installed and dep.active:
+            continue
+        
+        print_info(f"Instalando {dep.name}...")
+        try:
+            result = subprocess.run(dep.install_cmd, shell=True, check=True)
+            installed_any = True
+            print_ok(f"  {dep.name} instalado correctamente")
+            
+            if dep.requires_restart:
+                # Para apparmor, reiniciar servicio
+                if dep.name == "AppArmor":
+                    print_info("Reiniciando AppArmor...")
+                    subprocess.run("sudo systemctl restart apparmor", shell=True, check=False)
+                    restarted_services.append("apparmor")
+                elif dep.name == "Systemd D-Bus Daemon (dbus.service)":
+                    subprocess.run("sudo systemctl restart dbus", shell=True, check=False)
+                    restarted_services.append("dbus")
+        
+        except subprocess.CalledProcessError as e:
+            print_error(f"  Error instalando {dep.name}: {e}")
+    
+    return installed_any, restarted_services
+
+def check_apparmor_profile() -> bool:
+    """Verifica si el perfil AppArmor de BlipEraser está instalado."""
+    profile_path = "/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
+    return os.path.exists(profile_path)
+
+def install_apparmor_profile() -> bool:
+    """Instala el perfil AppArmor de BlipEraser."""
+    src = Path(__file__).parent.parent / "packaging" / "apparmor" / "usr.lib.blip-eraser.blip-eraser-privileged"
+    dst = Path("/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged")
+    
+    if not src.exists():
+        print_warn("Perfil AppArmor no encontrado en packaging/apparmor/")
+        return False
+    
+    try:
+        subprocess.run(f"sudo cp {src} /etc/apparmor.d/", shell=True, check=True)
+        subprocess.run("sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged", 
+                      shell=True, check=True)
+        print_ok("Perfil AppArmor de BlipEraser instalado y cargado")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_error(f"Error instalando perfil AppArmor: {e}")
+        return False
+
+def check_systemd_service() -> bool:
+    """Verifica si el servicio systemd está instalado y activo."""
+    service_path = "/usr/lib/systemd/system/blip-eraser-privileged.service"
+    if not os.path.exists(service_path):
+        return False
+    active, _ = run_check("systemctl is-active blip-eraser-privileged 2>/dev/null")
+    return active
+
+def install_systemd_service() -> bool:
+    """Instala y activa el servicio systemd."""
+    scripts = [
+        ("mkdir -p /usr/lib/blip-eraser/", "Crear directorio /usr/lib/blip-eraser/"),
+        ("cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/", "Copiar servicio systemd"),
+        ("cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/", "Copiar config D-Bus"),
+        ("cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/", "Copiar XML D-Bus"),
+        ("cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/", "Copiar script wrapper"),
+        ("chmod +x /usr/lib/blip-eraser/blip-eraser-privileged", "Dar permisos de ejecución"),
+        ("systemctl daemon-reload", "Recargar systemd"),
+        ("systemctl enable --now blip-eraser-privileged.service", "Habilitar e iniciar servicio"),
+    ]
+    
+    for cmd, desc in scripts:
+        print_info(f"  {desc}...")
+        try:
+            subprocess.run(f"sudo {cmd}", shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print_error(f"  Error en '{desc}': {e}")
+            return False
+    print_ok("Servicio systemd instalado y activado")
+    return True
+
+def main() -> int:
+    print_bold("\n=== BlipEraser - Verificador de Dependencias Fase 2 ===\n")
+    
+    # Verificar root para operaciones privilegiadas
+    if os.geteuid() != 0:
+        print_warn("Algunas operaciones requieren root. Se usará sudo cuando sea necesario.\n")
+    
+    # Verificar estado actual
+    statuses = check_all_dependencies()
+    print_dependency_table(statuses)
+    
+    # Verificar AppArmor profile
+    print_info("\nVerificando perfil AppArmor de BlipEraser...")
+    if check_apparmor_profile():
+        print_ok("Perfil AppArmor de BlipEraser instalado")
+    else:
+        print_warn("Perfil AppArmor de BlipEraser NO instalado")
+    
+    # Verificar servicio systemd
+    print_info("\nVerificando servicio systemd...")
+    if check_systemd_service():
+        print_ok("Servicio systemd blip-eraser-privileged activo")
+    else:
+        print_warn("Servicio systemd blip-eraser-privileged NO instalado/activo")
+    
+    # Preguntar instalación de dependencias faltantes
+    if not ask_install_missing(check_all_dependencies()):
+        print_info("Instalación cancelada por el usuario.")
+        return 0
+    
+    # Instalar dependencias faltantes
+    missing = [d for d in check_all_dependencies() if not d.installed or not d.active]
+    if missing:
+        print_info("\nInstalando dependencias...")
+        installed_any, restarted = install_dependencies(missing)
+    
+    # Instalar perfil AppArmor si falta
+    if not check_apparmor_profile():
+        print_info("\nInstalando perfil AppArmor de BlipEraser...")
+        install_apparmor_profile()
+    
+    # Instalar servicio systemd si falta
+    if not check_systemd_service():
+        print_info("\nInstalando servicio systemd...")
+        if install_systemd_service():
+            print_ok("Servicio systemd instalado y activado")
+    
+    # Resumen final
+    print_bold("\n=== Resumen Final ===")
+    final_statuses = check_all_dependencies()
+    print_dependency_table(final_statuses)
+    
+    if check_apparmor_profile() and check_systemd_service() and all(d.installed and d.active for d in final_statuses):
+        print_ok("\n✓ Todo instalado y activado correctamente")
+        print_info("El daemon privilegiado Phase 2 está listo para usar.")
+    else:
+        print_warn("\n⚠ Algunas dependencias requieren reinicio o configuración adicional")
+        print_info("Reinicia el sistema si AppArmor fue instalado por primera vez.")
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
