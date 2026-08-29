@@ -165,13 +165,6 @@ def main() -> int:
             msg += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
         QMessageBox.information(None, "Dependencias instaladas", msg)
 
-    app = QApplication(sys.argv)
-    # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a
-    # QIcon() vacío si el asset no existe (ver widgets/logo.py).
-    from blip_eraser.widgets.logo import app_icon
-
-    app.setWindowIcon(app_icon())
-
     saved = load_saved_language()
     if should_ask_for_language(saved):
         set_language(resolve_initial_language(_prompt_initial_language()))
@@ -229,6 +222,15 @@ def main() -> int:
     worker.message.connect(splash.set_message)
     worker.finished.connect(_on_worker_finished)
     worker.start()
+    
+    # Asegurar que el worker termine antes de que la app se cierre
+    def _cleanup() -> None:
+        if worker.isRunning():
+            worker.requestInterruption()
+            worker.wait(3000)  # Esperar hasta 3 segundos
+    
+    app.aboutToQuit.connect(_cleanup)
+    
     return app.exec()
 
 
