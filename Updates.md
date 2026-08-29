@@ -28,13 +28,45 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 - **Objetivo**: restringir operaciones privilegiadas (`pkexec pacman -Rns`, `pkexec rm -rf`) a allowlist estricta y validar paths antes de ejecutar.
 - **Alcance Fase 1 (completado)**: policy polkit custom (`/usr/share/polkit-1/actions/com.dinopath.blip-eraser.policy`) + validación estricta en `privileges.py` (resolve + allowlist `/var/cache/pacman/pkg`, `/var/log`, `/var/lib/pacman` + rechazo symlinks) + auditoría estructurada en bitácora forense + validación de paquetes en `pacman.py` antes de desinstalar.
-- **Alcance Fase 2 (pendiente)**: demonio systemd D-Bus (`blip-eraser-privileged`) con separación real de privilegios.
-- **Estado**: Fase 1 operativa y validada; Fase 2 en diseño/implementación pendiente.
-- **Pendientes identificados** (internos, no públicos):
-  - P0: Eliminar TOCTOU (requiere daemon Fase 2)
+- **Alcance Fase 2 (completado - daemon D-Bus)**: demonio systemd D-Bus (`blip-eraser-privileged`) con separación real de privilegios.
+  - **Implementado**: `src/blip_eraser/daemon/privileged_daemon.py` (daemon D-Bus), `packaging/systemd/blip-eraser-privileged.service`, `packaging/dbus/blip-eraser-privileged.conf` (policy restrictiva a grupo `wheel`), `packaging/scripts/blip-eraser-privileged` (wrapper).
+  - **Validaciones**: allowlist de paths, rechazo symlinks, verificación de firmas de paquetes (pacman-key), caché thread-safe de paquetes instalados.
+  - **Política D-Bus**: restrictiva a grupo `wheel` (usuarios admin en Arch), deny por defecto.
+  - **Tests**: `tests/test_privileged_daemon.py` (24 tests: validaciones, operaciones, caché, firmas, integración).
+  - **Integración cliente**: `dbus_client.py` usa daemon con fallback a pkexec.
+- **Alcance Fase 3 (pendiente)**: AppArmor profile (opcional).
+- **Pendientes internos** (no públicos):
+  - P0: Eliminar TOCTOU (requiere daemon Fase 2 — ahora implementado)
   - P1: `_reject_symlinks()` en Windows/WSL
-  - P1: Pacman DB: cache + firma al inicio (Supply chain)
+  - P1: Pacman DB: cache + firma al inicio (Supply chain — implementado en daemon)
   - Fase 3: AppArmor profile (opcional)
+
+### 📦 Instalación y activación del daemon privilegiado (Fase 2)
+
+```bash
+# 1. Instalar dependencias del daemon
+sudo pacman -S python-gobject
+
+# 2. Copiar archivos del sistema (requiere root)
+sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
+sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
+sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
+sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
+sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
+
+# 3. Recargar systemd y D-Bus
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
+
+# 4. Verificar estado
+systemctl status blip-eraser-privileged.service
+# Debe mostrar: Active: active (running)
+
+# 5. En la app: el cliente (dbus_client.py) usa el daemon automáticamente
+#    si está disponible; si no, cae a pkexec (prefer_daemon=True por defecto).
+```
+
+> **Nota**: El daemon requiere que el usuario pertenezca al grupo `wheel` (estándar en Arch para usuarios admin). Si no, el D-Bus policy deniega el acceso y la app usa fallback pkexec.
 
 - **Por qué:** tras contener `_rebuild_apps`, el crash volvió en el MISMO
   arranque pero en OTRO widget de OverviewPage: `QLabel has been deleted` en
