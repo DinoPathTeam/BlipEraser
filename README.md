@@ -100,6 +100,7 @@ sudo cp packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged /etc/appar
 sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
 
 # 3. Instalar systemd service (para daemon privilegiado Fase 2)
+sudo mkdir -p /usr/lib/blip-eraser/
 sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
 sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
 sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
