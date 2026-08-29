@@ -1,8 +1,8 @@
 [Unit]
 Description=BlipEraser Privileged Daemon
-Documentation=https://github.com/blip-eraser/blip-eraser
-After=dbus-daemon.service
-Requires=dbus-daemon.service
+Documentation=https://github.com/DinoPathTeam/BlipEraser
+After=dbus.service
+Requires=dbus.service
 
 [Service]
 Type=dbus
@@ -45,9 +45,8 @@ SyslogIdentifier=blip-eraser-privileged
 # Restart policy
 Restart=on-failure
 RestartSec=5
-StartLimitIntervalSec=60
+StartLimitInterval=60
 StartLimitBurst=3
 
 [Install]
 WantedBy=multi-user.target
-Also=dbus-daemon.service
