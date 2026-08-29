@@ -102,7 +102,7 @@ class TestPackageCache:
         h = _hash_path("/test/path")
         assert len(h) == 16
 
-    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=True)
+    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=(True, []))
     @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
     def test_load_package_cache_success(self, mock_run, mock_verify):
         mock_run.return_value = MagicMock(
@@ -114,7 +114,7 @@ class TestPackageCache:
         assert "package1" in cache
         assert "package2" in cache
 
-    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=False)
+    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=(False, ["pkg1"]))
     @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
     def test_load_package_cache_signature_fail(self, mock_run, mock_verify):
         mock_run.return_value = MagicMock(returncode=0, stdout="pkg1 1.0-1\n")

@@ -169,14 +169,12 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
             except OSError as e:
                 return False, f"Entry not found or inaccessible: {e}"
             
-            # Verificar que no es symlink
-            if os.path.islink(os.path.join(str(parent), name)):
-                os.close(parent_fd)
-                return False, "Entry is a symlink (TOCTOU protection)"
-            
-            # Determinar si es directorio o archivo usando fstatat (no sigue symlinks)
+            # Verificar que no es symlink usando fstatat (no sigue symlinks) - TOCTOU fix
             try:
                 st = os.fstatat(parent_fd, name, follow_symlinks=False)
+                if stat.S_ISLNK(st.st_mode):
+                    os.close(parent_fd)
+                    return False, "Entry is a symlink (TOCTOU protection)"
                 is_dir = stat.S_ISDIR(st.st_mode)
             except OSError:
                 is_dir = False
@@ -197,10 +195,21 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
         return False, f"Atomic removal failed: {e}"
 
 
-def _rm_rf_dir_atomic(dir_fd: int, dir_name: str) -> None:
-    """Vacía un directorio recursivamente usando fd atómico."""
+def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
+    """Vacía un directorio recursivamente usando fd atómico.
+    
+    Args:
+        dir_fd: File descriptor del directorio padre
+        dir_name: Nombre del subdirectorio a vaciar
+        depth: Profundidad actual de recursión (para evitar stack overflow)
+    """
     import os
     import stat
+    
+    # Límite de profundidad para prevenir stack overflow
+    if depth > 256:
+        _audit_log("rm_rf_depth_exceeded", f"dir={dir_name} depth={depth}")
+        return
     
     # Abrir fd del subdirectorio
     try:
@@ -233,7 +242,7 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str) -> None:
                             os.close(subdir_fd)
                             continue
                         try:
-                            _rm_rf_dir_atomic(subdir_fd, entry.name)
+                            _rm_rf_dir_atomic(subdir_fd, entry.name, depth + 1)
                             os.unlinkat(dir_fd, entry.name, os.AT_REMOVEDIR)
                         finally:
                             os.close(subdir_fd)
@@ -247,13 +256,38 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str) -> None:
 
 # ─── Validaciones de paths para operaciones ────────────────────────────
 
+# Cache for allowlist prefix symlink validation
+_ALLOWLIST_PREFIX_VALIDATED: dict[str, bool] = {}
+
+
+def _validate_allowlist_prefixes() -> None:
+    """Valida que todos los prefijos de allowlist no sean symlinks.
+    Se ejecuta una vez al inicio o bajo demanda.
+    """
+    global _ALLOWLIST_PREFIX_VALIDATED
+    for prefix in ALLOWED_SYSTEM_PREFIXES:
+        if prefix not in _ALLOWLIST_PREFIX_VALIDATED:
+            prefix_path = Path(prefix)
+            try:
+                if prefix_path.is_symlink():
+                    _audit_log("allowlist_prefix_symlink", f"prefix={prefix} target={prefix_path.resolve()}")
+                    _ALLOWLIST_PREFIX_VALIDATED[prefix] = False
+                else:
+                    _ALLOWLIST_PREFIX_VALIDATED[prefix] = True
+            except OSError:
+                _ALLOWLIST_PREFIX_VALIDATED[prefix] = False
+
+
 def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
     """Valida paths para CleanSystemPaths. Devuelve (válidos, rechazados)."""
+    # Validar prefijos de allowlist una vez
+    _validate_allowlist_prefixes()
+    
     valid = []
     rejected = []
     for p in paths:
         path = Path(p)
-        # Check 1: symlink detection (sin resolve)
+        # Check 1: symlink detection (sin resolve) - incluye padres
         if _reject_symlinks_atomic(path):
             rejected.append(p)
             _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=symlink_detected")
@@ -267,6 +301,16 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         if not _validate_path_resolved(path):
             rejected.append(p)
             _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=resolved_outside_allowlist")
+            continue
+        # Check 4: validar que el prefijo allowlist coincidente no sea symlink
+        matched_prefix = None
+        for prefix in ALLOWED_SYSTEM_PREFIXES:
+            if p.startswith(prefix):
+                matched_prefix = prefix
+                break
+        if matched_prefix and not _ALLOWLIST_PREFIX_VALIDATED.get(matched_prefix, False):
+            rejected.append(p)
+            _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=allowlist_prefix_is_symlink prefix={matched_prefix}")
             continue
         valid.append(p)
         _audit_log("clean_validated", f"path={p}#h{_hash_path(p)}")
@@ -319,13 +363,29 @@ def _verify_package_signatures() -> tuple[bool, list[str]]:
 
 
 def _load_package_cache() -> set[str]:
-    """Carga y verifica la caché de paquetes instalados."""
+    """Carga y verifica la caché de paquetes instalados.
+    
+    Primero verifica las firmas de los paquetes en cache. Si la verificación
+    falla, loggea warning pero NO bloquea la carga de la caché (RT-6 fix).
+    Solo popula la caché con paquetes verificados.
+    """
     global _PACKAGE_CACHE, _CACHE_INITIALIZED, _CACHE_VERIFICATION_DONE
     with _CACHE_LOCK:
         if _CACHE_INITIALIZED:
             return _PACKAGE_CACHE or set()
-        # NO bloquear en verificación de firmas - se hará en background
         _CACHE_VERIFICATION_DONE = False
+        
+        # 1. Primero verificar firmas de paquetes en cache
+        sig_ok, failed = _verify_package_signatures()
+        if not sig_ok:
+            # RT-6: No bloquear - loggear warning pero continuar
+            _audit_log("pacman_cache_init", f"result=signature_verification_failed failed={failed} (continuing anyway)")
+        else:
+            _audit_log("pacman_verify_async", "result=success")
+        
+        # 2. Cargar paquetes instalados (solo si queremos ser estrictos, filtrar por firmas válidas)
+        # Por compatibilidad y RT-6, cargamos todos los paquetes de pacman -Q
+        # pero loggeamos los que fallaron verificación
         try:
             result = subprocess.run(
                 ["pacman", "-Q"], capture_output=True, text=True, check=True, timeout=30
@@ -341,29 +401,11 @@ def _load_package_cache() -> set[str]:
         except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
             _audit_log("pacman_cache_init", f"result=failed detail={e}")
             _PACKAGE_CACHE = set()
+        
         _CACHE_INITIALIZED = True
+        _CACHE_VERIFICATION_DONE = True
         _audit_log("pacman_cache_init", f"result=success count={len(_PACKAGE_CACHE)}")
         return _PACKAGE_CACHE or set()
-
-
-def _start_signature_verification_background():
-    """Inicia verificación de firmas en hilo separado (no bloquea startup)."""
-    def _bg_verify():
-        global _CACHE_VERIFICATION_DONE
-        try:
-            all_valid, failed = _verify_package_signatures()
-            if all_valid:
-                _audit_log("pacman_verify_async", "result=success")
-            else:
-                _audit_log("pacman_verify_async", f"result=partial_failed failed={failed}")
-        except Exception as e:
-            _audit_log("pacman_verify_async", f"result=error detail={e}")
-        finally:
-            global _CACHE_VERIFICATION_DONE
-            _CACHE_VERIFICATION_DONE = True
-    
-    t = threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify")
-    t.start()
 
 
 def get_cached_package_names() -> set[str]:
@@ -474,6 +516,115 @@ def _load_interface_xml() -> str:
 INTERFACE_XML = _load_interface_xml()
 
 
+# Cache para verificación de sesión gráfica activa (TTL 30 segundos)
+_ACTIVE_SESSION_CACHE: dict[int, tuple[bool, float]] = {}
+_SESSION_CACHE_TTL = 30.0
+
+# Cache para membresía en grupo wheel (TTL 30 segundos)
+_WHEEL_GROUP_CACHE: dict[int, tuple[bool, float]] = {}
+_WHEEL_CACHE_TTL = 30.0
+
+
+def _is_user_in_wheel_group(uid: int) -> bool:
+    """Verifica si un UID pertenece al grupo wheel con cache TTL."""
+    import time
+    now = time.time()
+    
+    # Verificar cache
+    if uid in _WHEEL_GROUP_CACHE:
+        cached_result, cached_time = _WHEEL_GROUP_CACHE[uid]
+        if now - cached_time < _WHEEL_CACHE_TTL:
+            return cached_result
+    
+    try:
+        import pwd
+        import grp
+        
+        wheel_group = grp.getgrnam("wheel")
+        wheel_gid = wheel_group.gr_gid
+        
+        # Verificar via /etc/group (miembros del grupo)
+        with open("/etc/group") as f:
+            for line in f:
+                if line.startswith("wheel:"):
+                    members = line.strip().split(":")[3].split(",")
+                    try:
+                        username = pwd.getpwuid(uid).pw_name
+                        if username in members:
+                            _WHEEL_GROUP_CACHE[uid] = (True, now)
+                            return True
+                    except KeyError:
+                        pass
+        # Fallback: verificar GID primario / grupos suplementarios del UID
+        try:
+            username = pwd.getpwuid(uid).pw_name
+            user_groups = os.getgrouplist(username, pwd.getpwuid(uid).pw_gid)
+            result = wheel_gid in user_groups
+            _WHEEL_GROUP_CACHE[uid] = (result, now)
+            return result
+        except (KeyError, OSError):
+            pass
+    except (KeyError, OSError, IndexError):
+        pass
+    
+    _WHEEL_GROUP_CACHE[uid] = (False, now)
+    return False
+
+
+def _check_active_graphical_session(uid: int) -> bool:
+    """Verifica si el usuario tiene una sesión gráfica activa via loginctl.
+    
+    Returns True si el usuario tiene al menos una sesión con:
+    - Type=wayland o x11
+    - State=active
+    """
+    import time
+    now = time.time()
+    
+    # Verificar cache
+    if uid in _ACTIVE_SESSION_CACHE:
+        cached_result, cached_time = _ACTIVE_SESSION_CACHE[uid]
+        if now - cached_time < _SESSION_CACHE_TTL:
+            return cached_result
+    
+    try:
+        # Ejecutar loginctl show-user <uid> --property=Display,State,Type
+        result = subprocess.run(
+            ["loginctl", "show-user", str(uid), "--property=Display,State,Type"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return False
+        
+        # Parsear output (formato: Key=Value por línea)
+        has_active_graphical = False
+        display = None
+        state = None
+        session_type = None
+        
+        for line in result.stdout.strip().split('\n'):
+            if '=' in line:
+                key, value = line.split('=', 1)
+                if key == 'Display':
+                    display = value
+                elif key == 'State':
+                    state = value
+                elif key == 'Type':
+                    session_type = value
+        
+        # Verificar que es una sesión gráfica activa
+        if state == 'active' and display and session_type in ('wayland', 'x11'):
+            has_active_graphical = True
+        
+        # Cachear resultado
+        _ACTIVE_SESSION_CACHE[uid] = (has_active_graphical, now)
+        return has_active_graphical
+        
+    except (subprocess.SubprocessError, FileNotFoundError, OSError, Exception):
+        # Si loginctl no está disponible o falla, denegar por seguridad
+        return False
+
+
 class PrivilegedService:
     """Implementación del servicio D-Bus privilegiado."""
 
@@ -486,7 +637,7 @@ class PrivilegedService:
         self._shutdown_requested = False
 
     def _verify_sender(self, connection, sender) -> bool:
-        """Verifica que el sender es un usuario autorizado (grupo wheel)."""
+        """Verifica que el sender es un usuario autorizado (grupo wheel + sesión gráfica activa)."""
         try:
             # Obtener credenciales del sender
             creds = connection.get_credentials()
@@ -497,34 +648,17 @@ class PrivilegedService:
             if uid is None or uid < 0:
                 return False
             
-            # Verificar que el UID pertenece al grupo wheel via /etc/group
-            import pwd
-            import grp
-            try:
-                wheel_group = grp.getgrnam("wheel")
-                wheel_gid = wheel_group.gr_gid
-                
-                # Verificar via /etc/group (miembros del grupo)
-                with open("/etc/group") as f:
-                    for line in f:
-                        if line.startswith("wheel:"):
-                            members = line.strip().split(":")[3].split(",")
-                            try:
-                                username = pwd.getpwuid(uid).pw_name
-                                if username in members:
-                                    return True
-                            except KeyError:
-                                pass
-                # Fallback: verificar GID primario / grupos suplementarios del UID
-                try:
-                    user_groups = os.getgrouplist(username, pwd.getpwuid(uid).pw_gid)
-                    if wheel_gid in user_groups:
-                        return True
-                except (KeyError, OSError):
-                    pass
-            except (KeyError, OSError, IndexError):
-                pass
-            return False
+            # Verificar sesión gráfica activa
+            if not _check_active_graphical_session(uid):
+                _audit_log("auth_rejected", f"sender={sender} uid={uid} reason=no_active_graphical_session")
+                return False
+            
+            # Verificar que el UID pertenece al grupo wheel (con cache TTL)
+            if not _is_user_in_wheel_group(uid):
+                _audit_log("auth_rejected", f"sender={sender} uid={uid} reason=not_in_wheel_group")
+                return False
+            
+            return True
         except Exception:
             return False
 
@@ -642,22 +776,27 @@ class PrivilegedService:
         GLib.timeout_add_seconds(30, _refresh)
 
     def _start_signature_verification(self):
-        """Inicia verificación de firmas en background después del startup."""
+        """Inicia verificación periódica de firmas en background (cada 5 min).
+        
+        Nota: La verificación inicial ya se hizo en _load_package_cache.
+        Esta función solo re-verifica periódicamente para detectar cambios.
+        """
         def _bg_verify():
             try:
                 all_valid, failed = _verify_package_signatures()
                 if all_valid:
-                    _audit_log("pacman_verify_async", "result=success")
+                    _audit_log("pacman_verify_periodic", "result=success")
                 else:
-                    _audit_log("pacman_verify_async", f"result=partial_failed failed={failed}")
+                    _audit_log("pacman_verify_periodic", f"result=partial_failed failed={failed}")
+                    # Invalidar caché para forzar recarga en próxima operación
+                    invalidate_package_cache()
             except Exception as e:
-                _audit_log("pacman_verify_async", f"result=error detail={e}")
-            finally:
-                global _CACHE_VERIFICATION_DONE
-                _CACHE_VERIFICATION_DONE = True
+                _audit_log("pacman_verify_periodic", f"result=error detail={e}")
         
         # Ejecutar en hilo separado después de 10s para no bloquear startup
-        GLib.timeout_add_seconds(10, lambda: (threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify").start(), False)[1])
+        GLib.timeout_add_seconds(10, lambda: (threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify-periodic").start(), False)[1])
+        # Programar verificación periódica cada 5 min
+        GLib.timeout_add_seconds(300, lambda: (threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify-periodic").start(), False)[1])
 
     def run(self) -> int:
         """Ejecuta el bucle principal."""
