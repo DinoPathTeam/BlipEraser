@@ -31,6 +31,11 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Seguridad interna (nunca subir a repositorio)
+SECURITY_RESEARCH_INTERNAL.md
+*_INTERNAL.md
+SECURITY_*.md
+
 # Paquetes / entradas del sistema
 *.pacnew
 *.pacorig
