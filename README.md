@@ -80,24 +80,39 @@ BlipEraser funciona en **cualquier distribución basada en Arch Linux** que use 
 - **S.O.**: Cualquier distribución basada en Arch Linux (requiere `pacman`, `systemd`, D-Bus).
 - **Python**: 3.11 o superior.
 - **GUI**: PyQt6 y **PyGObject** (instalados vía `pacman`, no por `pip`).
+- **Multimedia**: `gst-libav` (GStreamer plugin para video de intro H.264).
 - **Privilegios**: `pkexec` / Polkit para acciones de desinstalación de paquetes del sistema.
 - **Sistema**: `systemd` + D-Bus (bus de sistema) para daemon privilegiado (Fase 2).
+- **Seguridad**: AppArmor (perfil incluido en `packaging/apparmor/`).
 
 ---
 
 ## 📦 Instalación
 
-> **IMPORTANTE**: Instala PyQt6 y PyGObject con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librerías del sistema.
+> **IMPORTANTE**: Instala PyQt6, PyGObject y gst-libav con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librerías del sistema. El daemon privilegiado (Fase 2) requiere PyGObject para D-Bus y gst-libav para el video de intro H.264.
 
 ```bash
-# 1. Instalar dependencias del sistema (incluye gst-libav para video de intro)
+# 1. Instalar dependencias del sistema
 sudo pacman -S python-pyqt6 python-gobject gst-libav
 
-# 2. Clonar el repositorio
+# 2. Instalar AppArmor profile (para daemon privilegiado Fase 2)
+sudo cp packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged /etc/apparmor.d/
+sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
+
+# 3. Instalar systemd service (para daemon privilegiado Fase 2)
+sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
+sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
+sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
+sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
+sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
+
+# 4. Clonar el repositorio
 git clone https://github.com/DinoPathTeam/BlipEraser.git
 cd BlipEraser
 
-# 3. Instalación editable
+# 5. Instalación editable
 pip install -e . --break-system-packages
 ```
 

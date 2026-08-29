@@ -83,21 +83,25 @@ PASO 3: INSTALA LOS PROGRAMAS NECESARIOS
 --------------------------------------------------------------------------------
 
 BlipEraser está escrito en Python y necesita unas librerías de Qt para
-dibujar su ventana. Vamos a instalar todo lo necesario con el gestor del
-sistema. Copia y pega esta línea completa y pulsa Enter:
+dibujar su ventana. El daemon privilegiado (Fase 2) requiere PyGObject para
+D-Bus y gst-libav para el video de intro H.264. Vamos a instalar todo lo
+necesario con el gestor del sistema. Copia y pega esta línea completa y pulsa
+Enter:
 
-    sudo pacman -S python python-pip python-pyqt6 git
+    sudo pacman -S python python-pip python-pyqt6 python-gobject gst-libav git
 
 Pulsa "Y" cuando lo pregunte y espera a que termine. Esto instala:
 
 - python: el lenguaje en el que está escrito BlipEraser.
 - python-pip: la herramienta que descarga e instala paquetes de Python.
 - python-pyqt6: las librerías para que el programa muestre su ventana.
+- python-gobject: para D-Bus daemon privilegiado (Fase 2).
+- gst-libav: plugin GStreamer para video de intro H.264 (splash).
 - git: la herramienta para descargar el código desde GitHub.
 
-MUY IMPORTANTE: PyQt6 debe instalarse SIEMPRE con pacman (el gestor del
-sistema), NUNCA con pip. Si lo instalas con pip puede estropear tus
-librerías de Qt.
+MUY IMPORTANTE: PyQt6, PyGObject y gst-libav se instalan SIEMPRE con pacman
+(el gestor del sistema), NUNCA con pip. Si lo instalas con pip puede
+estropear tus librerías de Qt.
 
 --------------------------------------------------------------------------------
 PASO 4: CONSIGUE EL CÓDIGO DESDE GITHUB (ELEGIR UNA DE LAS DOS OPCIONES)

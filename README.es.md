@@ -58,21 +58,33 @@ BlipEraser funciona en **cualquier distribución basada en Arch Linux** que use 
 
 - Cualquier distro basada en Arch (requiere `pacman`, `systemd`, D-Bus).
 - Python 3.11+, PyQt6 y **PyGObject** (instalados vía `pacman`).
+- **Multimedia**: `gst-libav` (plugin GStreamer para video de intro H.264).
 - `pkexec` / polkit para las acciones con privilegios de administrador.
 - `systemd` + D-Bus (bus de sistema) para el daemon privilegiado (Fase 2).
+- **Seguridad**: AppArmor (perfil incluido en `packaging/apparmor/`).
 
 ## 📦 Instalación
 
-**Muy importante:** PyQt6 y PyGObject se instalan con el gestor del sistema, **no por pip**.
+**Muy importante:** PyQt6, PyGObject y gst-libav se instalan con el gestor del sistema, **no por pip**. El daemon privilegiado (Fase 2) requiere PyGObject para D-Bus y gst-libav para el video de intro H.264.
 
 ```bash
-# Incluye gst-libav para el video de intro del splash
+# 1. Instalar dependencias del sistema (incluye gst-libav para video de intro)
 sudo pacman -S python-pyqt6 python-gobject gst-libav
-```
 
-Después clona el repo e instala el proyecto en modo editable:
+# 2. Instalar AppArmor profile (para daemon privilegiado Fase 2)
+sudo cp packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged /etc/apparmor.d/
+sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
 
-```bash
+# 3. Instalar systemd service (para daemon privilegiado Fase 2)
+sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
+sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
+sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
+sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
+sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
+
+# 4. Clona el repo e instala el proyecto en modo editable
 git clone https://github.com/DinoPathTeam/BlipEraser.git
 cd BlipEraser
 pip install -e . --break-system-packages

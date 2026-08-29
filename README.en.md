@@ -52,8 +52,10 @@ BlipEraser works on **any Arch Linux-based distribution** that uses `pacman` as 
 
 - Any Arch Linux-based distro (requires `pacman`, `systemd`, D-Bus).
 - Python 3.11+, PyQt6 and **PyGObject** (see installation).
+- **Multimedia**: `gst-libav` (GStreamer plugin for H.264 video intro).
 - `pkexec` / polkit for privileged actions.
 - `systemd` + D-Bus (system bus) for privileged daemon (Phase 2).
+- **Security**: AppArmor (profile included in `packaging/apparmor/`).
 
 ---
 
@@ -62,8 +64,21 @@ BlipEraser works on **any Arch Linux-based distribution** that uses `pacman` as 
 **Important:** PyQt6 and PyGObject must be installed through the system package manager, **not via pip**. Installing them with pip clashes with your system's libraries:
 
 ```bash
-# Includes gst-libav for splash screen video intro
+# 1. Install system dependencies (includes gst-libav for splash screen video intro)
 sudo pacman -S python-pyqt6 python-gobject gst-libav
+
+# 2. Install AppArmor profile (for privileged daemon Phase 2)
+sudo cp packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged /etc/apparmor.d/
+sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
+
+# 3. Install systemd service and D-Bus configuration (for privileged daemon Phase 2)
+sudo cp packaging/systemd/blip-eraser-privileged.service /usr/lib/systemd/system/
+sudo cp packaging/dbus/blip-eraser-privileged.conf /usr/share/dbus-1/system.d/
+sudo cp packaging/dbus/com.dinopath.BlipEraser.Privileged.xml /usr/share/dbus-1/interfaces/
+sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
+sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
+sudo systemctl daemon-reload
+sudo systemctl enable --now blip-eraser-privileged.service
 ```
 
 Then clone the repository and install the project in editable mode:
