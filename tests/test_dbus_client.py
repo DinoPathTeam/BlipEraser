@@ -247,11 +247,11 @@ class TestGetPrivilegedApi:
         assert api1 is api2
         reset_privileged_api()
 
-    def test_default_prefer_daemon_is_false(self):
-        """El daemon está deshabilitado por defecto hasta que esté listo con polkit."""
+    def test_default_prefer_daemon_is_true(self):
+        """El daemon está habilitado por defecto (Fase 2 implementada y testeada)."""
         reset_privileged_api()
         api = get_privileged_api()
-        assert api._client is None  # prefer_daemon=False por defecto
+        assert api._client is not None  # prefer_daemon=True por defecto
         reset_privileged_api()
 
 

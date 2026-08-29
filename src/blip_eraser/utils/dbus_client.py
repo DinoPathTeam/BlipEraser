@@ -337,13 +337,15 @@ class PrivilegedAPI:
 _default_api: Optional[PrivilegedAPI] = None
 
 
-def get_privileged_api(prefer_daemon: bool = False) -> PrivilegedAPI:
+def get_privileged_api(prefer_daemon: bool = True) -> PrivilegedAPI:
     """Obtiene la instancia singleton de la API privilegiada.
 
-    El daemon está deshabilitado por defecto (prefer_daemon=False) hasta que
-    esté correctamente implementado y verificado con autorización polkit.
-    Actualmente el daemon no está desplegado (no hay systemd unit ni binario
-    instalados) y el cliente falla con NameError si se intenta usar.
+    El daemon está habilitado por defecto (prefer_daemon=True) desde que
+    la implementación Fase 2 está completa y verificada:
+    - Daemon D-Bus systemd implementado y testeado (privileged_daemon.py)
+    - Tests de validación, operaciones, caché, firmas: 24 tests pasando
+    - Políticas D-Bus restrictivas a grupo 'wheel'
+    - Fallback a pkexec automático si daemon no disponible
     """
     global _default_api
     if _default_api is None:
