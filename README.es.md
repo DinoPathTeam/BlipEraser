@@ -9,12 +9,34 @@
 
 # BlipEraser
 
-Desinstalador de aplicaciones y limpiador del sistema para **CachyOS** (y cualquier distro basada en Arch).
+Desinstalador de aplicaciones y limpiador del sistema para **Arch Linux** (y cualquier distro basada en Arch).
 
 BlipEraser existe para cubrir el hueco que dejan los gestores gráficos tradicionales:
 apps instaladas **manualmente** — AppImages, carpetas sueltas de lanzadores de terceros
 como Hydra Launcher, programas sin paquete — que **no quedan registradas en ningún
 gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz de detectar.
+
+### 🎯 Distribuciones compatibles
+
+BlipEraser funciona en **cualquier distribución basada en Arch Linux** que use `pacman` como gestor de paquetes y `systemd` + D-Bus, incluyendo (pero no limitado a):
+
+- **Arch Linux** (oficial)
+- **CachyOS**
+- **EndeavourOS**
+- **Manjaro**
+- **Garuda Linux**
+- **ArcoLinux**
+- **Artix Linux** (con systemd)
+- **Hyperbola** (con systemd)
+- **Parabola GNU/Linux-libre**
+- **RebornOS**
+- **Archcraft**
+- **ArchBang**
+- **Namib Linux**
+- **Obarun** (con systemd)
+- **Arch Linux ARM**, y otras derivadas que mantengan compatibilidad con `pacman`, `systemd` y D-Bus
+
+> **Nota**: Si tu distribución usa `pacman`, `systemd` y tiene D-Bus en el bus de sistema, BlipEraser debería funcionar. Si encuentras problemas en una derivada específica, reporta un issue.
 
 ## 🌟 Navegación y Secciones
 
@@ -23,7 +45,7 @@ gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz 
 3. **Limpiador del sistema**:
    - **Limpieza recomendada**: Basura (`~/.cache`), Caché de pacman (`/var/cache/pacman/pkg`) y Registros (`/var/log`) desglosados ítem por ítem.
    - **Aplicaciones instaladas (manual)**: Carpetas sueltas y AppImages detectados.
-4. **Ajustes de rendimiento**: Optimizaciones seguras de CachyOS/Arch (`fstrim`, `zswap`, espejos de pacman por velocidad), cada una con tooltip de mecanismo, consecuencias y beneficio.
+4. **Ajustes de rendimiento**: Optimizaciones seguras de Arch Linux (`fstrim`, `zswap`, espejos de pacman por velocidad), cada una con tooltip de mecanismo, consecuencias y beneficio.
 5. **Configuración**: Selección de temas cromáticos, fuentes tipográficas y borrado de historial de actividad.
 
 ## 🛡️ Confirmación de Seguridad y Umbral de Gran Tamaño
@@ -34,7 +56,7 @@ gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz 
 
 ## 🛠️ Requisitos del sistema
 
-- CachyOS o cualquier distro basada en Arch (requiere `pacman`).
+- Cualquier distro basada en Arch (requiere `pacman`, `systemd`, D-Bus).
 - Python 3.11+, PyQt6 y **PyGObject** (instalados vía `pacman`).
 - `pkexec` / polkit para las acciones con privilegios de administrador.
 - `systemd` + D-Bus (bus de sistema) para el daemon privilegiado (Fase 2).

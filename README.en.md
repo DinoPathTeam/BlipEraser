@@ -5,7 +5,7 @@
 
 # BlipEraser
 
-An app uninstaller for **CachyOS** (and any Arch-based distro).
+An app uninstaller for **Arch Linux** (and any Arch-based distro).
 
 BlipEraser exists to fill the gap left by traditional graphical package managers:
 apps installed **manually** — AppImages, loose folders from third-party launchers
@@ -19,14 +19,38 @@ manager** and therefore cannot be detected by the usual "uninstall" tools.
 - **Overview**: system health gauge (*GOOD / FAIR / POOR*), live CPU/GPU/RAM/disk stats, and a one-click "Clean now" summary of recommended cleanup.
 - **Uninstaller**: a unified list of `pacman` packages and manual folders, with sorting, search filter and **manual per-row selection** (no "select all" header checkbox, to prevent accidental mass uninstalls). Uninstalls run through `pkexec pacman -Rns --noconfirm`.
 - **Cleaner**: two independent sections — *recommended cleanup* (junk `~/.cache`, pacman cache `/var/cache/pacman/pkg`, logs `/var/log`) and *manually installed apps* (loose folders and AppImages in the scan paths).
-- **Performance tweaks**: one-click optimizations for Arch/CachyOS — `fstrim` (SSD), `zswap` (RAM compression) and pacman mirrors sorted by speed, each with a detailed tooltip (mechanism, consequences, benefit).
+- **Performance tweaks**: one-click optimizations for Arch Linux — `fstrim` (SSD), `zswap` (RAM compression) and pacman mirrors sorted by speed, each with a detailed tooltip (mechanism, consequences, benefit).
 - **Settings**: theme, fonts, language and activity log management.
+
+---
+
+### 🎯 Supported Distributions
+
+BlipEraser works on **any Arch Linux-based distribution** that uses `pacman` as package manager and `systemd` + D-Bus, including (but not limited to):
+
+- **Arch Linux** (official)
+- **CachyOS**
+- **EndeavourOS**
+- **Manjaro**
+- **Garuda Linux**
+- **ArcoLinux**
+- **Artix Linux** (with systemd)
+- **Hyperbola** (with systemd)
+- **Parabola GNU/Linux-libre**
+- **RebornOS**
+- **Archcraft**
+- **ArchBang**
+- **Namib Linux**
+- **Obarun** (with systemd)
+- **Arch Linux ARM**, and other derivatives maintaining compatibility with `pacman`, `systemd`, and D-Bus
+
+> **Note**: If your distribution uses `pacman`, `systemd`, and has D-Bus on the system bus, BlipEraser should work. If you encounter issues on a specific derivative, please open an issue.
 
 ---
 
 ## System Requirements
 
-- CachyOS or any Arch-based distro (requires `pacman`).
+- Any Arch Linux-based distro (requires `pacman`, `systemd`, D-Bus).
 - Python 3.11+, PyQt6 and **PyGObject** (see installation).
 - `pkexec` / polkit for privileged actions.
 - `systemd` + D-Bus (system bus) for privileged daemon (Phase 2).

@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <b>Desinstalador y Limpiador del Sistema para CachyOS y Arch Linux</b>
+  <b>Desinstalador y Limpiador del Sistema para Arch Linux y derivadas</b>
 </p>
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License MIT"></a>
-  <a href="https://cachyos.org/"><img src="https://img.shields.io/badge/OS-CachyOS%20%7C%20Arch%20Linux-red.svg" alt="CachyOS / Arch"></a>
+  <a href="https://archlinux.org/"><img src="https://img.shields.io/badge/OS-Arch%20Linux%20%7C%20Arch-based-red.svg" alt="Arch Linux / Arch-based"></a>
   <a href="https://riverbankcomputing.com/software/pyqt/"><img src="https://img.shields.io/badge/GUI-PyQt6-informational.svg" alt="PyQt6"></a>
 </p>
 
@@ -23,7 +23,29 @@
 
 **BlipEraser** cubre el hueco que dejan los gestores gráficos tradicionales: detecta y gestiona aplicaciones instaladas **manualmente** (AppImages, lanzadores como Hydra, programas en `~/Games`, `~/.local/share` o `~/Descargas`) que **no quedan registradas en el gestor de paquetes**, combinándolas en una sola interfaz limpia junto con los paquetes de `pacman`.
 
-Además, incluye diagnóstico de salud del sistema, limpiador de caché y registros por categoría, optimizaciones de rendimiento probadas para CachyOS/Arch y personalización de temas.
+Además, incluye diagnóstico de salud del sistema, limpiador de caché y registros por categoría, optimizaciones de rendimiento probadas para Arch Linux y personalización de temas.
+
+### 🎯 Distribuciones compatibles
+
+BlipEraser funciona en **cualquier distribución basada en Arch Linux** que use `pacman` como gestor de paquetes y `systemd` + D-Bus, incluyendo (pero no limitado a):
+
+- **Arch Linux** (oficial)
+- **CachyOS**
+- **EndeavourOS**
+- **Manjaro**
+- **Garuda Linux**
+- **ArcoLinux**
+- **Artix Linux** (con systemd)
+- **Hyperbola** (con systemd)
+- **Parabola GNU/Linux-libre**
+- **RebornOS**
+- **Archcraft**
+- **ArchBang**
+- **Namib Linux**
+- **Obarun** (con systemd)
+- **Cachyos**, **Arch Linux ARM**, y otras derivadas que mantengan compatibilidad con `pacman`, `systemd` y D-Bus
+
+> **Nota**: Si tu distribución usa `pacman`, `systemd` y tiene D-Bus en el bus de sistema, BlipEraser debería funcionar. Si encuentras problemas en una derivada específica, reporta un issue.
 
 ---
 
@@ -45,7 +67,7 @@ Además, incluye diagnóstico de salud del sistema, limpiador de caché y regist
   - **Advertencia visual destacada (rojo / negrita)** para operaciones de gran tamaño (≥ 5 GiB).
   - **Confirmación obligatoria sin excepción**: no existe opción de *"no volver a preguntar"*.
 - **⚡ Ajustes de Rendimiento**:
-  - Optimizaciones seguras de un solo clic para Arch/CachyOS: `fstrim` (SSD), compresión de RAM `zswap` y espejos de pacman ordenados por velocidad.
+  - Optimizaciones seguras de un solo clic para Arch Linux: `fstrim` (SSD), compresión de RAM `zswap` y espejos de pacman ordenados por velocidad.
   - Cada opción incluye un tooltip detallado (mecanismo, consecuencias y beneficio).
 - **🎨 Personalización e Idioma**:
   - Selector de tema visual (Red, Blue, Green, Purple, Dark) y familias de fuentes del sistema.
@@ -55,7 +77,7 @@ Además, incluye diagnóstico de salud del sistema, limpiador de caché y regist
 
 ## 🛠️ Requisitos del Sistema
 
-- **S.O.**: CachyOS o cualquier distribución basada en Arch Linux (requiere `pacman`).
+- **S.O.**: Cualquier distribución basada en Arch Linux (requiere `pacman`, `systemd`, D-Bus).
 - **Python**: 3.11 o superior.
 - **GUI**: PyQt6 y **PyGObject** (instalados vía `pacman`, no por `pip`).
 - **Privilegios**: `pkexec` / Polkit para acciones de desinstalación de paquetes del sistema.
@@ -65,7 +87,7 @@ Además, incluye diagnóstico de salud del sistema, limpiador de caché y regist
 
 ## 📦 Instalación
 
-> **IMPORTANTE**: Instala PyQt6 y PyGObject con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librerías de CachyOS/Arch.
+> **IMPORTANTE**: Instala PyQt6 y PyGObject con el gestor de paquetes del sistema (`pacman`) para evitar conflictos con las librerías del sistema.
 
 ```bash
 # 1. Instalar dependencias del sistema (incluye gst-libav para video de intro)
