@@ -156,8 +156,12 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
                 os.close(parent_fd)
                 return False, "Entry is a symlink (TOCTOU protection)"
             
-            # Determinar si es directorio o archivo
-            is_dir = os.path.isdir(os.path.join(str(parent), name))
+            # Determinar si es directorio o archivo usando fstatat (no sigue symlinks)
+            try:
+                st = os.fstatat(parent_fd, name, follow_symlinks=False)
+                is_dir = stat.S_ISDIR(st.st_mode)
+            except OSError:
+                is_dir = False
             
             if is_dir:
                 # Para directorios, usar unlinkat con AT_REMOVEDIR
@@ -187,22 +191,27 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str) -> None:
         return  # No existe o no accesible
     
     try:
-        # Iterar entradas
+        # Iterar entradas usando os.scandir (devuelve DirEntry con info de tipo)
         with os.scandir(dir_fd) as it:
             for entry in it:
                 if entry.name in ('.', '..'):
                     continue
                 try:
-                    entry_fd = os.openat(dir_fd, entry.name, os.O_PATH | os.O_NOFOLLOW)
-                    try:
-                        st = os.fstat(entry_fd)
-                        if stat.S_ISDIR(st.st_mode):
-                            _rm_rf_dir_atomic(entry_fd, entry.name)
+                    # entry.is_dir(follow_symlinks=False) usa la info del DirEntry (sin syscall extra)
+                    # y no sigue symlinks
+                    if entry.is_dir(follow_symlinks=False):
+                        # Abrir fd del subdirectorio para recursión
+                        try:
+                            subdir_fd = os.openat(dir_fd, entry.name, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+                        except OSError:
+                            continue
+                        try:
+                            _rm_rf_dir_atomic(subdir_fd, entry.name)
                             os.unlinkat(dir_fd, entry.name, os.AT_REMOVEDIR)
-                        else:
-                            os.unlinkat(dir_fd, entry.name, 0)
-                    finally:
-                        os.close(entry_fd)
+                        finally:
+                            os.close(subdir_fd)
+                    else:
+                        os.unlinkat(dir_fd, entry.name, 0)
                 except OSError:
                     pass  # Ignorar errores individuales
     finally:
@@ -239,11 +248,13 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
 
 # ─── Caché de paquetes (supply chain) ─────────────────────────────────
 
-def _verify_package_signatures() -> bool:
-    """Verifica firmas de paquetes en /var/cache/pacman/pkg."""
+def _verify_package_signatures() -> tuple[bool, list[str]]:
+    """Verifica firmas de paquetes en /var/cache/pacman/pkg.
+    Retorna (all_valid, failed_packages).
+    """
     cache_dir = Path("/var/cache/pacman/pkg")
     if not cache_dir.exists():
-        return True
+        return True, []
     try:
         # Buscar todos los formatos de paquete válidos
         pkg_patterns = ["*.pkg.tar.zst", "*.pkg.tar.xz", "*.pkg.tar.lz4", "*.pkg.tar.gz"]
@@ -252,13 +263,15 @@ def _verify_package_signatures() -> bool:
             pkg_files.extend(cache_dir.glob(pattern))
         
         if not pkg_files:
-            return True
+            return True, []
         
+        failed = []
         for pkg_file in pkg_files:
             sig_file = pkg_file.with_suffix(pkg_file.suffix + ".sig")
             if not sig_file.exists():
                 _audit_log("pacman_verify", f"package={pkg_file.name} result=missing_signature")
-                return False
+                failed.append(pkg_file.name)
+                continue
             result = subprocess.run(
                 ["pacman-key", "--verify", str(sig_file), str(pkg_file)],
                 capture_output=True, text=True, timeout=30
@@ -266,12 +279,16 @@ def _verify_package_signatures() -> bool:
             if result.returncode != 0:
                 _audit_log("pacman_verify",
                     f"package={pkg_file.name} result=invalid_signature stderr={result.stderr.strip()[:200]}")
-                return False
+                failed.append(pkg_file.name)
+                continue
+        if failed:
+            _audit_log("pacman_verify_all", f"result=partial_failed failed={failed}")
+            return False, failed
         _audit_log("pacman_verify_all", f"result=success count={len(pkg_files)}")
-        return True
+        return True, []
     except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
         _audit_log("pacman_verify", f"result=error detail={e}")
-        return False
+        return False, []
 
 
 def _load_package_cache() -> set[str]:
@@ -307,13 +324,15 @@ def _start_signature_verification_background():
     def _bg_verify():
         global _CACHE_VERIFICATION_DONE
         try:
-            if _verify_package_signatures():
+            all_valid, failed = _verify_package_signatures()
+            if all_valid:
                 _audit_log("pacman_verify_async", "result=success")
             else:
-                _audit_log("pacman_verify_async", "result=failed_warning")
+                _audit_log("pacman_verify_async", f"result=partial_failed failed={failed}")
         except Exception as e:
             _audit_log("pacman_verify_async", f"result=error detail={e}")
         finally:
+            global _CACHE_VERIFICATION_DONE
             _CACHE_VERIFICATION_DONE = True
     
     t = threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify")
@@ -429,27 +448,31 @@ class PrivilegedService:
             if uid is None or uid < 0:
                 return False
             
-            # Verificar que el UID pertenece al grupo wheel
+            # Verificar que el UID pertenece al grupo wheel via /etc/group
+            import pwd
             import grp
             try:
                 wheel_group = grp.getgrnam("wheel")
                 wheel_gid = wheel_group.gr_gid
-                # Verificar grupos del usuario
-                user_groups = os.getgroups()
-                if wheel_group.gr_gid in user_groups:
-                    return True
-                # También verificar via /etc/group directamente
+                
+                # Verificar via /etc/group (miembros del grupo)
                 with open("/etc/group") as f:
                     for line in f:
                         if line.startswith("wheel:"):
                             members = line.strip().split(":")[3].split(",")
-                            import pwd
                             try:
                                 username = pwd.getpwuid(uid).pw_name
                                 if username in members:
                                     return True
                             except KeyError:
                                 pass
+                # Fallback: verificar GID primario / grupos suplementarios del UID
+                try:
+                    user_groups = os.getgrouplist(username, pwd.getpwuid(uid).pw_gid)
+                    if wheel_gid in user_groups:
+                        return True
+                except (KeyError, OSError):
+                    pass
             except (KeyError, OSError, IndexError):
                 pass
             return False
@@ -555,10 +578,11 @@ class PrivilegedService:
         """Inicia verificación de firmas en background después del startup."""
         def _bg_verify():
             try:
-                if _verify_package_signatures():
+                all_valid, failed = _verify_package_signatures()
+                if all_valid:
                     _audit_log("pacman_verify_async", "result=success")
                 else:
-                    _audit_log("pacman_verify_async", "result=failed_warning")
+                    _audit_log("pacman_verify_async", f"result=partial_failed failed={failed}")
             except Exception as e:
                 _audit_log("pacman_verify_async", f"result=error detail={e}")
             finally:

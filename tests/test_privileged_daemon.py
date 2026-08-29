@@ -205,13 +205,17 @@ class TestSignatureVerification:
     @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=False)
     @patch("blip_eraser.daemon.privileged_daemon.Path.glob", return_value=[])
     def test_verify_no_cache_dir(self, mock_glob, mock_exists):
-        assert _verify_package_signatures() is True
+        valid, failed = _verify_package_signatures()
+        assert valid is True
+        assert failed == []
 
     @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
     @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
     def test_verify_no_packages(self, mock_glob, mock_exists):
         mock_glob.return_value = []
-        assert _verify_package_signatures() is True
+        valid, failed = _verify_package_signatures()
+        assert valid is True
+        assert failed == []
 
     @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
     @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
@@ -226,7 +230,9 @@ class TestSignatureVerification:
         mock_glob.return_value = [pkg_file]
         mock_run.return_value = MagicMock(returncode=0)
         
-        assert _verify_package_signatures() is True
+        valid, failed = _verify_package_signatures()
+        assert valid is True
+        assert failed == []
 
     @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
     @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
@@ -240,7 +246,10 @@ class TestSignatureVerification:
         pkg_file.with_suffix.return_value = sig_file
         mock_glob.return_value = [pkg_file]
         
-        assert _verify_package_signatures() is False
+        valid, failed = _verify_package_signatures()
+        assert valid is False
+        assert len(failed) == 4  # 4 patterns globbed
+        assert "pkg-1.0-1-x86_64.pkg.tar.zst" in failed[0]
 
 
 class TestPrivilegedDaemonIntegration:
