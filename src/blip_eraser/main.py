@@ -82,6 +82,63 @@ def _warn_missing_dependencies(window, lines: list[str]) -> None:
     )
 
 
+def _check_and_install_daemon_deps() -> tuple[bool, list[str]]:
+    """Verifica e instala dependencias del daemon privilegiado (Fase 2).
+    
+    Returns:
+        (restart_required, installed_list)
+    """
+    from PyQt6.QtWidgets import QMessageBox
+    from blip_eraser.utils.dependency_check import (
+        check_daemon_dependencies,
+        install_daemon_dependency,
+        DAEMON_DEPENDENCIES,
+    )
+    
+    missing = check_daemon_dependencies()
+    if not missing:
+        return False, []
+    
+    # Preguntar al usuario si quiere instalar
+    lines = []
+    for dep in missing:
+        status = "no instalada" if not dep.check_cmd else "no activa"
+        lines.append(f"• {dep.name}: {status}")
+    
+    msg = (
+        f"El daemon privilegiado (Fase 2) requiere las siguientes dependencias:\n\n"
+        f"{chr(10).join(lines)}\n\n"
+        f"¿Desea instalarlas ahora? Se pedirá contraseña de administrador (pkexec)."
+    )
+    
+    box = QMessageBox()
+    box.setWindowTitle("Dependencias del daemon privilegiado")
+    box.setText(msg)
+    box.setIcon(QMessageBox.Icon.Question)
+    yes_btn = box.addButton("Instalar", QMessageBox.ButtonRole.AcceptRole)
+    no_btn = box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+    box.exec()
+    
+    if box.clickedButton() is not yes_btn:
+        return False, []
+    
+    # Instalar dependencias faltantes
+    installed = []
+    restart_required = False
+    
+    for dep in missing:
+        success, msg = install_daemon_dependency(dep)
+        if success:
+            installed.append(dep.name)
+            if dep.requires_restart:
+                restart_required = True
+        else:
+            # Mostrar error pero continuar
+            QMessageBox.warning(None, "Error", f"Error instalando {dep.name}: {msg}")
+    
+    return restart_required, installed
+
+
 def main() -> int:
     """Entry point. Devuelve el código de salida de la app."""
     if not check_pyqt6_available():
