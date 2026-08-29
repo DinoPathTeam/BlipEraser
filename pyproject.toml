@@ -25,7 +25,9 @@ classifiers = [
 # python-gobject provee gi.repository.Gio/GLib para D-Bus daemon y cliente (Fase 2).
 #
 # Opcional: QtMultimedia (video de intro en splash screen)
-# En Arch: `sudo pacman -S qt6-multimedia gstreamer gst-plugins-base gst-plugins-good`
+# En Arch: `sudo pacman -S qt6-multimedia gstreamer gst-plugins-base gst-plugins-good gst-libav`
+# gst-libav ES REQUERIDO para decodificar H.264/H.265/AAC (licencias: gst-plugins-good no lo incluye).
+# Sin gst-libav, el video no se decodifica, salta error y cae a fallback de logo.
 # Requiere backend multimedia (gstreamer + plugins). Si no está disponible,
 # la app usa fallback silencioso a animación de logo (sin romper el arranque).
 dependencies = []

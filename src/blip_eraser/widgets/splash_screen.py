@@ -421,6 +421,24 @@ class SplashScreen(QWidget):
             self._check_both_finished()
 
     def _on_media_error(self, error, error_string) -> None:
+        # Log detallado del error para diagnóstico (codecs faltantes, etc.)
+        try:
+            from blip_eraser.utils.log import write_diagnostic
+            from PyQt6.QtMultimedia import QMediaPlayer
+            error_name = QMediaPlayer.Error(error).name if hasattr(QMediaPlayer.Error, '__members__') else str(error)
+            write_diagnostic(
+                f"SPLASH_MEDIA_ERROR: error={error_name}({error}) "
+                f"detail={error_string}"
+            )
+            # Detectar error típico de codecs faltantes en Linux
+            if "shared" in error_string.lower() or "library" in error_string.lower() or "plugin" in error_string.lower() or "decoder" in error_string.lower():
+                write_diagnostic(
+                    "SPLASH_CODEC_HINT: Probable codecs H.264/AAC faltantes. "
+                    "En Arch/CachyOS: sudo pacman -S gst-libav"
+                )
+        except Exception:
+            pass
+        
         # Fallback silencioso a animación original
         self._video_loaded = False
         if self._video_widget:
