@@ -388,6 +388,26 @@ def run_with_pkexec(cmd: List[str]) -> Tuple[bool, str]:
         return False, str(e)
 
 
+def install_daemon_dependency(dep) -> Tuple[bool, str]:
+    """Instala una dependencia del daemon usando pkexec.
+    
+    Args:
+        dep: DaemonDependency object with install_cmd attribute
+        
+    Returns:
+        Tuple of (success, message)
+    """
+    if not dep.install_cmd:
+        return False, f"No install command for {dep.name}"
+    
+    # Use pkexec to install the dependency
+    success, msg = run_with_pkexec(dep.install_cmd.split())
+    if success:
+        return True, f"{dep.name} installed successfully"
+    else:
+        return False, f"Failed to install {dep.name}: {msg}"
+
+
 def check_phase2_installed() -> Tuple[bool, List[str]]:
     """Verifica si Phase 2 está completamente instalado."""
     missing = []
