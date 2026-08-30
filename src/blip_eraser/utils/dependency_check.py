@@ -180,6 +180,7 @@ def _check_daemon_deps_cached() -> list[DaemonDependency]:
     missing = []
     for dep in DAEMON_DEPENDENCIES:
         try:
+            # Use shell=True for commands with pipes/redirections, but they're hardcoded
             result = subprocess.run(
                 dep.check_cmd, shell=True, capture_output=True, timeout=5
             )
