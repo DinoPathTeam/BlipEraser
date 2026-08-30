@@ -24,9 +24,9 @@ from blip_eraser.utils.dependency_check import (
     PYQT6_MISSING_MESSAGE,
     check_pyqt6_available,
     check_daemon_dependencies,
-    install_daemon_dependency,
     DAEMON_DEPENDENCIES,
 )
+from blip_eraser.utils.phase2_installer import install_daemon_dependency
 from blip_eraser.utils.i18n import (
     load_saved_language,
     set_language,
