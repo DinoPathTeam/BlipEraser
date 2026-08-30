@@ -1,235 +1,4 @@
-"""Pantalla de arranque (splash): video de intro + mensaje de progreso.
-
-- Reproduce un video de introducción (splash-intro.mp4) si QtMultimedia
-  está disponible y el archivo existe.
-- Renderiza frames de video manualmente via QVideoSink + paintEvent(),
-  lo que permite superponer el mensaje de progreso con z-order normal
-  (sin la limitación de superficie nativa de QVideoWidget).
-- Usa KeepAspectRatioByExpanding para llenar el área hero sin barras
-  negras (recorta el sobrante del video 16:9).
-- Fallback silencioso a animación original (logo + fade) si falta
-  QtMultimedia/QVideoSink, el video no carga, o cualquier error.
-- Comportamiento de timing:
-  * El video se reproduce UNA vez a su duración natural.
-  * El StartupWorker corre en paralelo.
-  * Si el worker termina ANTES que el video: el video sigue hasta su fin.
-  * Si el video termina ANTES que el worker: se PAUSA en el último frame
-    (no loop, no negro) y espera al worker.
-  * Los mensajes de progreso se superponen en la parte inferior con fade.
-"""
-
-from __future__ import annotations
-
-from PyQt6.QtCore import (
-    QEasingCurve,
-    QParallelAnimationGroup,
-    QPoint,
-    QPropertyAnimation,
-    QRect,
-    QSequentialAnimationGroup,
-    QThread,
-    Qt,
-    QTimer,
-    QUrl,
-    pyqtSignal,
-)
-from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
-from PyQt6.QtWidgets import (
-    QGraphicsOpacityEffect,
-    QLabel,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
-
-from blip_eraser.utils.config import load_prefs
-from blip_eraser.utils.i18n import tr
-from blip_eraser.utils.theme import THEMES, palette_for
-from blip_eraser.widgets.logo import ASSET_LOGO_PATH, app_icon
-
-SPLASH_WIDTH = 560
-SPLASH_HEIGHT = 360
-SPLASH_LOGO_HEIGHT = 150
-_HERO_HEIGHT = 210
-
-_STEP_PAUSE_MS = 400
-_FINAL_PAUSE_MS = 600
-
-_INTRO_LOGO_MS = 800
-_INTRO_TITLE_MS = 600
-_INTRO_TITLE_DELAY_MS = 200
-
-_MSG_FADE_OUT_MS = 200
-_MSG_FADE_IN_MS = 300
-
-ASSET_SPLASH_VIDEO = (
-    __file__.rsplit("\\", 1)[0] if "\\" in __file__ else __file__.rsplit("/", 1)[0]
-) + "/../assets/splash-intro.mp4"
-
-_QMULTIMEDIA_AVAILABLE = False
-_QVIDEOSINK_AVAILABLE = False
-try:
-    from PyQt6.QtMultimedia import QMediaPlayer, QVideoSink
-
-    _QMULTIMEDIA_AVAILABLE = True
-    _QVIDEOSINK_AVAILABLE = True
-except ImportError:
-    QMediaPlayer = None
-    QVideoSink = None
-
-
-class _VideoWidget(QWidget):
-    """Widget que pinta frames de video recibidos de un QVideoSink.
-
-    Permite z-order normal con otros widgets hijos (mensaje de progreso).
-    Usa KeepAspectRatioByExpanding: llena el widget recortando el video
-    si la relación de aspecto no coincide (sin letterboxing).
-    """
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._current_image: QImage | None = None
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-    def set_frame(self, image: QImage) -> None:
-        """Recibe un nuevo frame y programa repintado."""
-        if image.isNull():
-            return
-        self._current_image = image
-        # Repintado inmediato (no acumulativo)
-        self.update()
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        if self._current_image and not self._current_image.isNull():
-            # Escalar con KeepAspectRatioByExpanding: llena el rectángulo,
-            # recortando el video si la proporción no coincide (16:9 vs contenedor).
-            target_rect = self.rect()
-            scaled = self._current_image.scaled(
-                target_rect.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            # Centrar el recorte
-            x = target_rect.x() + (target_rect.width() - scaled.width()) // 2
-            y = target_rect.y() + (target_rect.height() - scaled.height()) // 2
-            
-            # DIAGNÓSTICO: loguear dimensiones reales
-            try:
-                from blip_eraser.utils.log import write_diagnostic
-                write_diagnostic(
-                    f"SPLASH_PAINT: widget_rect={target_rect.width()}x{target_rect.height()} "
-                    f"image={self._current_image.width()}x{self._current_image.height()} "
-                    f"scaled={scaled.width()}x{scaled.height()} "
-                    f"draw_pos=({x},{y})"
-                )
-            except Exception:
-                pass
-            
-            painter.drawImage(x, y, scaled)
-        else:
-            # Sin frame aún: fondo oscuro neutro
-            painter.fillRect(self.rect(), QColor("#1a1a22"))
-        painter.end()
-
-    def clear_frame(self) -> None:
-        self._current_image = None
-        self.update()
-
-
-class SplashScreen(QWidget):
-    """Ventana sin marco: video de intro (o logo animado) + mensaje debajo."""
-
-    closed = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-        )
-        self.setFixedSize(SPLASH_WIDTH, SPLASH_HEIGHT)
-        self.setObjectName("Splash")
-        self.setWindowIcon(app_icon())
-
-        theme_key = load_prefs().get("theme", "red")
-        palette = palette_for(theme_key)
-        accent = THEMES.get(theme_key, THEMES["red"])["accent"]
-
-        self.setStyleSheet(
-            f"QWidget#Splash {{ background-color: {palette['panel']}; "
-            f"border: 1px solid {palette['border']}; border-radius: 12px; }}"
-        )
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(32, 36, 32, 28)
-        outer.setSpacing(20)
-        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Área "hero" donde va el video o el logo animado
-        self._hero = QWidget()
-        self._hero.setFixedSize(SPLASH_WIDTH - 64, _HERO_HEIGHT)
-        outer.addWidget(self._hero)
-
-        # Componentes de fallback (logo animado original)
-        self._logo = QLabel(self._hero)
-        self._logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self._title = QLabel("BLIPERASER", self._hero)
-        self._title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title.setStyleSheet(
-            f"color: {accent}; font-size: 32px; font-weight: bold; "
-            "letter-spacing: 2px;"
-        )
-
-        # Componentes de video (QVideoSink + widget personalizado)
-        self._video_widget: _VideoWidget | None = None
-        self._video_sink = None
-        self._media_player: QMediaPlayer | None = None
-        self._video_loaded = False
-        self._video_ended = False
-        self._worker_finished = False
-        self._waiting_for_worker = False
-
-        # Mensaje de progreso (común a ambos modos) — ahora hijo del _hero
-        # para que quede por encima del video con z-order normal
-        self._message = QLabel("", self._hero)
-        self._message.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom)
-        self._message.setWordWrap(True)
-        self._message.setStyleSheet(
-            f"color: {accent}; font-size: 15px; font-weight: bold;"
-        )
-        self._message.setContentsMargins(8, 8, 8, 16)
-        self._message.hide()  # se muestra cuando hay mensaje
-
-        self._message_effect = QGraphicsOpacityEffect(self._message)
-        self._message.setGraphicsEffect(self._message_effect)
-        self._message_effect.setOpacity(0.0)
-
-        self._load_logo(accent)
-        self._center_on_screen()
-
-        self._logo_effect = QGraphicsOpacityEffect(self._logo)
-        self._logo.setGraphicsEffect(self._logo_effect)
-        self._logo_effect.setOpacity(0.0)
-
-        self._title_effect = QGraphicsOpacityEffect(self._title)
-        self._title.setGraphicsEffect(self._title_effect)
-        self._title_effect.setOpacity(0.0)
-
-        self._intro_anim: QSequentialAnimationGroup | None = None
-        self._msg_fade_out: QPropertyAnimation | None = None
-        self._msg_fade_in: QPropertyAnimation | None = None
-
-        self._intro_done = False
-        self._pending_message: str | None = None
-
-        self._layout_hero_positions()
-        self._setup_video_or_fallback()
-        self._start_intro()
-
-    def _load_logo(self, accent: str) -> None:
+def _load_logo(self, accent: str) -> None:
         if ASSET_LOGO_PATH.exists():
             pixmap = QPixmap(str(ASSET_LOGO_PATH))
             if not pixmap.isNull():
@@ -305,9 +74,11 @@ class SplashScreen(QWidget):
             if not video_path.exists():
                 return
 
-            # Widget personalizado que pinta frames
-            self._video_widget = _VideoWidget(self._hero)
-            self._video_widget.setFixedSize(self._hero.size())
+            # Widget personalizado que pinta frames - OCUPA TODA LA VENTANA
+            self._video_widget = _VideoWidget()
+            self._video_widget.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             self._video_widget.hide()
 
             # QVideoSink para recibir frames
@@ -316,7 +87,7 @@ class SplashScreen(QWidget):
 
             self._media_player = QMediaPlayer(self)
             self._media_player.setVideoSink(self._video_sink)
-            self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
+            self._media_player.setSource(QUrl.fromLocalFile(str(Path(ASSET_SPLASH_VIDEO))))
             self._media_player.mediaStatusChanged.connect(self._on_media_status_changed)
             self._media_player.errorOccurred.connect(self._on_media_error)
 
@@ -340,15 +111,16 @@ class SplashScreen(QWidget):
                 write_diagnostic(
                     f"SPLASH_FRAME: frame_size={frame.width()}x{frame.height()} "
                     f"image_size={image.width()}x{image.height()} "
-                    f"video_widget_size={self._video_widget.width()}x{self._video_widget.height()} "
-                    f"hero_size={self._hero.width()}x{self._hero.height()}"
+                    f"video_widget_size={self._video_widget.width()}x{self._video_widget.height()}"
                 )
             except Exception:
                 pass
             self._video_widget.set_frame(image)
 
     def _start_intro(self) -> None:
-        if self._video_loaded and self._media_player and self._video_widget:
+        if self._video_loaded and self._media_player:
+            # Cambiar a página de video
+            self._stacked.setCurrentIndex(0)
             self._logo.hide()
             self._title.hide()
             self._video_widget.show()
@@ -438,7 +210,7 @@ class SplashScreen(QWidget):
                 )
         except Exception:
             pass
-        
+
         # Fallback silencioso a animación original
         self._video_loaded = False
         if self._video_widget:
@@ -483,31 +255,46 @@ class SplashScreen(QWidget):
         if self._msg_fade_in is not None:
             self._msg_fade_in.stop()
 
-        # Mostrar label si estaba oculto
         if self._video_loaded:
+            # MODO VIDEO: usar overlay sobre el video
+            self._message_overlay.show()
+            self._message_bg.show()
+            self._message_overlay.raise_()
+            self._message_bg.raise_()
+            # Actualizar geometría del fondo semitransparente
+            self._message_overlay.adjustSize()
+            bg_margin = 12
+            self._message_bg.setGeometry(
+                self._message_overlay.x() - 12,
+                self._message_overlay.y() - 8,
+                self._message_overlay.width() + 24,
+                self._message_overlay.height() + 16
+            )
+            self._message_bg.raise_()
+            self._message_overlay.raise_()
+        else:
+            # MODO FALLBACK: mensaje debajo del hero
             self._message.show()
-            self._message.raise_()  # asegurar que queda por encima del video widget
-            
-            try:
-                from blip_eraser.utils.log import write_diagnostic
-                write_diagnostic(
-                    f"SPLASH_MSG: msg_geometry={self._message.geometry().width()}x{self._message.geometry().height()} "
-                    f"at=({self._message.x()},{self._message.y()}) "
-                    f"video_widget_geom=({self._video_widget.x()},{self._video_widget.y()}) "
-                    f"video_widget_size={self._video_widget.width()}x{self._video_widget.height()} "
-                    f"hero_size={self._hero.width()}x{self._hero.height()}"
-                )
-            except Exception:
-                pass
+            self._message.raise_()
 
-        fade_out = QPropertyAnimation(self._message_effect, b"opacity", self)
+        if self._msg_fade_out is not None:
+            self._msg_fade_out.stop()
+        if self._msg_fade_in is not None:
+            self._msg_fade_in.stop()
+
+        fade_out = QPropertyAnimation(self._message_effect if not self._video_loaded else self._message_overlay.graphicsEffect(), b"opacity", self)
         fade_out.setDuration(_MSG_FADE_OUT_MS)
-        fade_out.setStartValue(self._message_effect.opacity())
+        fade_out.setStartValue(self._message_effect.opacity() if not self._video_loaded else self._message_overlay.graphicsEffect().opacity())
         fade_out.setEndValue(0.0)
 
         def _swap_and_fade_in() -> None:
-            self._message.setText(text)
-            fade_in = QPropertyAnimation(self._message_effect, b"opacity", self)
+            if self._video_loaded:
+                self._message_overlay.setText(text)
+            else:
+                self._message.setText(text)
+            fade_in = QPropertyAnimation(
+                self._message_effect if not self._video_loaded else self._message_overlay.graphicsEffect(),
+                b"opacity", self)
             fade_in.setDuration(_MSG_FADE_IN_MS)
             fade_in.setStartValue(0.0)
             fade_in.setEndValue(1.0)
@@ -523,49 +310,3 @@ class SplashScreen(QWidget):
             self._media_player.stop()
         self.closed.emit()
         super().closeEvent(event)
-
-
-class StartupWorker(QThread):
-    message = pyqtSignal(str)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.show_permissions_notice = False
-        self.missing_lines: list[str] = []
-
-    def run(self) -> None:
-        from blip_eraser.utils.apps import list_installed_apps
-        from blip_eraser.utils.dependency_check import check_pyqt6_available
-        from blip_eraser.utils.permissions import should_show_permissions_notice
-        from blip_eraser.utils.ui_text import localized_missing_lines
-        from blip_eraser.utils.updates import check_for_updates
-
-        if self.isInterruptionRequested():
-            return
-        self.message.emit(tr("splash_check_updates"))
-        check_for_updates()
-        QThread.msleep(_STEP_PAUSE_MS)
-
-        if self.isInterruptionRequested():
-            return
-        self.message.emit(tr("splash_check_permissions"))
-        self.show_permissions_notice = should_show_permissions_notice()
-        QThread.msleep(_STEP_PAUSE_MS)
-
-        if self.isInterruptionRequested():
-            return
-        self.message.emit(tr("splash_check_dependencies"))
-        check_pyqt6_available()
-        self.missing_lines = localized_missing_lines(["pacman", "pkexec"])
-        QThread.msleep(_STEP_PAUSE_MS)
-
-        if self.isInterruptionRequested():
-            return
-        self.message.emit(tr("splash_scanning"))
-        list_installed_apps()
-        QThread.msleep(_STEP_PAUSE_MS)
-
-        if self.isInterruptionRequested():
-            return
-        self.message.emit(tr("splash_welcome"))
-        QThread.msleep(_FINAL_PAUSE_MS)
