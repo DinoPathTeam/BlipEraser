@@ -119,6 +119,13 @@ def find_missing_dependencies(
 # ----------------------------------------------------------------------
 # Nivel 3 — Dependencias del Daemon Privilegiado (Fase 2)
 # ----------------------------------------------------------------------
+import time
+from functools import lru_cache
+
+# Cache para resultados de verificación de dependencias daemon (TTL 1 hora)
+_DAEMON_DEPS_CACHE: tuple[list[DaemonDependency], float] | None = None
+_DAEMON_DEPS_CACHE_TTL = 3600  # 1 hora
+
 @dataclass(frozen=True)
 class DaemonDependency:
     """Metadatos de una dependencia del daemon privilegiado."""
@@ -144,9 +151,10 @@ DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
     ),
     DaemonDependency(
         name="AppArmor",
-        check_cmd="systemctl is-active apparmor 2>/dev/null",
+        # Verificar módulo kernel + perfiles cargados (más rápido y fiable que systemctl)
+        check_cmd="lsmod | grep -q apparmor && [ -d /sys/kernel/security/apparmor ] && ls /sys/kernel/security/apparmor/profiles 2>/dev/null | grep -q .",
         install_cmd="pkexec pacman -S --noconfirm apparmor",
-        check_active_cmd="systemctl is-active apparmor 2>/dev/null",
+        check_active_cmd="lsmod | grep -q apparmor && [ -d /sys/kernel/security/apparmor ] && ls /sys/kernel/security/apparmor/profiles 2>/dev/null | grep -q .",
         requires_restart=True,
     ),
     DaemonDependency(
@@ -158,13 +166,17 @@ DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
 )
 
 
-def check_daemon_dependencies() -> list[DaemonDependency]:
-    """Verifica qué dependencias del daemon faltan o están inactivas.
+def _check_daemon_deps_cached() -> list[DaemonDependency]:
+    """Verifica dependencias del daemon con cache TTL."""
+    global _daemon_deps_cache
+    import time
     
-    Returns:
-        Lista de dependencias que faltan o están inactivas (vacío si todo OK).
-    """
-    import subprocess
+    now = time.time()
+    if _daemon_deps_cache is not None:
+        cached_result, cached_time = _daemon_deps_cache
+        if now - cached_time < 3600:  # TTL 1 hora
+            return cached_result
+    
     missing = []
     for dep in DAEMON_DEPENDENCIES:
         try:
@@ -172,7 +184,6 @@ def check_daemon_dependencies() -> list[DaemonDependency]:
                 dep.check_cmd, shell=True, capture_output=True, timeout=5
             )
             if result.returncode != 0:
-                # No instalado o no activo
                 missing.append(dep)
                 continue
             
@@ -186,28 +197,24 @@ def check_daemon_dependencies() -> list[DaemonDependency]:
                     continue
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
             missing.append(dep)
+    
+    _daemon_deps_cache = (missing, time.time())
     return missing
 
 
-def install_daemon_dependency(dep) -> tuple[bool, str]:
-    """Instala una dependencia del daemon usando pkexec.
+def check_daemon_dependencies() -> list[DaemonDependency]:
+    """Verifica qué dependencias del daemon faltan o están inactivas.
     
     Returns:
-        (success, message)
+        Lista de dependencias que faltan o están inactivas (vacío si todo OK).
     """
-    import subprocess
-    try:
-        result = subprocess.run(
-            dep.install_cmd, shell=True, capture_output=True, text=True, timeout=120
-        )
-        if result.returncode == 0:
-            return True, f"{dep.name} instalado correctamente"
-        else:
-            return False, f"Error instalando {dep.name}: {dep.stderr.strip()}"
-    except subprocess.TimeoutExpired:
-        return False, f"Timeout instalando {dep.name}"
-    except Exception as e:
-        return False, f"Error instalando {dep.name}: {e}"
+    return _check_daemon_deps_cached()
+
+
+def invalidate_daemon_deps_cache() -> None:
+    """Invalida el cache de dependencias del daemon."""
+    global _daemon_deps_cache
+    _daemon_deps_cache = None
 
 
 def missing_binary_banner(binaries: Sequence[str]) -> str:
