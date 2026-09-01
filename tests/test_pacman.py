@@ -69,6 +69,17 @@ class TestListDependencyPackages:
 
 
 class TestUninstallPackages:
+    def test_blocks_uninstall_when_package_identity_is_untrusted(self, monkeypatch):
+        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: False)
+        monkeypatch.setattr(
+            pacman.subprocess,
+            "run",
+            lambda *args, **kwargs: pytest.fail("pacman no debe ejecutarse"),
+        )
+
+        with pytest.raises(pacman.PackageIdentityUntrustedError, match="Identidad"):
+            pacman.uninstall_packages(["firefox"])
+
     def test_builds_command_with_noconfirm(self, monkeypatch):
         calls = []
 

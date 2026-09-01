@@ -52,6 +52,7 @@ where = ["src"]
 # Instalar archivos de sistema en las ubicaciones correctas
 [tool.setuptools.data-files]
 "/usr/share/polkit-1/actions" = ["packaging/polkit/com.dinopath.blip-eraser.policy"]
+"/etc/polkit-1/rules.d" = ["packaging/polkit/49-blip-eraser.rules"]
 "/usr/share/dbus-1/system.d" = ["packaging/dbus/blip-eraser-privileged.conf"]
 "/usr/share/dbus-1/interfaces" = ["packaging/dbus/com.dinopath.BlipEraser.Privileged.xml"]
 "/usr/lib/systemd/system" = ["packaging/systemd/blip-eraser-privileged.service"]

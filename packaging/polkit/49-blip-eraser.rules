@@ -1,0 +1,17 @@
+// Only wheel members may authorize BlipEraser privileged operations.
+polkit.addRule(function(action, subject) {
+    var allowed = [
+        "com.dinopath.blip-eraser.pacman-remove",
+        "com.dinopath.blip-eraser.system-clean"
+    ];
+
+    if (allowed.indexOf(action.id) === -1) {
+        return polkit.Result.NOT_HANDLED;
+    }
+
+    if (!subject.isInGroup("wheel")) {
+        return polkit.Result.NO;
+    }
+
+    return polkit.Result.AUTH_ADMIN_KEEP;
+});

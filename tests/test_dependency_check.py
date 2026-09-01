@@ -19,6 +19,7 @@ from blip_eraser.utils.dependency_check import (
     missing_binary_banner,
 )
 from blip_eraser.utils import dependency_check as dc
+from blip_eraser.utils.validation import validate_path, validate_path_str
 
 
 class TestCheckPyQt6Available:
@@ -139,3 +140,14 @@ class TestMissingBinaryBanner:
         monkeypatch.setattr(shutil, "which", lambda name: None)
         banner = missing_binary_banner(["pacman", "pkexec"])
         assert banner.count("no encontrado") == 2
+
+
+class TestSystemPathAllowlist:
+    def test_rejects_similar_prefix(self):
+        assert not validate_path_str("/var/log-malicioso")
+        assert not validate_path_str("/var/cache/pacman/pkg-otro")
+
+    def test_accepts_allowed_directory_and_child(self):
+        assert validate_path_str("/var/log")
+        assert validate_path_str("/var/log/journal")
+        assert validate_path("/var/log/journal")

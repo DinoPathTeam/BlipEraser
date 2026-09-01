@@ -40,7 +40,10 @@ HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
 def validate_path_str(path: str) -> bool:
     """Valida que una ruta string está dentro de los prefijos permitidos (sin resolve)."""
     path_str = str(path).replace("\\", "/")
-    return any(path_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
+    return any(
+        path_str == prefix or path_str.startswith(f"{prefix}/")
+        for prefix in ALLOWED_SYSTEM_PREFIXES
+    )
 
 
 def validate_path_resolved(path: Path) -> bool:
@@ -48,7 +51,10 @@ def validate_path_resolved(path: Path) -> bool:
     try:
         resolved = path.resolve(strict=False)
         resolved_str = str(resolved).replace("\\", "/")
-        return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
+        return any(
+            resolved_str == prefix or resolved_str.startswith(f"{prefix}/")
+            for prefix in ALLOWED_SYSTEM_PREFIXES
+        )
     except OSError:
         return False
 
@@ -122,9 +128,15 @@ def validate_path(path: Path) -> bool:
         except OSError:
             return False
         resolved_str = str(resolved).replace("\\", "/")
-        return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
+        return any(
+            resolved_str == prefix or resolved_str.startswith(f"{prefix}/")
+            for prefix in ALLOWED_SYSTEM_PREFIXES
+        )
 
-    return True
+    return any(
+        path_str == prefix or path_str.startswith(f"{prefix}/")
+        for prefix in ALLOWED_SYSTEM_PREFIXES
+    )
 
 
 def reject_symlinks(path: Path) -> bool:

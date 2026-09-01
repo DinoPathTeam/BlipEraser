@@ -28,6 +28,7 @@ from blip_eraser.utils.privileges import (
     remove_paths,
     get_allowed_operation,
 )
+from blip_eraser.utils.pacman import PackageIdentityUntrustedError
 from blip_eraser.utils.scan_cache import invalidate
 
 
@@ -141,6 +142,17 @@ def run_destructive_action(
         except ValueError as e:
             # Paquetes no válidos (rechazados por validación en pacman.py)
             errors.append(str(e))
+        except PackageIdentityUntrustedError:
+            QMessageBox.critical(
+                parent,
+                "Identidad no reconocida",
+                "La identidad de los paquetes no pudo verificarse. "
+                "La desinstalación fue bloqueada y la aplicación se cerrará.",
+            )
+            from PyQt6.QtWidgets import QApplication
+
+            QApplication.quit()
+            return False
         except Exception as e:  # noqa: BLE001 - límite de la capa GUI
             errors.append(tr("priv_error_failed").format(path=item.label))
 

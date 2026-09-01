@@ -34,6 +34,11 @@ from blip_eraser.utils.dbus_client import (
 _PACKAGE_CACHE: set[str] | None = None
 _CACHE_LOCK = threading.Lock()
 _CACHE_INITIALIZED = False
+_PACKAGE_IDENTITY_TRUSTED = True
+
+
+class PackageIdentityUntrustedError(RuntimeError):
+    """La identidad de los paquetes no pudo verificarse de forma segura."""
 
 
 def _verify_package_signatures() -> bool:
@@ -91,17 +96,19 @@ def _load_package_cache() -> set[str]:
     2. Carga lista de paquetes instalados desde `pacman -Q`
     3. Cachea en memoria para la sesión
     """
-    global _PACKAGE_CACHE, _CACHE_INITIALIZED
+    global _PACKAGE_CACHE, _CACHE_INITIALIZED, _PACKAGE_IDENTITY_TRUSTED
 
     with _CACHE_LOCK:
         if _CACHE_INITIALIZED:
             return _PACKAGE_CACHE or set()
 
         # Verificar firmas ANTES de confiar en la BD local
-        if not _verify_package_signatures():
+        _PACKAGE_IDENTITY_TRUSTED = _verify_package_signatures()
+        if not _PACKAGE_IDENTITY_TRUSTED:
             write_diagnostic("AUDIT action=pacman_cache_init result=signature_verification_failed")
-            # No bloqueamos: la BD local podría ser legítima aunque falte firma en caché
-            # Pero registramos la anomalía
+            _PACKAGE_CACHE = set()
+            _CACHE_INITIALIZED = True
+            return _PACKAGE_CACHE
 
         # Cargar lista de paquetes
         try:
@@ -138,10 +145,11 @@ def get_cached_package_names() -> set[str]:
 
 def invalidate_package_cache() -> None:
     """Invalida la caché para forzar recarga (útil tras instalar/desinstalar)."""
-    global _PACKAGE_CACHE, _CACHE_INITIALIZED
+    global _PACKAGE_CACHE, _CACHE_INITIALIZED, _PACKAGE_IDENTITY_TRUSTED
     with _CACHE_LOCK:
         _PACKAGE_CACHE = None
         _CACHE_INITIALIZED = False
+        _PACKAGE_IDENTITY_TRUSTED = True
         write_diagnostic("AUDIT action=pacman_cache_invalidate result=success")
 
 
@@ -150,10 +158,11 @@ def reset_package_cache_state() -> None:
 
     Fuerza la re-inicialización completa ignorando el estado previo.
     """
-    global _PACKAGE_CACHE, _CACHE_INITIALIZED
+    global _PACKAGE_CACHE, _CACHE_INITIALIZED, _PACKAGE_IDENTITY_TRUSTED
     with _CACHE_LOCK:
         _PACKAGE_CACHE = None
         _CACHE_INITIALIZED = False
+        _PACKAGE_IDENTITY_TRUSTED = True
 
 
 def _query_packages(flag: str) -> list[tuple[str, str]]:
@@ -210,6 +219,11 @@ def _validate_packages_exist(packages: list[str]) -> tuple[list[str], list[str]]
     Devuelve (válidos, inválidos). Los inválidos no se desinstalarán.
     """
     installed = _get_installed_package_names()
+    if not _PACKAGE_IDENTITY_TRUSTED:
+        raise PackageIdentityUntrustedError(
+            "Identidad de paquetes no reconocida; la desinstalación se bloqueó."
+        )
+
     valid = [p for p in packages if p in installed]
     invalid = [p for p in packages if p not in installed]
     return valid, invalid

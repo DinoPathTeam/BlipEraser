@@ -12,9 +12,9 @@
     <message>Se requiere autenticación para desinstalar paquetes del sistema</message>
     <message xml:lang="en">Authentication required to uninstall system packages</message>
     <defaults>
-      <allow_any>auth_admin</allow_any>
-      <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin</allow_active>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>no</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/pacman</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">-Rns</annotate>
@@ -27,9 +27,9 @@
     <message>Se requiere autenticación para limpiar rutas del sistema</message>
     <message xml:lang="en">Authentication required to clean system paths</message>
     <defaults>
-      <allow_any>auth_admin</allow_any>
-      <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin</allow_active>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>no</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rm</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">-rf</annotate>
