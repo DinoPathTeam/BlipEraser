@@ -1,0 +1,18 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\Adrian\Documents\BlipEraser\.venv-test\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Adrian\Documents\BlipEraser
+configfile: pyproject.toml
+collecting ... collected 19 items
+
+tests/test_splash_screen.py::TestVideoWidget::test_video_widget_constructs PASSED [  5%]
+tests/test_splash_screen.py::TestVideoWidget::test_video_widget_set_frame_triggers_update PASSED [ 10%]
+tests/test_splash_screen.py::TestVideoWidget::test_video_widget_ignores_null_frame PASSED [ 15%]
+tests/test_splash_screen.py::TestVideoWidget::test_video_widget_paint_event_no_crash PASSED [ 21%]
+tests/test_splash_screen.py::TestSplashScreenConstruction::test_splash_constructs_without_pyqt6_multimedia PASSED [ 26%]
+tests/test_splash_screen.py::TestSplashScreenConstruction::test_splash_constructs_with_video_missing PASSED [ 31%]
+tests/test_splash_screen.py::TestSplashScreenConstruction::test_splash_constructs_with_mock_video_available PASSED [ 36%]
+tests/test_splash_screen.py::TestSplashScreenFallbackBehavior::test_fallback_animation_runs PASSED [ 42%]
+tests/test_splash_screen.py::TestSplashScreenFallbackBehavior::test_fallback_message_queue PASSED [ 47%]
+tests/test_splash_screen.py::TestVideoTimingBehavior::test_media_status_changed_sets_video_ended_flag FAILED [ 52%]
+tests/test_splash_screen.py::TestVideoTimingBehavior::test_media_status_changed_ignores_other_statuses 
