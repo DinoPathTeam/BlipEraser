@@ -21,6 +21,7 @@ import importlib
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
+import subprocess
 
 # Asume distro Arch — revisar si se soporta multi-distro a futuro
 PYQT6_MODULE = "PyQt6.QtWidgets"
@@ -168,12 +169,12 @@ DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
 
 def _check_daemon_deps_cached() -> list[DaemonDependency]:
     """Verifica dependencias del daemon con cache TTL."""
-    global _daemon_deps_cache
+    global _DAEMON_DEPS_CACHE
     import time
     
     now = time.time()
-    if _daemon_deps_cache is not None:
-        cached_result, cached_time = _daemon_deps_cache
+    if _DAEMON_DEPS_CACHE is not None:
+        cached_result, cached_time = _DAEMON_DEPS_CACHE
         if now - cached_time < 3600:  # TTL 1 hora
             return cached_result
     
@@ -196,10 +197,10 @@ def _check_daemon_deps_cached() -> list[DaemonDependency]:
                 if active_result.returncode != 0:
                     missing.append(dep)
                     continue
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError):
+        except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
             missing.append(dep)
     
-    _daemon_deps_cache = (missing, time.time())
+    _DAEMON_DEPS_CACHE = (missing, time.time())
     return missing
 
 
@@ -214,8 +215,8 @@ def check_daemon_dependencies() -> list[DaemonDependency]:
 
 def invalidate_daemon_deps_cache() -> None:
     """Invalida el cache de dependencias del daemon."""
-    global _daemon_deps_cache
-    _daemon_deps_cache = None
+    global _DAEMON_DEPS_CACHE
+    _DAEMON_DEPS_CACHE = None
 
 
 def missing_binary_banner(binaries: Sequence[str]) -> str:

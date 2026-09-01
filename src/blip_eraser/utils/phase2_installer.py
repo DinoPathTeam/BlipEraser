@@ -205,21 +205,6 @@ def install_script() -> Tuple[bool, str]:
         return False, f"Error instalando script wrapper: {e}"
 
 
-def install_polkit_policy() -> Tuple[bool, str]:
-    """Instala política Polkit."""
-    try:
-        if check_root():
-            POLKIT_POLICY_DEST.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(POLKIT_POLICY_SRC, POLKIT_POLICY_DEST)
-        else:
-            subprocess.run(["pkexec", "mkdir", "-p", "/usr/share/polkit-1/actions"], check=True, timeout=10)
-            subprocess.run(["pkexec", "cp", str(POLKIT_POLICY_SRC), str(POLKIT_POLICY_DEST)], check=True, timeout=10)
-        
-        return True, "Política Polkit instalada"
-    except Exception as e:
-        return False, f"Error instalando política Polkit: {e}"
-
-
 def reload_daemons() -> Tuple[bool, str]:
     """Recarga daemon systemd y AppArmor."""
     try:

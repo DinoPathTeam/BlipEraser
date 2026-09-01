@@ -91,9 +91,9 @@ def _check_and_install_daemon_deps() -> tuple[bool, list[str]]:
     from PyQt6.QtWidgets import QMessageBox
     from blip_eraser.utils.dependency_check import (
         check_daemon_dependencies,
-        install_daemon_dependency,
         DAEMON_DEPENDENCIES,
     )
+    from blip_eraser.utils.phase2_installer import install_daemon_dependency
     
     missing = check_daemon_dependencies()
     if not missing:
