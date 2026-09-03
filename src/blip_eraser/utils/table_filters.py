@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from collections.abc import Callable
 from typing import Any, Literal
 
 
@@ -199,10 +200,10 @@ def detect_date_format(date_str: str) -> str:
 def filter_apps(
     apps: list[Any],
     filter_state: FilterState,
-    get_type: callable,
-    get_size_bytes: callable,
-    get_date: callable,
-    get_category: callable | None = None,
+    get_type: Callable[[Any], str],
+    get_size_bytes: Callable[[Any], int],
+    get_date: Callable[[Any], str],
+    get_category: Callable[[Any], str] | None = None,
 ) -> list[Any]:
     """Filtra y ordena una lista de apps/entradas según FilterState.
     

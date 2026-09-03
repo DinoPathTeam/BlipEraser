@@ -8,8 +8,10 @@ mismo que el Limpiador del sistema.
 """
 
 from pathlib import Path
+from typing import Any, Literal, cast
 
 from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -29,7 +31,6 @@ from PyQt6.QtWidgets import (
 from blip_eraser.pages.base import BasePage
 from blip_eraser.utils.apps import (
     KIND_APP,
-    KIND_DEPENDENCY,
     KIND_FOLDER,
     InstalledApp,
     kind_label_key,
@@ -40,14 +41,12 @@ from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.utils.log import write_diagnostic
-from blip_eraser.utils.pacman import uninstall_packages
 from blip_eraser.utils.scan_cache import SECTION_UNINSTALLER, is_stale, mark_scanned
 from blip_eraser.utils.table_filters import (
     DateFilterMode,
     FilterState,
     WeightFilterMode,
     filter_apps,
-    format_size_threshold,
     get_available_types,
     get_type_display_names,
     parse_size_threshold,
@@ -92,10 +91,10 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         # Desinstalador solo permite selección manual (una a una o
         # arrastrando) para evitar desinstalaciones masivas accidentales.
         self.table = CheckTable(_COLUMNS, show_select_all=False)
-        self.table.setHorizontalHeaderLabels(
+        cast(Any, self.table).setHorizontalHeaderLabels(
             ["", tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
-        header = self.table.horizontalHeader()
+        header = cast(QHeaderView, self.table.horizontalHeader())
         # Columnas redimensionables arrastrando el borde (Interactive).
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setStretchLastSection(False)
@@ -105,17 +104,17 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
 
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton(tr("refresh_button"))
-        self.refresh_btn.clicked.connect(self.load_apps)
+        cast(Any, self.refresh_btn.clicked).connect(self.load_apps)
         btn_row.addWidget(self.refresh_btn)
 
         self.uninstall_btn = QPushButton(tr("uninstall_button_count").format(n=0))
         self.uninstall_btn.setEnabled(False)
-        self.uninstall_btn.clicked.connect(self.uninstall_selected)
+        cast(Any, self.uninstall_btn.clicked).connect(self.uninstall_selected)
         btn_row.addWidget(self.uninstall_btn)
 
         layout.addLayout(btn_row)
 
-        self.table.itemChanged.connect(self._update_uninstall_btn)
+        cast(Any, self.table.itemChanged).connect(self._update_uninstall_btn)
 
     def _build_filter_toolbar(self) -> QWidget:
         """Construye la barra de filtros: Tipo / Peso / Fecha / Limpiar."""
@@ -159,7 +158,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         row.addWidget(self.filter_date_combo)
 
         self.filter_date_format = QComboBox()
-        self.filter_date_format.addItems(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"])
+        cast(Any, self.filter_date_format).addItems(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"])
         self.filter_date_format.setCurrentText(self._filter_state.date_format)
         self.filter_date_format.setToolTip(tr("filter_date_format_hint"))
         self.filter_date_format.setVisible(False)
@@ -188,38 +187,38 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         row.addStretch(1)
 
         # Conexiones
-        self.filter_type_button.triggered.connect(self._on_type_action_triggered)
-        self.filter_weight_combo.currentIndexChanged.connect(self._on_weight_filter_changed)
-        self.filter_weight_threshold.editingFinished.connect(self._on_weight_threshold_changed)
-        self.filter_date_combo.currentIndexChanged.connect(self._on_date_filter_changed)
-        self.filter_date_format.currentTextChanged.connect(self._on_date_format_changed)
-        self.filter_date_from.dateChanged.connect(self._on_date_range_changed)
-        self.filter_date_to.dateChanged.connect(self._on_date_range_changed)
-        self.filter_clear_btn.clicked.connect(self._clear_filters)
+        cast(Any, self.filter_type_button.triggered).connect(self._on_type_action_triggered)
+        cast(Any, self.filter_weight_combo.currentIndexChanged).connect(self._on_weight_filter_changed)
+        cast(Any, self.filter_weight_threshold.editingFinished).connect(self._on_weight_threshold_changed)
+        cast(Any, self.filter_date_combo.currentIndexChanged).connect(self._on_date_filter_changed)
+        cast(Any, self.filter_date_format.currentTextChanged).connect(self._on_date_format_changed)
+        cast(Any, self.filter_date_from.dateChanged).connect(self._on_date_range_changed)
+        cast(Any, self.filter_date_to.dateChanged).connect(self._on_date_range_changed)
+        cast(Any, self.filter_clear_btn.clicked).connect(self._clear_filters)
 
         return bar
 
     def _populate_type_button(self):
         """Llena el botón de Tipo con menú de acciones checkeables (multi-selección)."""
         menu = QMenu(self.filter_type_button)
-        self._type_actions = {}
+        self._type_actions: dict[str, QAction] = {}
 
         # Opción "Todos"
-        all_action = menu.addAction(tr("filter_type_all"))
+        all_action = cast(QAction, cast(Any, menu).addAction(tr("filter_type_all")))
         all_action.setCheckable(True)
         all_action.setChecked(True)
-        all_action.toggled.connect(self._on_type_all_toggled)
+        cast(Any, all_action.toggled).connect(self._on_type_all_toggled)
         self._type_actions["all"] = all_action
 
         menu.addSeparator()
 
         type_names = get_type_display_names(get_available_types())
         for kind_key, display in type_names.items():
-            action = menu.addAction(display)
+            action = cast(QAction, cast(Any, menu).addAction(display))
             action.setCheckable(True)
             action.setChecked(True)
             action.setData(kind_key)
-            action.toggled.connect(self._on_type_item_toggled)
+            cast(Any, action.toggled).connect(self._on_type_item_toggled)
             self._type_actions[kind_key] = action
 
         self.filter_type_button.setMenu(menu)
@@ -252,7 +251,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             self.filter_date_combo.addItem(label, mode)
         self.filter_date_combo.setCurrentIndex(0)
 
-    def _update_type_button_text(self):
+    def _update_type_button_text(self) -> None:
         """Actualiza el texto visible del botón de Tipo según selección."""
         checked = [k for k, a in self._type_actions.items() if k != "all" and a.isChecked()]
         if not checked:
@@ -266,7 +265,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             self.filter_type_button.setText(", ".join(labels))
             self.filter_type_button.setToolTip(", ".join(labels))
 
-    def _on_type_action_triggered(self, action):
+    def _on_type_action_triggered(self, action: QAction) -> None:
         """Manejador genérico para acciones del menú (no hace nada, las acciones tienen sus propios handlers)."""
         pass
 
@@ -332,7 +331,11 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
 
     def _on_date_format_changed(self, text: str):
         """Aplica el formato de fecha elegido."""
-        self._filter_state.date_format = text
+        if text in {"DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "AUTO"}:
+            self._filter_state.date_format = cast(
+                Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY", "AUTO"],
+                text,
+            )
         self._render()
 
     def _on_date_range_changed(self):
@@ -356,7 +359,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
     def _clear_filters(self):
         """Resetea todos los filtros a valores por defecto."""
         # Tipo: todos seleccionados
-        for k, a in self._type_actions.items():
+        for _k, a in self._type_actions.items():
             a.blockSignals(True)
             a.setChecked(True)
             a.blockSignals(False)
@@ -412,7 +415,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             tr("uninstall_button_count").format(n=len(self.table.checked_rows()))
         )
         self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
-        self.table.setHorizontalHeaderLabels(
+        cast(Any, self.table).setHorizontalHeaderLabels(
             ["", tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
 
@@ -441,13 +444,13 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         self._filter = text.strip().lower()
         self._render()
 
-    def showEvent(self, event):
-        super().showEvent(event)
+    def showEvent(self, a0: Any) -> None:
+        super().showEvent(a0)
         # Escaneo automático al mostrar la página solo si el caché está
         # viciado (primera vez, timeout de 5 min, o invalidado tras una
         # desinstalación). El botón "Actualizar lista" escanea siempre.
         if is_stale(SECTION_UNINSTALLER):
-            QTimer.singleShot(0, self.load_apps)
+            cast(Any, QTimer).singleShot(0, self.load_apps)
 
     # ------------------------------------------------------------------
     # Datos
