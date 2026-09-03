@@ -20,18 +20,21 @@ Security:
 from __future__ import annotations
 
 import os
+import importlib
 import signal
+import stat
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
+from typing import Any, Callable, cast
 
 try:
-    import gi
+    gi: Any = importlib.import_module("gi")
     gi.require_version("GLib", "2.0")
     gi.require_version("Gio", "2.0")
-    from gi.repository import GLib, Gio
+    GLib: Any = importlib.import_module("gi.repository.GLib")
+    Gio: Any = importlib.import_module("gi.repository.Gio")
 except ImportError:
     print("ERROR: PyGObject (gi) not available. Install python-gobject.", file=sys.stderr)
     sys.exit(1)
@@ -39,12 +42,6 @@ except ImportError:
 # ─── Constantes de seguridad ────────────────────────────────────────────
 
 # Prefijos permitidos para CleanSystemPaths (rm -rf)
-ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
-    "/var/cache/pacman/pkg",
-    "/var/log",
-    "/var/lib/pacman",
-)
-
 # Denylist dentro de $HOME (nunca se usa en daemon, pero por consistencia)
 HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
     ".ssh",
@@ -61,24 +58,25 @@ HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
 )
 
 # Caché de paquetes instalados (thread-safe)
-_PACKAGE_CACHE: set[str] | None = None
+_package_cache: set[str] | None = None
 _CACHE_LOCK = threading.Lock()
-_CACHE_INITIALIZED = False
-_CACHE_VERIFICATION_DONE = False  # Para verificación async de firmas
+_cache_initialized = False
+_cache_verification_done = False  # Para verificación async de firmas
 
 # ─── Auditoría ──────────────────────────────────────────────────────────
 
 # Intentar usar systemd journal nativo para logging estructurado
 try:
-    import systemd.journal
-    _HAVE_JOURNAL = True
+    _journal: Any = importlib.import_module("systemd.journal")
+    _journal_available = True
 except ImportError:
-    _HAVE_JOURNAL = False
+    _journal = None
+    _journal_available = False
 
 AUDIT_LOG_PATH = Path("/var/log/blip-eraser/daemon.log")
 
 
-def _audit_log(action: str, detail: str = "", **fields) -> None:
+def _audit_log(action: str, detail: str = "", **fields: object) -> None:
     """Registra auditoría en journal (systemd) con campos estructurados.
     
     Si systemd.journal no está disponible, cae a print con formato clave=valor.
@@ -113,10 +111,10 @@ def _audit_log(action: str, detail: str = "", **fields) -> None:
             parts.append(f"{k.lower()}={_escape_val(v)}")
     message = " ".join(parts)
 
-    if _HAVE_JOURNAL:
+    if _journal_available:
         try:
             # Enviar a systemd journal con campos estructurados
-            systemd.journal.send(
+            _journal.send(
                 f"AUDIT action={action}",
                 PRIORITY=6,  # INFO
                 **log_fields
@@ -147,14 +145,31 @@ def _hash_path(path: str) -> str:
 # ─── Validaciones ──────────────────────────────────────────────────────
 
 from blip_eraser.utils.validation import (
-    validate_path_str,
     validate_path_str as _validate_path_str,
-    reject_symlinks_atomic,
     reject_symlinks_atomic as _reject_symlinks_atomic,
-    validate_path_resolved,
     validate_path_resolved as _validate_path_resolved,
-    ALLOWED_SYSTEM_PREFIXES,
+    ALLOWED_SYSTEM_PREFIXES as _VALIDATION_ALLOWED_SYSTEM_PREFIXES,
 )
+
+validate_path_str = _validate_path_str
+reject_symlinks_atomic = _reject_symlinks_atomic
+validate_path_resolved = _validate_path_resolved
+ALLOWED_SYSTEM_PREFIXES = _VALIDATION_ALLOWED_SYSTEM_PREFIXES
+
+_OS_OPENAT: Any = getattr(os, "openat", None)
+_OS_FSTATAT: Any = getattr(os, "fstatat", None)
+_OS_UNLINKAT: Any = getattr(os, "unlinkat", None)
+_OS_O_PATH = getattr(os, "O_PATH", 0)
+_OS_O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
+_OS_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_OS_AT_REMOVEDIR = getattr(os, "AT_REMOVEDIR", 0)
+
+
+def _get_euid() -> int:
+    get_euid: Any = getattr(os, "geteuid", None)
+    if not callable(get_euid):
+        return -1
+    return cast(Callable[[], int], get_euid)()
 
 
 # ─── Operación atómica rm -rf usando fd ────────────────────────────────
@@ -164,9 +179,10 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
     Borra un path de forma atómica usando file descriptors para evitar TOCTOU.
     Retorna (success, error_message).
     """
-    import errno
-    
     try:
+        if not all((_OS_FSTATAT, _OS_UNLINKAT)):
+            return False, "Atomic filesystem APIs are unavailable"
+
         # Abrir el directorio padre con O_DIRECTORY | O_NOFOLLOW
         parent = path.parent
         name = path.name
@@ -178,20 +194,20 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
         # Abrir fd del padre con O_PATH | O_NOFOLLOW | O_DIRECTORY
         # O_PATH no requiere permisos de lectura, solo execute en el directorio
         try:
-            parent_fd = os.open(parent, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+            parent_fd = os.open(parent, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
         except OSError as e:
             return False, f"Cannot open parent directory: {e}"
         
         try:
             # Verificar que el entry existe y no es symlink (usando fstatat)
             try:
-                st = os.fstatat(parent_fd, name, follow_symlinks=False)
+                st = _OS_FSTATAT(parent_fd, name, follow_symlinks=False)
             except OSError as e:
                 return False, f"Entry not found or inaccessible: {e}"
             
             # Verificar que no es symlink usando fstatat (no sigue symlinks) - TOCTOU fix
             try:
-                st = os.fstatat(parent_fd, name, follow_symlinks=False)
+                st = _OS_FSTATAT(parent_fd, name, follow_symlinks=False)
                 if stat.S_ISLNK(st.st_mode):
                     os.close(parent_fd)
                     return False, "Entry is a symlink (TOCTOU protection)"
@@ -203,9 +219,9 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
                 # Para directorios, usar unlinkat con AT_REMOVEDIR
                 # Primero vaciar recursivamente (también con fd)
                 _rm_rf_dir_atomic(parent_fd, name)
-                os.unlinkat(parent_fd, name, os.AT_REMOVEDIR)
+                _OS_UNLINKAT(parent_fd, name, _OS_AT_REMOVEDIR)
             else:
-                os.unlinkat(parent_fd, name, 0)
+                _OS_UNLINKAT(parent_fd, name, 0)
             
             return True, ""
         finally:
@@ -223,9 +239,6 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
         dir_name: Nombre del subdirectorio a vaciar
         depth: Profundidad actual de recursión (para evitar stack overflow)
     """
-    import os
-    import stat
-    
     # Límite de profundidad para prevenir stack overflow
     if depth > 256:
         _audit_log("rm_rf_depth_exceeded", f"dir={dir_name} depth={depth}")
@@ -233,7 +246,9 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
     
     # Abrir fd del subdirectorio
     try:
-        subdir_fd = os.openat(dir_fd, dir_name, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+        if _OS_OPENAT is None or _OS_UNLINKAT is None:
+            return
+        subdir_fd = _OS_OPENAT(dir_fd, dir_name, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
     except OSError:
         return  # No existe o no accesible
     
@@ -249,7 +264,7 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
                     if entry.is_dir(follow_symlinks=False):
                         # Abrir fd del subdirectorio para recursión
                         try:
-                            subdir_fd = os.openat(dir_fd, entry.name, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+                            subdir_fd = _OS_OPENAT(dir_fd, entry.name, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
                         except OSError:
                             continue
                         # Validar que el fd abierto es efectivamente un directorio
@@ -263,11 +278,11 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
                             continue
                         try:
                             _rm_rf_dir_atomic(subdir_fd, entry.name, depth + 1)
-                            os.unlinkat(dir_fd, entry.name, os.AT_REMOVEDIR)
+                            _OS_UNLINKAT(dir_fd, entry.name, _OS_AT_REMOVEDIR)
                         finally:
                             os.close(subdir_fd)
                     else:
-                        os.unlinkat(dir_fd, entry.name, 0)
+                        _OS_UNLINKAT(dir_fd, entry.name, 0)
                 except OSError:
                     pass  # Ignorar errores individuales
     finally:
@@ -303,8 +318,8 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
     # Validar prefijos de allowlist una vez
     _validate_allowlist_prefixes()
     
-    valid = []
-    rejected = []
+    valid: list[str] = []
+    rejected: list[str] = []
     for p in paths:
         path = Path(p)
         # Check 1: symlink detection (sin resolve) - incluye padres
@@ -353,7 +368,7 @@ def _verify_package_signatures() -> tuple[bool, list[str]]:
         if not pkg_files:
             return True, []
         
-        failed = []
+        failed: list[str] = []
         for pkg_file in pkg_files:
             sig_file = pkg_file.with_suffix(pkg_file.suffix + ".sig")
             if not sig_file.exists():
@@ -386,11 +401,11 @@ def _load_package_cache() -> set[str]:
     falla, loggea warning pero NO bloquea la carga de la caché (RT-6 fix).
     Solo popula la caché con paquetes verificados.
     """
-    global _PACKAGE_CACHE, _CACHE_INITIALIZED, _CACHE_VERIFICATION_DONE
+    global _package_cache, _cache_initialized, _cache_verification_done
     with _CACHE_LOCK:
-        if _CACHE_INITIALIZED:
-            return _PACKAGE_CACHE or set()
-        _CACHE_VERIFICATION_DONE = False
+        if _cache_initialized:
+            return _package_cache or set()
+        _cache_verification_done = False
         
         # 1. Primero verificar firmas de paquetes en cache
         sig_ok, failed = _verify_package_signatures()
@@ -407,35 +422,36 @@ def _load_package_cache() -> set[str]:
             result = subprocess.run(
                 ["pacman", "-Q"], capture_output=True, text=True, check=True, timeout=30
             )
-            names = set()
+            names: set[str] = set()
             for line in result.stdout.splitlines():
                 line = line.strip()
                 if not line:
                     continue
                 name = line.split(None, 1)[0]
                 names.add(name)
-            _PACKAGE_CACHE = names
+            _package_cache = names
         except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
             _audit_log("pacman_cache_init", f"result=failed detail={e}")
-            _PACKAGE_CACHE = set()
+            _package_cache = set()
         
-        _CACHE_INITIALIZED = True
-        _CACHE_VERIFICATION_DONE = True
-        _audit_log("pacman_cache_init", f"result=success count={len(_PACKAGE_CACHE)}")
-        return _PACKAGE_CACHE or set()
+        _cache_initialized = True
+        _cache_verification_done = True
+        cache_count = len(_package_cache)
+        _audit_log("pacman_cache_init", f"result=success count={cache_count}")
+        return _package_cache or set()
 
 
 def get_cached_package_names() -> set[str]:
-    if not _CACHE_INITIALIZED:
+    if not _cache_initialized:
         return _load_package_cache()
-    return _PACKAGE_CACHE or set()
+    return _package_cache or set()
 
 
 def invalidate_package_cache() -> None:
-    global _PACKAGE_CACHE, _CACHE_INITIALIZED
+    global _package_cache, _cache_initialized
     with _CACHE_LOCK:
-        _PACKAGE_CACHE = None
-        _CACHE_INITIALIZED = False
+        _package_cache = None
+        _cache_initialized = False
         _audit_log("pacman_cache_invalidate", "result=success")
 
 
@@ -473,7 +489,7 @@ def clean_system_paths(paths: list[str]) -> str:
         raise ValueError(f"Todas las rutas rechazadas por validación: {', '.join(rejected)}")
     
     _audit_log("clean_started", f"paths={valid}")
-    errors = []
+    errors: list[str] = []
     for p in valid:
         path = Path(p)
         success, err = _rm_rf_atomic(path)
@@ -548,8 +564,8 @@ def _is_user_in_wheel_group(uid: int) -> bool:
             return cached_result
     
     try:
-        import pwd
-        import grp
+        pwd: Any = importlib.import_module("pwd")
+        grp: Any = importlib.import_module("grp")
         
         wheel_group = grp.getgrnam("wheel")
         wheel_gid = wheel_group.gr_gid
@@ -569,7 +585,10 @@ def _is_user_in_wheel_group(uid: int) -> bool:
         # Fallback: verificar GID primario / grupos suplementarios del UID
         try:
             username = pwd.getpwuid(uid).pw_name
-            user_groups = os.getgrouplist(username, pwd.getpwuid(uid).pw_gid)
+            getgrouplist: Any = getattr(os, "getgrouplist", None)
+            if getgrouplist is None:
+                return False
+            user_groups = getgrouplist(username, pwd.getpwuid(uid).pw_gid)
             result = wheel_gid in user_groups
             _WHEEL_GROUP_CACHE[uid] = (result, now)
             return result
@@ -647,7 +666,7 @@ class PrivilegedService:
         self._verify_timer = None
         self._shutdown_requested = False
 
-    def _verify_sender(self, connection, sender) -> bool:
+    def _verify_sender(self, connection: Any, sender: str) -> bool:
         """Verifica que el sender es un usuario autorizado (grupo wheel + sesión gráfica activa)."""
         try:
             # Obtener credenciales del sender
@@ -673,8 +692,16 @@ class PrivilegedService:
         except Exception:
             return False
 
-    def on_method_call(self, connection, sender, object_path, interface_name,
-                       method_name, parameters, invocation):
+    def on_method_call(
+        self,
+        connection: Any,
+        sender: str,
+        object_path: str,
+        interface_name: str,
+        method_name: str,
+        parameters: Any,
+        invocation: Any,
+    ) -> None:
         """Manejador de llamadas D-Bus con verificación de sender."""
         # Verificar autenticación del sender
         if not self._verify_sender(connection, sender):
@@ -743,7 +770,7 @@ class PrivilegedService:
                 f"Error interno: {e}"
             )
 
-    def register(self, bus: Gio.DBusConnection) -> int:
+    def register(self, bus: Any) -> int:
         """Registra el objeto en el bus."""
         return bus.register_object(
             "/com/dinopath/BlipEraser/Privileged",
@@ -754,9 +781,9 @@ class PrivilegedService:
             None
         )
 
-    def _setup_signals(self):
+    def _setup_signals(self) -> None:
         """Configura handlers de señales para shutdown limpio."""
-        def _signal_handler(signum, frame):
+        def _signal_handler(signum: int, frame: Any) -> None:
             _audit_log("shutdown_signal", f"signal={signum}")
             self._shutdown_requested = True
             if self._loop:
@@ -765,10 +792,12 @@ class PrivilegedService:
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
         # SIGHUP para recargar caché manualmente
-        def _sighup_handler(signum, frame):
+        def _sighup_handler(signum: int, frame: Any) -> None:
             _audit_log("cache_reload_requested", "signal=SIGHUP")
             invalidate_package_cache()
-        signal.signal(signal.SIGHUP, _sighup_handler)
+        sighup = getattr(signal, "SIGHUP", None)
+        if sighup is not None:
+            signal.signal(sighup, _sighup_handler)
 
     def _start_periodic_cache_refresh(self):
         """Timer periódico para refrescar caché de paquetes (cada 5 min)."""
@@ -812,7 +841,7 @@ class PrivilegedService:
     def run(self) -> int:
         """Ejecuta el bucle principal."""
         # Verificar que somos root
-        if os.geteuid() != 0:
+        if _get_euid() != 0:
             print("ERROR: El daemon debe ejecutarse como root", file=sys.stderr)
             return 1
 
@@ -860,12 +889,12 @@ def main() -> int:
     
     try:
         # Verificar que somos root
-        if os.geteuid() != 0:
+        if _get_euid() != 0:
             print("ERROR: El daemon debe ejecutarse como root", file=sys.stderr)
             return 1
         
         # Log startup info
-        _audit_log("daemon_starting", f"pid={os.getpid()} uid={os.geteuid()} python={sys.version}")
+        _audit_log("daemon_starting", f"pid={os.getpid()} uid={_get_euid()} python={sys.version}")
         
         service = PrivilegedService()
         return service.run()

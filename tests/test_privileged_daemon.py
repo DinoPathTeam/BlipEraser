@@ -99,7 +99,7 @@ class TestAuditLogging:
     def test_audit_fallback_writes_stderr_and_file(self, monkeypatch, tmp_path, capsys):
         import blip_eraser.daemon.privileged_daemon as daemon
 
-        monkeypatch.setattr(daemon, "_HAVE_JOURNAL", False)
+        monkeypatch.setattr(daemon, "_journal_available", False)
         monkeypatch.setattr(daemon, "AUDIT_LOG_PATH", tmp_path / "daemon.log")
 
         daemon._audit_log("test_event", "path=/var/log/test.log")
