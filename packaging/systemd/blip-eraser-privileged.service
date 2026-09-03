@@ -7,7 +7,7 @@ Requires=dbus.service
 [Service]
 Type=dbus
 BusName=com.dinopath.BlipEraser.Privileged
-ExecStart=/usr/lib/blip-eraser/blip-eraser-privileged
+ExecStart=/usr/bin/python3 /usr/lib/blip-eraser/blip-eraser-privileged
 User=root
 Group=root
 
@@ -15,7 +15,7 @@ Group=root
 WorkingDirectory=/usr/lib/blip-eraser
 
 # Environment
-Environment=PYTHONPATH=/usr/lib/python3.11/site-packages:/usr/lib/python3.12/site-packages:/usr/lib/python3.13/site-packages
+Environment=PYTHONPATH=/usr/lib/blip-eraser
 
 # Hardening estricto
 NoNewPrivileges=yes

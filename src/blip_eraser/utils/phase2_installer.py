@@ -14,13 +14,13 @@ Incluye:
 from __future__ import annotations
 
 import os
+import importlib
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
-from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.dependency_check import DaemonDependency
 
 
 # Rutas destino en el sistema
@@ -31,6 +31,7 @@ POLKIT_POLICY_DEST = Path("/usr/share/polkit-1/actions/com.dinopath.blip-eraser.
 APPARMOR_PROFILE_DEST = Path("/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged")
 SCRIPT_DEST = Path("/usr/lib/blip-eraser/blip-eraser-privileged")
 SCRIPT_DIR = Path("/usr/lib/blip-eraser")
+DAEMON_PACKAGE_DEST = SCRIPT_DIR / "blip_eraser"
 
 # Rutas origen en el repo (relativas a la raíz del proyecto)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -42,74 +43,13 @@ DBUS_INTERFACE_SRC = PACKAGING_DIR / "dbus" / "com.dinopath.BlipEraser.Privilege
 POLKIT_POLICY_SRC = PACKAGING_DIR / "polkit" / "com.dinopath.blip-eraser.policy"
 APPARMOR_PROFILE_SRC = PACKAGING_DIR / "apparmor" / "usr.lib.blip-eraser.blip-eraser-privileged"
 SCRIPT_SRC = PACKAGING_DIR / "scripts" / "blip-eraser-privileged"
-
-
-class InstallResult:
-    """Resultado de una operación de instalación."""
-    def __init__(self, success: bool, message: str = "", needs_restart: bool = False):
-        self.success = success
-        self.message = message
-        self.needs_restart = needs_restart
-
-
-def _run_pkexec(cmd: List[str], description: str) -> Tuple[bool, str]:
-    """Ejecuta un comando con pkexec y retorna (success, message)."""
-    cmd = ["pkexec"] + cmd
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            return True, f"{description}: OK"
-        else:
-            return False, f"{description} falló: {result.stderr.strip()}"
-    except subprocess.TimeoutExpired:
-        return False, f"Timeout en {description}"
-    except Exception as e:
-        return False, f"Error en {description}: {e}"
+DAEMON_PACKAGE_SRC = Path(__file__).resolve().parent.parent
 
 
 def check_root() -> bool:
     """Verifica si estamos ejecutando como root."""
-    return os.geteuid() == 0
-
-
-def ensure_root_or_pkexec() -> bool:
-    """Asegura que estamos en root o podemos usar pkexec."""
-    if check_root():
-        return True
-    # Verificar si pkexec está disponible
-    try:
-        subprocess.run(["pkexec", "--version"], capture_output=True, timeout=5)
-        return True
-    except (FileNotFoundError, subprocess.SubprocessError):
-        return False
-
-
-def install_file(src: Path, dest: Path, mode: int = 0o644) -> Tuple[bool, str]:
-    """Instala un archivo con pkexec si es necesario."""
-    try:
-        # Crear directorio destino si no existe
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        
-        if check_root():
-            shutil.copy2(src, dest)
-            os.chmod(dest, mode)
-            return True, f"Instalado {dest.name}"
-        else:
-            # Usar pkexec para copiar y dar permisos
-            cmd = ["pkexec", "cp", str(src), str(dest)]
-            result = subprocess.run(["pkexec", "cp", str(src), str(dest)], 
-                                  capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                return False, f"Error copiando {src.name}: {result.stderr}"
-            
-            # Dar permisos
-            subprocess.run(["pkexec", "chmod", str(mode), str(dest)], 
-                          capture_output=True, timeout=10)
-            return True, f"Instalado {dest.name} vía pkexec"
-    except subprocess.TimeoutExpired:
-        return False, f"Timeout instalando {dest.name}"
-    except Exception as e:
-        return False, f"Error instalando {dest.name}: {e}"
+    get_euid = getattr(os, "geteuid", None)
+    return callable(get_euid) and get_euid() == 0
 
 
 def install_systemd_service() -> Tuple[bool, str]:
@@ -205,6 +145,37 @@ def install_script() -> Tuple[bool, str]:
         return False, f"Error instalando script wrapper: {e}"
 
 
+def install_daemon_package() -> Tuple[bool, str]:
+    """Instala el paquete Python del daemon en una ruta del sistema."""
+    try:
+        if not DAEMON_PACKAGE_SRC.is_dir():
+            return False, f"No se encontró el paquete fuente: {DAEMON_PACKAGE_SRC}"
+
+        if check_root():
+            SCRIPT_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(
+                DAEMON_PACKAGE_SRC,
+                DAEMON_PACKAGE_DEST,
+                dirs_exist_ok=True,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+        else:
+            subprocess.run(
+                ["pkexec", "mkdir", "-p", str(SCRIPT_DIR)],
+                check=True,
+                timeout=10,
+            )
+            subprocess.run(
+                ["pkexec", "cp", "-R", str(DAEMON_PACKAGE_SRC), str(SCRIPT_DIR)],
+                check=True,
+                timeout=30,
+            )
+
+        return True, "Paquete Python del daemon instalado"
+    except Exception as e:
+        return False, f"Error instalando paquete Python del daemon: {e}"
+
+
 def reload_daemons() -> Tuple[bool, str]:
     """Recarga daemon systemd y AppArmor."""
     try:
@@ -233,14 +204,15 @@ def enable_and_start_service() -> Tuple[bool, str]:
 
 def check_dependencies_installed() -> List[str]:
     """Verifica qué dependencias del sistema faltan."""
-    missing = []
+    missing: list[str] = []
     
     # python-gobject (PyGObject)
     try:
-        import gi
+        gi: Any = importlib.import_module("gi")
         gi.require_version("GLib", "2.0")
         gi.require_version("Gio", "2.0")
-        from gi.repository import GLib, Gio
+        importlib.import_module("gi.repository.GLib")
+        importlib.import_module("gi.repository.Gio")
     except ImportError:
         missing.append("python-gobject")
     
@@ -252,7 +224,12 @@ def check_dependencies_installed() -> List[str]:
     
     # apparmor
     try:
-        result = subprocess.run(["systemctl", "is-active", "apparmor"], capture_output=True, timeout=5)
+        result = subprocess.run(
+            ["systemctl", "is-active", "apparmor"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
         if result.returncode != 0 or result.stdout.strip() != "active":
             missing.append("apparmor (servicio inactivo)")
     except Exception:
@@ -263,7 +240,7 @@ def check_dependencies_installed() -> List[str]:
 
 def check_daemon_installed() -> Tuple[bool, List[str]]:
     """Verifica si el daemon está completamente instalado."""
-    missing = []
+    missing: list[str] = []
     
     checks = [
         (SYSTEMD_SERVICE_DEST, "Servicio systemd"),
@@ -272,6 +249,7 @@ def check_daemon_installed() -> Tuple[bool, List[str]]:
         (POLKIT_POLICY_DEST, "Política Polkit"),
         (APPARMOR_PROFILE_DEST, "Perfil AppArmor"),
         (SCRIPT_DEST, "Script wrapper"),
+        (DAEMON_PACKAGE_DEST / "__init__.py", "Paquete Python del daemon"),
     ]
     
     for path, name in checks:
@@ -291,7 +269,7 @@ def install_all_phase2() -> Tuple[bool, str, bool]:
     if not ensure_root_or_pkexec():
         return False, "Se requieren privilegios de root (pkexec no disponible)", False
     
-    results = []
+    results: list[str] = []
     needs_restart = False
     
     # 1. Instalar servicio systemd
@@ -325,6 +303,12 @@ def install_all_phase2() -> Tuple[bool, str, bool]:
     results.append(f"Script: {msg}")
     if not success:
         return False, f"Error instalando script: {msg}", False
+
+    # 5a. Código Python importable fuera del entorno virtual del usuario
+    success, msg = install_daemon_package()
+    results.append(f"Paquete Python: {msg}")
+    if not success:
+        return False, f"Error instalando paquete Python: {msg}", False
     
     # 5b. Polkit policy
     success, msg = install_polkit_policy()
@@ -344,13 +328,13 @@ def install_all_phase2() -> Tuple[bool, str, bool]:
     if not success:
         return False, f"Error habilitando servicio: {msg}", False
     
-    return True, "\n".join(results), True
+    return True, "\n".join(results), needs_restart
 
 
 # Funciones auxiliares que faltaban
 def ensure_root_or_pkexec() -> bool:
     """Verifica si podemos ejecutar como root (directo o via pkexec)."""
-    if os.geteuid() == 0:
+    if check_root():
         return True
     try:
         subprocess.run(["pkexec", "--version"], capture_output=True, timeout=5)
@@ -373,7 +357,7 @@ def run_with_pkexec(cmd: List[str]) -> Tuple[bool, str]:
         return False, str(e)
 
 
-def install_daemon_dependency(dep) -> Tuple[bool, str]:
+def install_daemon_dependency(dep: DaemonDependency) -> Tuple[bool, str]:
     """Instala una dependencia del daemon usando pkexec.
     
     Args:
@@ -395,7 +379,7 @@ def install_daemon_dependency(dep) -> Tuple[bool, str]:
 
 def check_phase2_installed() -> Tuple[bool, List[str]]:
     """Verifica si Phase 2 está completamente instalado."""
-    missing = []
+    missing: list[str] = []
     
     required = [
         ("/usr/lib/systemd/system/blip-eraser-privileged.service", "Servicio systemd"),
@@ -404,6 +388,7 @@ def check_phase2_installed() -> Tuple[bool, List[str]]:
         ("/usr/share/polkit-1/actions/com.dinopath.blip-eraser.policy", "Política Polkit"),
         ("/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged", "Perfil AppArmor"),
         ("/usr/lib/blip-eraser/blip-eraser-privileged", "Script wrapper"),
+        ("/usr/lib/blip-eraser/blip_eraser/__init__.py", "Paquete Python del daemon"),
     ]
     
     for path, name in required:
@@ -422,7 +407,7 @@ def install_phase2_if_needed() -> Tuple[bool, str]:
         (success, message)
     """
     # Verificar si ya está instalado
-    installed, missing = check_daemon_installed()
+    installed, _missing = check_daemon_installed()
     if installed:
         return True, "Phase 2 ya instalado"
     
