@@ -176,6 +176,19 @@ def install_daemon_package() -> Tuple[bool, str]:
         return False, f"Error instalando paquete Python del daemon: {e}"
 
 
+def _service_is_current() -> bool:
+    """Comprueba que la unidad usa el runtime autónomo del daemon."""
+    try:
+        content = SYSTEMD_SERVICE_DEST.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return (
+        "ExecStart=/usr/bin/python3 /usr/lib/blip-eraser/"
+        "blip-eraser-privileged" in content
+        and "Environment=PYTHONPATH=/usr/lib/blip-eraser" in content
+    )
+
+
 def reload_daemons() -> Tuple[bool, str]:
     """Recarga daemon systemd y AppArmor."""
     try:
@@ -255,6 +268,9 @@ def check_daemon_installed() -> Tuple[bool, List[str]]:
     for path, name in checks:
         if not path.exists():
             missing.append(name)
+
+    if not _service_is_current():
+        missing.append("Servicio systemd desactualizado")
     
     return len(missing) == 0, missing
 
