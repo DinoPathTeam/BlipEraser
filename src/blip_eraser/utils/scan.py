@@ -167,7 +167,7 @@ def best_effort_dir_size(path: Path) -> int:
         return 0
 
 
-def scan_cleanup() -> dict:
+def scan_cleanup() -> dict[str, int]:
     """Espacio recuperable por categoría (junk/cache/logs) + huérfanos."""
     return {
         "junk_bytes": best_effort_dir_size(_CACHE_DIR),

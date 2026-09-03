@@ -13,6 +13,7 @@ from __future__ import annotations
 import threading
 import traceback
 from collections.abc import Callable
+from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -60,11 +61,11 @@ class BackgroundScanMixin:
       evitando qFatal en PyQt6 al entregar a un receptor en estado inconsistente.
     """
 
-    def _init_scan_buttons(self, buttons: list) -> None:
+    def _init_scan_buttons(self, buttons: list[Any]) -> None:
         self._scan_buttons = list(buttons)
         self._scan_token = 0
         self._scanning = False
-        self._scan_on_result: Callable[[object], None] | None = None
+        self._scan_on_result: Callable[[Any], None] | None = None
         self._scan_bridge = _ScanBridge()
         self._scan_bridge.result_ready.connect(self._on_scan_result_ready)
         self._scan_bridge.failed.connect(self._on_scan_failed)
@@ -86,7 +87,7 @@ class BackgroundScanMixin:
 
         return not sip.isdeleted(self)
 
-    def _forensic_debug(self, label: str, **widgets) -> str:
+    def _forensic_debug(self, label: str, **widgets: Any) -> str:
         """Línea forense de depuración (vida + identidad de widgets implicados).
 
         Va a la bitácora de diagnóstico (write_diagnostic), nunca a la UI del
@@ -115,8 +116,8 @@ class BackgroundScanMixin:
         exc: BaseException,
         *,
         user_message: str | None = None,
-        extra: dict | None = None,
-        **widgets,
+        extra: dict[str, object] | None = None,
+        **widgets: Any,
     ) -> None:
         """Contiene un RuntimeError de render/rebuild SIN tumbar la app.
 
@@ -152,7 +153,7 @@ class BackgroundScanMixin:
         log_buffer.add(user_message if user_message is not None else tr("table_render_failed"))
 
     def _start_background_scan(
-        self, fn: Callable[[], object], on_result: Callable[[object], None]
+        self, fn: Callable[[], Any], on_result: Callable[[Any], None]
     ) -> None:
         self._scan_token += 1
         token = self._scan_token

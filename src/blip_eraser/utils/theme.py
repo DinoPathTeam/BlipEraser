@@ -7,7 +7,9 @@ produce la hoja de estilos Qt (string) para ese tema. Testable sin GUI.
 
 from __future__ import annotations
 
-THEMES: dict[str, dict] = {
+from typing import Any
+
+THEMES: dict[str, dict[str, Any]] = {
     # Tema 1: Rojo y Negro (oscuro) — el original con el nombre actualizado.
     "red": {
         "label_key": "theme_red",
@@ -78,7 +80,7 @@ THEMES: dict[str, dict] = {
     },
 }
 
-FONTS: list[dict] = [
+FONTS: list[dict[str, Any]] = [
     {"id": "system", "label_key": "font_system", "family": None},
     {"id": "roboto", "family": "Roboto"},
     {"id": "lato", "family": "Lato"},
@@ -87,7 +89,7 @@ FONTS: list[dict] = [
 ]
 
 
-def palette_for(theme_key: str) -> dict:
+def palette_for(theme_key: str) -> dict[str, Any]:
     """Paleta completa de un tema."""
     theme = THEMES.get(theme_key, THEMES["red"])
     return theme["palette"]

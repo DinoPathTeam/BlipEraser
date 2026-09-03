@@ -13,6 +13,10 @@ limpieza con datos reales. Toda la lógica es pura y testeable.
 """
 
 from PyQt6 import sip
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any, TypedDict, cast
+
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
@@ -26,7 +30,7 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser.utils import theme as theme_mod
-from blip_eraser.utils.apps import health_score, kind_label_key, list_installed_apps
+from blip_eraser.utils.apps import InstalledApp, health_score, kind_label_key, list_installed_apps
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
 from blip_eraser.utils.file_utils import human_size
@@ -57,19 +61,32 @@ from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 _ICON_FALLBACK = "application-x-executable"
 
 
+class CleanupSummary(TypedDict):
+    junk_bytes: int
+    pacman_cache_bytes: int
+    logs_bytes: int
+    orphan_count: int
+
+
+class ScanResult(TypedDict):
+    apps: list[InstalledApp]
+    cleanup: CleanupSummary
+
+
 class OverviewPage(QWidget, BackgroundScanMixin):
     uninstall_requested = pyqtSignal(str, str, str)  # (nombre, fuente, detalle)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._prev_cpu: tuple[int, int] | None = None
-        self._accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
-        self._apps: list = []
+        self._accent = str(theme_mod.THEMES[str(load_prefs().get("theme", "red"))]["accent"])
+        self._apps: list[InstalledApp] = []
+        self._initial_scan_callback: Callable[[], None] | None = None
         self._build_ui()
         self._init_scan_buttons([self.scan_btn, self.cleanup_btn])
 
         self._timer = QTimer(self)
-        self._timer.timeout.connect(self.refresh)
+        cast(Any, self._timer.timeout).connect(self.refresh)
         self._timer.start(2000)
         self.refresh()
         log_buffer.subscribe(self._on_log)
@@ -87,7 +104,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             f"cleanup_logs_label_id={id(self.cleanup_logs_label)}"
         )
 
-    def start_initial_scan(self, on_finished=None) -> None:
+    def start_initial_scan(self, on_finished: Callable[[], None] | None = None) -> None:
         """Inicia el primer escaneo tras completarse la inicialización completa.
 
         Llamado desde MainWindow para evitar condiciones de carrera con
@@ -145,10 +162,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         left_layout.addSpacing(8)
 
         # Botón SCAN NOW (pastilla con glow e icono)
-        accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
+        accent = str(theme_mod.THEMES[str(load_prefs().get("theme", "red"))]["accent"])
         self.scan_btn = ScanNowButton(tr("overview_erase_button"), tr("overview_erase_subtitle"))
         self.scan_btn.set_accent(accent)
-        self.scan_btn.clicked.connect(self._scan)
+        cast(Any, self.scan_btn.clicked).connect(self._scan)
         left_layout.addWidget(self.scan_btn)
 
         left_layout.addStretch(1)
@@ -225,7 +242,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         # Acción real conectada al resumen: limpia basura + caché + registros
         # con el mismo flujo (confirmación y borrado) que el Limpiador.
         self.cleanup_btn = QPushButton(tr("cleanup_run_button"))
-        self.cleanup_btn.clicked.connect(self._cleanup_now)
+        cast(Any, self.cleanup_btn.clicked).connect(self._cleanup_now)
         right_layout.addWidget(self.cleanup_btn)
         right_layout.addStretch(0)
 
@@ -244,10 +261,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self.scan_btn.set_texts(tr("overview_scanning"), tr("overview_erase_subtitle"))
         self._start_background_scan(self._scan_worker, self._on_scan_done)
 
-    def _scan_worker(self) -> dict:
+    def _scan_worker(self) -> ScanResult:
         apps = list_installed_apps()
         cleanup = scan_cleanup()
-        return {"apps": apps, "cleanup": cleanup}
+        return ScanResult(apps=apps, cleanup=cast(CleanupSummary, cleanup))
 
     def _cleanup_now(self):
         """Botón del resumen: limpia basura + caché + registros (fondo, no bloquea)."""
@@ -255,7 +272,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             return
         self._start_background_scan(scan_cleanup_items, self._on_cleanup_items_ready)
 
-    def _on_cleanup_items_ready(self, entries: list):
+    def _on_cleanup_items_ready(self, entries: list[tuple[str, Path, int]]) -> None:
         if not entries:
             QMessageBox.information(self, tr("done_title"), tr("cleanup_list_empty"))
             return
@@ -286,11 +303,11 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         """Recomputa SOLO el resumen 'SYSTEM CLEANUP RECOMMENDED' en segundo plano."""
         self._start_background_scan(scan_cleanup, self._on_cleanup_summary_ready)
 
-    def _on_cleanup_summary_ready(self, cleanup: dict):
+    def _on_cleanup_summary_ready(self, cleanup: CleanupSummary) -> None:
         self._apply_cleanup(cleanup)
         self._apply_metrics(cleanup)
 
-    def _on_scan_done(self, result: dict):
+    def _on_scan_done(self, result: ScanResult) -> None:
         # Defensa dura de TODA la cadena del resultado: cualquier widget de la
         # página que muera en C++ durante el procesamiento (apps, cleanup,
         # métricas, o uno futuro) queda contenido aquí, sin whack-a-mole por
@@ -330,7 +347,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             if callable(callback):
                 callback()
 
-    def _apply_cleanup(self, cleanup: dict):
+    def _apply_cleanup(self, cleanup: CleanupSummary) -> None:
         """Renderiza los tres labels 'SYSTEM CLEANUP RECOMMENDED' desde `scan_cleanup()`.
 
         Compartido por `_on_scan_done` y `_on_cleanup_summary_ready` para que el
@@ -346,7 +363,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             f"{tr('cleanup_logs')}: {human_size(cleanup['logs_bytes'])}"
         )
 
-    def _apply_metrics(self, cleanup: dict):
+    def _apply_metrics(self, cleanup: CleanupSummary) -> None:
         """Actualiza las tres métricas del panel izquierdo (basura/huérfanos/entradas).
 
         Compartido por `_on_scan_done` y `_on_cleanup_summary_ready`: tras
@@ -400,6 +417,8 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             )
             while self._apps_layout.count():
                 item = self._apps_layout.takeAt(0)
+                if item is None:
+                    continue
                 widget = item.widget()
                 if widget:
                     write_diagnostic(f"_rebuild_apps deleteLater widget_id={id(widget)}")
@@ -468,7 +487,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
 
                 uninstall_btn = QPushButton(tr("uninstall_short"))
                 uninstall_btn.setObjectName("DangerButton")
-                uninstall_btn.clicked.connect(
+                cast(Any, uninstall_btn.clicked).connect(
                     lambda _=False, n=app.name, s=app.source, d=app.detail: self.uninstall_requested.emit(n, s, d)
                 )
                 row_layout.addWidget(uninstall_btn)
@@ -523,8 +542,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             na = tr("status_na")
             cpu_model_text = cpu_model() or na
             gpu_model_text = gpu_model() or na
-            ram_total = human_size(ram_total_bytes()) if ram_total_bytes() else na
-            disk_total = human_size(disk_total_bytes()) if disk_total_bytes() else na
+            ram_total_bytes_value = ram_total_bytes()
+            disk_total_bytes_value = disk_total_bytes()
+            ram_total = human_size(ram_total_bytes_value) if ram_total_bytes_value is not None else na
+            disk_total = human_size(disk_total_bytes_value) if disk_total_bytes_value is not None else na
 
             self.cpu_row.setText(f"{tr('status_cpu')}: {cpu_model_text}  ({cpu}%)" if cpu is not None else f"{tr('status_cpu')}: {cpu_model_text}  ({na})")
             self.gpu_row.setText(f"{tr('gpu_label')}: {gpu_model_text}")

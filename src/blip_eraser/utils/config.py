@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 CONFIG_DIR = Path.home() / ".config" / "blip-eraser"
 PREFS_FILE = CONFIG_DIR / "prefs.json"
 
-PREFS_DEFAULTS: dict = {
+PREFS_DEFAULTS: dict[str, Any] = {
     "theme": "red",
     "font": "system",
     "scan_paths": [
@@ -30,7 +31,7 @@ PREFS_DEFAULTS: dict = {
 }
 
 
-def _read_raw() -> dict:
+def _read_raw() -> dict[str, Any]:
     try:
         data = json.loads(PREFS_FILE.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -38,14 +39,14 @@ def _read_raw() -> dict:
         return {}
 
 
-def load_prefs() -> dict:
+def load_prefs() -> dict[str, Any]:
     """Preferencias completas (por defecto + lo persistido)."""
     merged = dict(PREFS_DEFAULTS)
     merged.update(_read_raw())
     return merged
 
 
-def save_prefs(patch: dict) -> None:
+def save_prefs(patch: dict[str, Any]) -> None:
     """Fusiona `patch` sobre las preferencias actuales y persiste.
 
     Best-effort: un fallo de escritura no rompe la app.

@@ -17,7 +17,7 @@ NO se ejecutan callables arbitrarios (elimina vector RCE).
 
 import subprocess
 
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QWidget
 
 from blip_eraser.utils.confirm import ConfirmPlan
 from blip_eraser.utils.file_utils import human_size
@@ -55,7 +55,7 @@ def _plan_body(plan: ConfirmPlan) -> str:
     return "<br>".join(lines)
 
 
-def ask_destructive_confirmation(parent, plan: ConfirmPlan, title: str) -> bool:
+def ask_destructive_confirmation(parent: QWidget | None, plan: ConfirmPlan, title: str) -> bool:
     """Pregunta Sí/No. Devuelve True solo con confirmación explícita.
 
     El diálogo no ofrece opciones para saltar la confirmación en el futuro:
@@ -86,7 +86,7 @@ def _friendly_error_message(error: RemovalError) -> str:
 
 
 def run_destructive_action(
-    parent,
+    parent: QWidget | None,
     plan: ConfirmPlan,
     title: str,
     log_key: str = "log_destructive_removed",
