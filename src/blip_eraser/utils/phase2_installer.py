@@ -189,6 +189,18 @@ def _service_is_current() -> bool:
     )
 
 
+def _daemon_package_is_current() -> bool:
+    """Comprueba que el código instalado del daemon no quedó obsoleto."""
+    source = DAEMON_PACKAGE_SRC / "daemon" / "privileged_daemon.py"
+    installed = DAEMON_PACKAGE_DEST / "daemon" / "privileged_daemon.py"
+    if not source.is_file():
+        return True
+    try:
+        return installed.is_file() and source.read_bytes() == installed.read_bytes()
+    except OSError:
+        return False
+
+
 def reload_daemons() -> Tuple[bool, str]:
     """Recarga daemon systemd y AppArmor."""
     try:
@@ -271,6 +283,8 @@ def check_daemon_installed() -> Tuple[bool, List[str]]:
 
     if not _service_is_current():
         missing.append("Servicio systemd desactualizado")
+    if not _daemon_package_is_current():
+        missing.append("Paquete Python del daemon desactualizado")
     
     return len(missing) == 0, missing
 
