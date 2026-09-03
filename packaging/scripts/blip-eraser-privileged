@@ -5,12 +5,13 @@ This script is installed to /usr/lib/blip-eraser/blip-eraser-privileged
 and invoked by the systemd service.
 """
 
-import sys
 import os
+import sys
 
-# Asegurar que podemos importar blip_eraser desde la instalación del sistema
-# El paquete se instala en /usr/lib/python3.x/site-packages/blip_eraser
-# o similar, que ya está en sys.path
+
+INSTALL_ROOT = os.path.dirname(os.path.abspath(__file__))
+if INSTALL_ROOT not in sys.path:
+    sys.path.insert(0, INSTALL_ROOT)
 
 from blip_eraser.daemon.privileged_daemon import main
 
