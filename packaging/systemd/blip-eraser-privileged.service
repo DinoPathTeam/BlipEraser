@@ -16,6 +16,7 @@ WorkingDirectory=/usr/lib/blip-eraser
 
 # Environment
 Environment=PYTHONPATH=/usr/lib/blip-eraser
+Environment=PYTHONUNBUFFERED=1
 
 # Hardening estricto
 NoNewPrivileges=yes
@@ -39,7 +40,7 @@ SystemCallFilter=@system-service @clock @cpu-emulation @debug @module @obsolete 
 SystemCallErrorNumber=EPERM
 
 # Solo permitimos escritura en las rutas necesarias para las operaciones
-ReadWritePaths=/var/cache/pacman/pkg /var/log /var/lib/pacman
+ReadWritePaths=/var/cache/pacman/pkg /var/log /var/lib/pacman /var/log/blip-eraser
 ReadOnlyPaths=/usr/bin/pacman /usr/bin/pacman-key /usr/bin/rm /usr/lib/blip-eraser
 
 # Capabilities mínimas necesarias

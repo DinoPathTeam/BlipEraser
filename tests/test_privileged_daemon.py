@@ -95,6 +95,19 @@ class TestHashPath:
         assert _hash_path("/var/log/a") != _hash_path("/var/log/b")
 
 
+class TestAuditLogging:
+    def test_audit_fallback_writes_stderr_and_file(self, monkeypatch, tmp_path, capsys):
+        import blip_eraser.daemon.privileged_daemon as daemon
+
+        monkeypatch.setattr(daemon, "_HAVE_JOURNAL", False)
+        monkeypatch.setattr(daemon, "AUDIT_LOG_PATH", tmp_path / "daemon.log")
+
+        daemon._audit_log("test_event", "path=/var/log/test.log")
+
+        assert "AUDIT action=test_event" in capsys.readouterr().err
+        assert "AUDIT action=test_event" in (tmp_path / "daemon.log").read_text()
+
+
 class TestPackageCache:
     """Tests de la caché de paquetes con verificación de firmas."""
 
@@ -294,6 +307,19 @@ class TestDBusPolicy:
         assert 'context="default"' in content
         assert 'deny send_destination' in content
         assert 'allow own' in content
+
+    def test_systemd_unit_captures_unbuffered_audit_output(self):
+        service_file = (
+            Path(__file__).parent.parent
+            / "packaging"
+            / "systemd"
+            / "blip-eraser-privileged.service"
+        )
+        content = service_file.read_text(encoding="utf-8")
+        assert "StandardOutput=journal" in content
+        assert "StandardError=journal" in content
+        assert "Environment=PYTHONUNBUFFERED=1" in content
+        assert "/var/log/blip-eraser" in content
 
 
 class TestAtomicRemoval:

@@ -75,6 +75,8 @@ try:
 except ImportError:
     _HAVE_JOURNAL = False
 
+AUDIT_LOG_PATH = Path("/var/log/blip-eraser/daemon.log")
+
 
 def _audit_log(action: str, detail: str = "", **fields) -> None:
     """Registra auditoría en journal (systemd) con campos estructurados.
@@ -102,6 +104,15 @@ def _audit_log(action: str, detail: str = "", **fields) -> None:
         safe_val = str(v).replace("\n", " ").replace("\r", " ")[:1000]
         log_fields[safe_key] = safe_val
     
+    # Fallback: formato clave=valor con escaping para parsing seguro.
+    parts = [f"AUDIT action={action}"]
+    if safe_detail:
+        parts.append(f"detail={_escape_val(safe_detail)}")
+    for k, v in log_fields.items():
+        if k not in ("ACTION", "DETAIL"):
+            parts.append(f"{k.lower()}={_escape_val(v)}")
+    message = " ".join(parts)
+
     if _HAVE_JOURNAL:
         try:
             # Enviar a systemd journal con campos estructurados
@@ -114,14 +125,17 @@ def _audit_log(action: str, detail: str = "", **fields) -> None:
         except Exception:
             pass  # Caer a fallback
     
-    # Fallback: formato clave=valor con escaping para parsing seguro
-    parts = [f"AUDIT action={action}"]
-    if safe_detail:
-        parts.append(f"detail={_escape_val(safe_detail)}")
-    for k, v in log_fields.items():
-        if k not in ("ACTION", "DETAIL"):
-            parts.append(f"{k.lower()}={_escape_val(v)}")
-    print(" ".join(parts), flush=True)
+    # Fallback 1: stderr queda asociado a la unidad systemd/journal.
+    print(message, file=sys.stderr, flush=True)
+
+    # Fallback 2: conservar auditoría local si journald no está disponible.
+    try:
+        AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with AUDIT_LOG_PATH.open("a", encoding="utf-8") as log_file:
+            log_file.write(message + "\n")
+        os.chmod(AUDIT_LOG_PATH, 0o600)
+    except OSError:
+        pass
 
 
 def _hash_path(path: str) -> str:
