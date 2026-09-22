@@ -87,3 +87,51 @@ class TestDeleteProgress:
             QtWidgets.QWidget(), plan, "t", on_finished=done.append
         )
         assert done == [False]
+
+    def test_theme_change_mid_delete_does_not_break(self, app, monkeypatch):
+        """Un repolish (cambio de tema) con el diálogo abierto no tumba el borrado."""
+        from pathlib import Path
+
+        monkeypatch.setattr(dlg_mod, "ask_destructive_confirmation", lambda *a: True)
+        monkeypatch.setattr(
+            dlg_mod.QMessageBox, "information", lambda *a, **k: None
+        )
+        monkeypatch.setattr(dlg_mod.QMessageBox, "warning", lambda *a, **k: None)
+
+        def slow_remove(paths, on_progress=None):
+            import time as _time
+
+            out = RemovalOutcome()
+            for i, _p in enumerate(paths, start=1):
+                _time.sleep(0.2)
+                if on_progress:
+                    on_progress(i, len(paths))
+            out.removed = len(paths)
+            return out
+
+        monkeypatch.setattr(dlg_mod, "remove_paths", slow_remove)
+
+        items = [
+            ConfirmItem(label=f"g{i}", category_label="Basura", size_bytes=10, paths=[Path(f"/tmp/g{i}")])
+            for i in range(4)
+        ]
+        done = []
+        parent = QtWidgets.QWidget()
+        dlg_mod.run_destructive_action(
+            parent, build_confirmation_plan(items), "t", on_finished=done.append
+        )
+        # Cambio de tema a mitad: repolish global + eventos, como _apply_appearance.
+        for _ in range(6):
+            app.processEvents()
+            app.setStyleSheet("QWidget { font-size: 10pt; }")
+            for w in QtWidgets.QApplication.allWidgets():
+                try:
+                    w.style().unpolish(w)
+                    w.style().polish(w)
+                except RuntimeError:
+                    pass  # widget muerto en C++: no debe tumbar el test
+            time.sleep(0.15)
+        _pump_until(app, lambda: len(done) == 1)
+        assert done == [True]
+        app.setStyleSheet("")
+        parent.close()
