@@ -11,6 +11,9 @@ Detecta lo que pacman no ve (AppImages, carpetas sueltas, Hydra) y lo unifica
 con paquetes en una sola UI. Licencia MIT. Estado: funcional, desordenado,
 en fase de orden/limpieza por partes. **Fase actual: solo entender, no fix.**
 
+**Ruta canónica:** `/home/adrexcou/BlipEraser/` (clon de GitHub para probar
+en Linux; el trabajo anterior era en Windows). Ignorar cualquier otra copia.
+
 ## 2. STACK REAL (verificado)
 
 - **Python ≥3.11** (probado en 3.14): todo — GUI, lógica, daemon.
