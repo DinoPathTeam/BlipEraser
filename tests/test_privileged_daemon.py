@@ -395,5 +395,42 @@ class TestAtomicRemoval:
         assert link.is_symlink()
 
 
+class TestActiveGraphicalSession:
+    """_check_active_graphical_session camina sesiones (show-user no da Type)."""
+
+    def _fake(self, monkeypatch, user_out, sess_out):
+        import subprocess as sp
+
+        def fake_run(cmd, **kwargs):
+            mock = MagicMock()
+            mock.returncode = 0
+            if "show-user" in cmd:
+                mock.stdout = user_out
+            else:
+                mock.stdout = sess_out
+            return mock
+
+        monkeypatch.setattr(
+            "blip_eraser.daemon.privileged_daemon.subprocess.run", fake_run
+        )
+        import blip_eraser.daemon.privileged_daemon as daemon_mod
+        daemon_mod._ACTIVE_SESSION_CACHE.clear()
+
+    def test_wayland_active(self, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _check_active_graphical_session
+        self._fake(monkeypatch, "Sessions=2\n", "Type=wayland\nState=active\n")
+        assert _check_active_graphical_session(1000) is True
+
+    def test_no_graphical_session(self, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _check_active_graphical_session
+        self._fake(monkeypatch, "Sessions=5\n", "Type=tty\nState=active\n")
+        assert _check_active_graphical_session(1000) is False
+
+    def test_no_sessions(self, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _check_active_graphical_session
+        self._fake(monkeypatch, "Sessions=\n", "")
+        assert _check_active_graphical_session(1000) is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

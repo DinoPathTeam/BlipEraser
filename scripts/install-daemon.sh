@@ -45,7 +45,9 @@ fi
 echo "[4/6] Recargar systemd y (re)arrancar servicio"
 systemctl daemon-reload
 systemctl reset-failed blip-eraser-privileged.service 2>/dev/null || true
-systemctl enable --now blip-eraser-privileged.service
+# restart (no solo enable --now): si ya corría, hay que recargar el código nuevo
+systemctl enable blip-eraser-privileged.service
+systemctl restart blip-eraser-privileged.service
 sleep 2
 
 echo "[5/6] Verificar servicio"

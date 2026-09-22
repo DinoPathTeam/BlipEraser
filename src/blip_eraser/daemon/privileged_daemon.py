@@ -549,53 +549,52 @@ def _is_user_in_wheel_group(uid: int) -> bool:
 
 def _check_active_graphical_session(uid: int) -> bool:
     """Verifica si el usuario tiene una sesión gráfica activa via loginctl.
-    
-    Returns True si el usuario tiene al menos una sesión con:
-    - Type=wayland o x11
-    - State=active
+
+    Camina las sesiones del usuario (show-user no expone Type; y el
+    --property=A,B,C no devuelve nada en systemd 261: se usa -p por
+    separado). True si alguna sesión tiene Type=wayland|x11 y State=active.
     """
     import time
     now = time.time()
-    
+
     # Verificar cache
     if uid in _ACTIVE_SESSION_CACHE:
         cached_result, cached_time = _ACTIVE_SESSION_CACHE[uid]
         if now - cached_time < _SESSION_CACHE_TTL:
             return cached_result
-    
+
+    has_active_graphical = False
     try:
-        # Ejecutar loginctl show-user <uid> --property=Display,State,Type
-        result = subprocess.run(
-            ["loginctl", "show-user", str(uid), "--property=Display,State,Type"],
-            capture_output=True, text=True, timeout=5
+        user = subprocess.run(
+            ["loginctl", "show-user", str(uid), "-p", "Sessions"],
+            capture_output=True, text=True, timeout=5,
         )
-        if result.returncode != 0:
-            return False
-        
-        # Parsear output (formato: Key=Value por línea)
-        has_active_graphical = False
-        display = None
-        state = None
-        session_type = None
-        
-        for line in result.stdout.strip().split('\n'):
-            if '=' in line:
-                key, value = line.split('=', 1)
-                if key == 'Display':
-                    display = value
-                elif key == 'State':
-                    state = value
-                elif key == 'Type':
-                    session_type = value
-        
-        # Verificar que es una sesión gráfica activa
-        if state == 'active' and display and session_type in ('wayland', 'x11'):
-            has_active_graphical = True
-        
+        sessions: list[str] = []
+        if user.returncode == 0:
+            for line in user.stdout.splitlines():
+                if line.startswith("Sessions="):
+                    sessions = line.split("=", 1)[1].split()
+
+        for sess in sessions:
+            if not sess:
+                continue
+            info = subprocess.run(
+                ["loginctl", "show-session", sess, "-p", "Type", "-p", "State"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if info.returncode != 0:
+                continue
+            props = dict(
+                line.split("=", 1) for line in info.stdout.splitlines() if "=" in line
+            )
+            if props.get("State") == "active" and props.get("Type") in ("wayland", "x11"):
+                has_active_graphical = True
+                break
+
         # Cachear resultado
         _ACTIVE_SESSION_CACHE[uid] = (has_active_graphical, now)
         return has_active_graphical
-        
+
     except (subprocess.SubprocessError, FileNotFoundError, OSError, Exception):
         # Si loginctl no está disponible o falla, denegar por seguridad
         return False
@@ -609,19 +608,40 @@ class PrivilegedService:
         self._node_info = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML)
         self._interface_info = self._node_info.interfaces[0]
         self._loop = None
+        self._name_id = 0
+        self._name_lost = False
         self._verify_timer = None
         self._shutdown_requested = False
+
+    def _sender_uid(self, connection: Any, sender: str) -> int | None:
+        """UID real del llamante vía org.freedesktop.DBus.GetConnectionUnixUser.
+
+        La versión anterior usaba connection.get_credentials(), que en una
+        conexión al bus (no peer-to-peer) devuelve None siempre: NADIE
+        podía autenticarse, ni siquiera Ping.
+        """
+        try:
+            result = connection.call_sync(
+                "org.freedesktop.DBus",
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                "GetConnectionUnixUser",
+                GLib.Variant("(s)", (sender,)),
+                GLib.VariantType("(u)"),
+                Gio.DBusCallFlags.NONE,
+                5000,
+                None,
+            )
+            uid = result.unpack()[0]
+            return uid if uid >= 0 else None
+        except Exception:
+            return None
 
     def _verify_sender(self, connection: Any, sender: str) -> bool:
         """Verifica que el sender es un usuario autorizado (grupo wheel + sesión gráfica activa)."""
         try:
-            # Obtener credenciales del sender
-            creds = connection.get_credentials()
-            if creds is None:
-                return False
-            
-            uid = creds.get_unix_user()
-            if uid is None or uid < 0:
+            uid = self._sender_uid(connection, sender)
+            if uid is None:
                 return False
             
             # Verificar sesión gráfica activa
@@ -717,14 +737,13 @@ class PrivilegedService:
             )
 
     def register(self, bus: Any) -> int:
-        """Registra el objeto en el bus."""
+        """Registra el objeto en el bus (6 args: el 7º de la versión anterior no existe)."""
         return bus.register_object(
             "/com/dinopath/BlipEraser/Privileged",
             self._interface_info,
             self.on_method_call,
             None,  # get_property
             None,  # set_property
-            None
         )
 
     def _setup_signals(self) -> None:
@@ -795,21 +814,23 @@ class PrivilegedService:
         self._setup_signals()
 
         # Registrar el nombre en el bus de sistema
-        self._bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         try:
-            # Flags seguros: permitir reemplazo si hay instancia anterior muerta
-            Gio.bus_own_name_sync(
-                Gio.BusType.SYSTEM,
-                "com.dinopath.BlipEraser.Privileged",
-                Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT | Gio.BusNameOwnerFlags.REPLACE,
-                None,  # name_acquired
-                None,  # name_lost
-                None
-            )
+            self._bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         except GLib.Error as e:
-            _audit_log("dbus_register_failed", f"error={e.message}")
-            print(f"ERROR: No se pudo registrar el nombre D-Bus: {e.message}", file=sys.stderr)
+            _audit_log("dbus_connect_failed", f"error={e.message}")
+            print(f"ERROR: No se pudo conectar al bus de sistema: {e.message}", file=sys.stderr)
             return 1
+        # Gio.bus_own_name_sync NO existe (la versión anterior jamás arrancó
+        # por esto): se usa bus_own_name asíncrono + MainLoop. Si se pierde
+        # el nombre, se sale para que systemd lo reinicie.
+        self._name_id = Gio.bus_own_name(
+            Gio.BusType.SYSTEM,
+            "com.dinopath.BlipEraser.Privileged",
+            Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT | Gio.BusNameOwnerFlags.REPLACE,
+            None,  # bus_acquired_handler
+            None,  # name_acquired_handler
+            self._on_name_lost,
+        )
 
         self.register(self._bus)
         _audit_log("daemon_started", "bus=system")
@@ -826,7 +847,15 @@ class PrivilegedService:
             pass
         finally:
             _audit_log("daemon_stopped", "clean_shutdown")
-        return 0
+        return 1 if self._name_lost else 0
+
+    def _on_name_lost(self, connection, name) -> None:
+        """El nombre se perdió (conflicto): salir para que systemd reinicie."""
+        _audit_log("dbus_name_lost", f"name={name}")
+        print(f"ERROR: Nombre D-Bus perdido: {name}", file=sys.stderr)
+        self._name_lost = True
+        if self._loop is not None:
+            self._loop.quit()
 
 
 def main() -> int:
