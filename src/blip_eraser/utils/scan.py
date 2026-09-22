@@ -1,6 +1,6 @@
 """Escaneo real del sistema para la UI — lógica pura, sin PyQt6.
 
-SQLes solo leen (pacman -Qi/-Qdt, tamaños de carpetas). Se usa para
+Solo leen (pacman -Qi/-Qdt, tamaños de carpetas). Se usa para
 alimentar el gauge (SYSTEM HEALTH), el botón "SCAN NOW" y el resumen
 "SYSTEM CLEANUP RECOMMENDED" con datos reales. Todo es fácilmente
 mockeable en tests.
@@ -81,24 +81,49 @@ def parse_pacman_size(text: str) -> int | None:
     return max(0, int(round(value * multiplier)))
 
 
+# Meses ingleses fijos: el parseo de fechas NO depende del locale del
+# proceso (QApplication cambia LC_TIME al idioma del sistema y rompería
+# strptime con %a/%b). Mapa propio = determinista en cualquier máquina.
+_EN_MONTHS = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+# "Tue 11 Jun 2024 08:15:00" (zona horaria ya descartada antes).
+_DATE_RE = re.compile(
+    r"^[A-Za-z]{3}\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+"
+    r"(\d{1,2}):(\d{2}):(\d{2})\s+([APap][Mm])$"
+)
+
+
 def normalize_pacman_date(value: str) -> str:
     """Normaliza 'Install Date' (locale C, inglés) a 'YYYY-MM-DD'.
 
     Ignora por completo el token de zona horaria (nombre, sigla regional u
     offset numérico como '-05') y parsea solo la parte de fecha/hora, que
-    en locale C es siempre inglés: '%a %d %b %Y %I:%M:%S %p'. Si el parseo
-    falla por cualquier razón (formato inesperado, valor vacío), devuelve
-    el valor crudo en vez de romper.
+    en locale C es siempre inglés. Parseo manual con mapa propio (no
+    strptime): inmune al LC_TIME que QApplication impone al arrancar.
+    Si el parseo falla por cualquier razón (formato inesperado, valor
+    vacío, fecha imposible), devuelve el valor crudo en vez de romper.
     """
     if not value:
         return value
     # Descarta el último token (zona horaria) y parsea solo fecha/hora.
     parts = value.rsplit(None, 1)
-    candidate = parts[0] if len(parts) == 2 else value
+    candidate = (parts[0] if len(parts) == 2 else value).strip()
+    match = _DATE_RE.match(candidate)
+    if not match:
+        return value
+    day_s, mon_s, year_s, hour_s, min_s, sec_s, ampm = match.groups()
+    month = _EN_MONTHS.get(mon_s[:1].upper() + mon_s[1:].lower())
+    if month is None:
+        return value
+    hour = int(hour_s) % 12 + (12 if ampm.upper() == "PM" else 0)
     try:
-        return datetime.strptime(candidate, "%a %d %b %Y %I:%M:%S %p").strftime("%Y-%m-%d")
+        dt = datetime(int(year_s), month, int(day_s), hour, int(min_s), int(sec_s))
     except ValueError:
         return value
+    return dt.strftime("%Y-%m-%d")
 
 
 def pacman_installed_info() -> dict[str, dict]:

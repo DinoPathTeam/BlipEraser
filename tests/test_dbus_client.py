@@ -157,8 +157,10 @@ class TestRunPkexecPacman:
 
 class TestPrivilegedClient:
     def test_init_without_gi(self, monkeypatch):
-        # Simular que gi no está disponible
-        monkeypatch.setitem(sys.modules, "gi", None)
+        # Simular que gi no está disponible: _ensure_gi lee los globales
+        # del módulo (fijados al importar), no sys.modules en cada llamada.
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.GLib", None)
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.Gio", None)
         client = PrivilegedClient()
         assert not client._ensure_gi()
 

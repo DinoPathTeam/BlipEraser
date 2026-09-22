@@ -123,6 +123,9 @@ class TestUninstallPackages:
             raise subprocess.CalledProcessError(126, cmd)
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        # La verificación de firmas usa el FS real: aislarla (igual que el
+        # test del path untrusted hace lo contrario en la línea 73).
+        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         with pytest.raises(DBusError) as exc:
             pacman.uninstall_packages(["sudo"])
         assert exc.value.code == "CANCELLED"

@@ -291,9 +291,8 @@ class TestMainEntryPoint:
         from blip_eraser.daemon.privileged_daemon import main
         if hasattr(os, "geteuid"):
             monkeypatch.setattr(os, "geteuid", lambda: 1000)
-            with pytest.raises(SystemExit) as exc:
-                main()
-            assert exc.value.code == 1
+            # main() devuelve código (sys.exit solo en __main__): 1 = no root.
+            assert main() == 1
         else:
             pytest.skip("os.geteuid no disponible en Windows")
 

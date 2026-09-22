@@ -112,8 +112,9 @@ def validate_path(path: Path) -> bool:
     """Valida que una ruta está dentro de los prefijos permitidos (con resolve en POSIX).
     
     Esta es la función principal usada por el cliente (privileges.py).
+    Acepta str o Path (coerción a la entrada: fail-closed igual).
     """
-    # Normalizar separadores para comparación consistente
+    path = Path(path)    # Normalizar separadores para comparación consistente
     path_str = str(path).replace("\\", "/")
 
     # Verificación rápida del prefijo en el string original
@@ -143,8 +144,9 @@ def reject_symlinks(path: Path) -> bool:
     """True si la ruta o cualquiera de sus padres es un symlink/reparse point.
     
     Esta es la función principal usada por el cliente (privileges.py).
+    Acepta str o Path.
     """
-    # Comprobación rápida en la ruta dada
+    path = Path(path)    # Comprobación rápida en la ruta dada
     if is_symlink_or_reparse(path):
         return True
     # Comprobar padres
