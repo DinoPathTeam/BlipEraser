@@ -113,6 +113,19 @@ pacman/systemd/loginctl/gst-libav (H.264) · Bash (installers/wrappers).
 
 ## Installation
 
+**Recommended:** deploy the privileged daemon (code + systemd + D-Bus + polkit) with the installer script — it is idempotent, re-run it after every code change:
+
+```bash
+# 1. System dependencies (includes gst-libav for splash screen video intro)
+sudo pacman -S python-pyqt6 python-gobject gst-libav
+
+# 2. Deploy daemon (asks for sudo by itself)
+./scripts/install-daemon.sh
+```
+
+<details>
+<summary>Manual install (alternative, same steps the script performs)</summary>
+
 **Important:** PyQt6 and PyGObject must be installed through the system package manager, **not via pip**. Installing them with pip clashes with your system's libraries:
 
 ```bash
@@ -133,6 +146,8 @@ sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
 sudo systemctl daemon-reload
 sudo systemctl enable --now blip-eraser-privileged.service
 ```
+
+</details>
 
 Then clone the repository and install the project in editable mode:
 
@@ -351,7 +366,22 @@ pacman/systemd/loginctl/gst-libav (H.264) · Bash (instaladores/wrappers).
 
 ## 📦 Instalación
 
-**Muy importante:** PyQt6, PyGObject y gst-libav se instalan con el gestor del sistema, **no por pip**. El daemon privilegiado (Fase 2) requiere PyGObject para D-Bus y gst-libav para el video de intro H.264.
+**Muy importante:** PyQt6, PyGObject y gst-libav se instalan con el gestor del sistema, **no por pip**.
+
+**Recomendado:** despliega el daemon (código + systemd + D-Bus + polkit) con el script instalador — es idempotente, re-ejecútalo tras cada cambio de código:
+
+```bash
+# 1. Dependencias del sistema (incluye gst-libav para video de intro)
+sudo pacman -S python-pyqt6 python-gobject gst-libav
+
+# 2. Desplegar daemon (pide sudo solo)
+./scripts/install-daemon.sh
+```
+
+<details>
+<summary>Instalación manual (alternativa: mismos pasos del script)</summary>
+
+El daemon privilegiado (Fase 2) requiere PyGObject para D-Bus y gst-libav para el video de intro H.264.
 
 ```bash
 # 1. Instalar dependencias del sistema (incluye gst-libav para video de intro)
@@ -370,8 +400,12 @@ sudo cp packaging/scripts/blip-eraser-privileged /usr/lib/blip-eraser/
 sudo chmod +x /usr/lib/blip-eraser/blip-eraser-privileged
 sudo systemctl daemon-reload
 sudo systemctl enable --now blip-eraser-privileged.service
+```
+
+</details>
 
 # 4. Clona el repo e instala el proyecto en modo editable
+```bash
 git clone https://github.com/DinoPathTeam/BlipEraser.git
 cd BlipEraser
 pip install -e . --break-system-packages
