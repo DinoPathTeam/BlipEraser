@@ -39,3 +39,6 @@ SECURITY_*.md
 # Paquetes / entradas del sistema
 *.pacnew
 *.pacorig
+
+# Reviews locales del agente (contexto, nunca subir)
+.agent/reviews/
