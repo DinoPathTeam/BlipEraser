@@ -120,7 +120,11 @@ class TestWriteDiagnostic:
         assert "x" * 300 not in content  # la primera línea se truncó
 
     def test_never_raises_on_bad_path(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", Path("Z:/inexistente/dir/debug.log"))
+        # Ruta rara y anidada DENTRO de tmp (antes era relativa al repo y
+        # dejaba el artefacto Z:/inexistente/... en cada corrida).
+        monkeypatch.setattr(
+            log_mod, "DIAG_LOG_PATH", tmp_path / "Z:" / "inexistente" / "dir" / "debug.log"
+        )
         write_diagnostic("no debe romper")  # sin excepción
 
 
