@@ -89,11 +89,6 @@ class TestPacmanInstalledInfo:
         monkeypatch.setattr(scan, "_run", lambda cmd, timeout=8, env=None: "")
         assert scan.pacman_installed_info() == {}
 
-    def test_sizes_wraps_info(self, monkeypatch):
-        info = {"a": {"size": 10, "date": "x"}, "b": {"size": 20, "date": ""}}
-        monkeypatch.setattr(scan, "pacman_installed_info", lambda: info)
-        assert scan.pacman_installed_sizes() == {"a": 10, "b": 20}
-
     def test_forces_c_locale_env(self, monkeypatch):
         captured = {}
 

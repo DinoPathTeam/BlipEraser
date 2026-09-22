@@ -187,7 +187,6 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         row.addStretch(1)
 
         # Conexiones
-        cast(Any, self.filter_type_button.triggered).connect(self._on_type_action_triggered)
         cast(Any, self.filter_weight_combo.currentIndexChanged).connect(self._on_weight_filter_changed)
         cast(Any, self.filter_weight_threshold.editingFinished).connect(self._on_weight_threshold_changed)
         cast(Any, self.filter_date_combo.currentIndexChanged).connect(self._on_date_filter_changed)
@@ -265,10 +264,6 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             self.filter_type_button.setText(", ".join(labels))
             self.filter_type_button.setToolTip(", ".join(labels))
 
-    def _on_type_action_triggered(self, action: QAction) -> None:
-        """Manejador genérico para acciones del menú (no hace nada, las acciones tienen sus propios handlers)."""
-        pass
-
     def _on_type_all_toggled(self, checked: bool):
         """Al marcar/desmarcar 'Todos', marca/desmarca todos los items."""
         for k, a in self._type_actions.items():
@@ -296,10 +291,6 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         else:
             self._filter_state.type_filter = checked
         self._render()
-
-    def _on_type_filter_changed(self, _text: str):
-        """Placeholder para compatibilidad (el menú maneja los cambios)."""
-        pass
 
     def _on_weight_filter_changed(self, _index: int):
         """Aplica el filtro de Peso al cambiar el combo."""

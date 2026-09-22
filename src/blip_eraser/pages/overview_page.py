@@ -79,6 +79,11 @@ class OverviewPage(QWidget, BackgroundScanMixin):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._prev_cpu: tuple[int, int] | None = None
+        # Modelos de hardware: no cambian en caliente; se resuelven una vez
+        # (evita `lspci` + relectura de /proc/cpuinfo cada 2s en refresh).
+        self._cpu_model_text: str | None = None
+        self._gpu_model_text: str | None = None
+        self._hw_resolved = False
         self._accent = str(theme_mod.THEMES[str(load_prefs().get("theme", "red"))]["accent"])
         self._apps: list[InstalledApp] = []
         self._initial_scan_callback: Callable[[], None] | None = None
@@ -540,8 +545,12 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             )
 
             na = tr("status_na")
-            cpu_model_text = cpu_model() or na
-            gpu_model_text = gpu_model() or na
+            if not self._hw_resolved:
+                self._cpu_model_text = cpu_model() or na
+                self._gpu_model_text = gpu_model() or na
+                self._hw_resolved = True
+            cpu_model_text = self._cpu_model_text
+            gpu_model_text = self._gpu_model_text
             ram_total_bytes_value = ram_total_bytes()
             disk_total_bytes_value = disk_total_bytes()
             ram_total = human_size(ram_total_bytes_value) if ram_total_bytes_value is not None else na

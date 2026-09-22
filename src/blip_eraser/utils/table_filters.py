@@ -13,11 +13,6 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 
-class SortOrder(Enum):
-    ASCENDING = "asc"
-    DESCENDING = "desc"
-
-
 class WeightFilterMode(Enum):
     """Modos de filtro por peso/tamaño."""
     ALL = "all"                    # Sin filtro
@@ -33,12 +28,6 @@ class DateFilterMode(Enum):
     NEWEST_FIRST = "newest"        # Más nuevos primero
     OLDEST_FIRST = "oldest"        # Más viejos primero
     CUSTOM_RANGE = "custom"        # Rango personalizado
-
-
-class TypeFilterMode(Enum):
-    """Modos de filtro por tipo."""
-    ALL = "all"
-    SELECTED = "selected"  # Solo tipos seleccionados (multi-selección)
 
 
 @dataclass
@@ -221,12 +210,6 @@ def filter_apps(
     result = []
     
     for item in apps:
-        # Filtro de búsqueda (texto libre)
-        if filter_state.search_text:
-            # Se asume que el llamador ya filtró por nombre, o se hace aquí
-            # Para no duplicar lógica, asumimos que el nombre ya pasó filtro
-            pass
-        
         # Filtro por tipo
         if filter_state.type_filter is not None:
             item_type = get_type(item)

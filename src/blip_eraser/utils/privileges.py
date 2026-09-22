@@ -71,30 +71,10 @@ SYSTEM_PATH_PREFIXES: tuple[str, ...] = (
     "/media/",
 )
 
-# Allowlist estricta de prefijos permitidos para operaciones `rm -rf` vía pkexec/daemon.
-# Solo estas rutas pueden borrarse con privilegios. Cualquier otra ruta
-# fuera de $HOME será rechazada ANTES de invocar la operación privilegiada.
-ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
-    "/var/cache/pacman/pkg",
-    "/var/log",
-    "/var/lib/pacman",
-)
-
-# Denylist de rutas dentro de $HOME que NUNCA deben borrarse automáticamente.
-# Protege claves SSH, configuración GPG, configs de usuario, etc.
-HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
-    ".ssh",
-    ".gnupg",
-    ".config",
-    ".local/share/keyrings",
-    ".local/share/gnupg",
-    ".cache/gpg",
-    ".cache/ssh",
-    ".password-store",
-    ".gnupg/secring.gpg",
-    ".gnupg/pubring.gpg",
-    ".gnupg/trustdb.gpg",
-)
+# NOTA: ALLOWED_SYSTEM_PREFIXES y HOME_DENYLIST_PREFIXES viven en
+# utils.validation (fuente única, compartida con el daemon). Aquí se
+# re-exportan vía el import superior para compatibilidad
+# (performance.py y tests los importan desde este módulo).
 
 # Códigos de retorno de pkexec (man pkexec) - mantenidos para compatibilidad fallback
 PKEXEC_RC_AUTH_CANCELLED = 126

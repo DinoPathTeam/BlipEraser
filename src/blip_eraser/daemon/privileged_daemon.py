@@ -40,22 +40,9 @@ except ImportError:
     sys.exit(1)
 
 # ─── Constantes de seguridad ────────────────────────────────────────────
-
-# Prefijos permitidos para CleanSystemPaths (rm -rf)
-# Denylist dentro de $HOME (nunca se usa en daemon, pero por consistencia)
-HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
-    ".ssh",
-    ".gnupg",
-    ".config",
-    ".local/share/keyrings",
-    ".local/share/gnupg",
-    ".cache/gpg",
-    ".cache/ssh",
-    ".password-store",
-    ".gnupg/secring.gpg",
-    ".gnupg/pubring.gpg",
-    ".gnupg/trustdb.gpg",
-)
+# NOTA: ALLOWED_SYSTEM_PREFIXES se importa de utils.validation (línea ~151,
+# aliasado para los tests). HOME_DENYLIST no se usa en el daemon (solo en el
+# cliente): no redefinir nada aquí para no sombrear el import.
 
 # Caché de paquetes instalados (thread-safe)
 _package_cache: set[str] | None = None

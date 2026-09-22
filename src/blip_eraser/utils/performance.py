@@ -25,14 +25,6 @@ class TweakResult:
     installed_deps: bool = False
 
 
-class TweakError(Exception):
-    """Error en operación de tweak."""
-    def __init__(self, code: str, message: str):
-        self.code = code
-        self.message = message
-        super().__init__(f"[{code}] {message}")
-
-
 # ─── Utilidades ────────────────────────────────────────────────────────────
 
 def _run_cmd(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:

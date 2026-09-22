@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -160,11 +159,6 @@ def pacman_installed_info() -> dict[str, dict]:
     return result
 
 
-def pacman_installed_sizes() -> dict[str, int]:
-    """{nombre_paquete: bytes} de todos los paquetes instalados (pacman -Qi)."""
-    return {name: info["size"] for name, info in pacman_installed_info().items()}
-
-
 def orphan_packages() -> list[str]:
     """Paquetes huérfanos (instalados como dependencia y ya no necesarios).
 
@@ -230,11 +224,3 @@ def scan_cleanup_items(
         except (OSError, PermissionError):
             continue
     return items
-
-
-def total_disk_space(path: str = "/") -> int | None:
-    """Capacidad total del disco en bytes."""
-    try:
-        return shutil.disk_usage(path).total
-    except (OSError, PermissionError):
-        return None

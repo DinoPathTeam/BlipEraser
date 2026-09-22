@@ -26,7 +26,6 @@ from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.performance import (
-    TWEAKS,
     check_tweak_state,
     apply_tweak,
     get_all_tweak_states,
