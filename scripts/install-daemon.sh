@@ -19,7 +19,7 @@ if [[ -z "$DEST" && "$(id -u)" -ne 0 ]]; then
     exec sudo "$0" "$@"
 fi
 
-echo "[1/6] Código del daemon -> $LIBDIR/blip_eraser"
+echo "[1/8] Código del daemon -> $LIBDIR/blip_eraser"
 mkdir -p "$LIBDIR"
 rm -rf "$LIBDIR/blip_eraser"
 cp -r "$REPO/src/blip_eraser" "$LIBDIR/blip_eraser"
@@ -28,21 +28,46 @@ find "$LIBDIR/blip_eraser" -name "__pycache__" -type d -prune -exec rm -rf {} + 
 rm -rf "$LIBDIR/blip_eraser/assets"
 install -m 755 "$REPO/packaging/scripts/blip-eraser-privileged" "$LIBDIR/blip-eraser-privileged"
 
-echo "[2/6] Unidad systemd + D-Bus"
+echo "[2/8] Unidad systemd + D-Bus"
 install -Dm 644 "$REPO/packaging/systemd/blip-eraser-privileged.service" "$SYSTEMD_UNIT"
 install -Dm 644 "$REPO/packaging/dbus/blip-eraser-privileged.conf" "$DBUS_CONF"
 install -Dm 644 "$REPO/packaging/dbus/com.dinopath.BlipEraser.Privileged.xml" "$DBUS_XML"
 
-echo "[3/6] Polkit (acciones + reglas wheel)"
+echo "[3/8] Polkit (acciones + reglas wheel)"
 install -Dm 644 "$REPO/packaging/polkit/com.dinopath.blip-eraser.policy" "$POLKIT_POLICY"
 install -Dm 644 "$REPO/packaging/polkit/49-blip-eraser.rules" "$POLKIT_RULES"
+
+echo "[4/8] Acceso directo (.desktop) + icono"
+install -Dm 644 "$REPO/packaging/blip-eraser.desktop" "$DEST/usr/share/applications/blip-eraser.desktop"
+install -Dm 644 "$REPO/packaging/icons/hicolor/512x512/apps/blip-eraser.png" \
+    "$DEST/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
+if [[ -z "$DEST" ]]; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+
+echo "[5/8] AppArmor (modo auditoría, Fase 3)"
+if [[ -d /sys/kernel/security/apparmor ]] && command -v apparmor_parser >/dev/null; then
+    install -Dm 644 "$REPO/packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged" \
+        "$DEST/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
+    if [[ -z "$DEST" ]]; then
+        apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged \
+            && echo "[OK] Perfil cargado en modo complain (solo registra)."
+    fi
+else
+    echo "[WARN] Kernel sin AppArmor: perfil copiado pero sin cargar (solo aviso)."
+    if [[ -z "$DEST" ]]; then
+        install -Dm 644 "$REPO/packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged" \
+            /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged || true
+    fi
+fi
 
 if [[ -n "$DEST" ]]; then
     echo "[OK] Despliegue de prueba en $DEST (sin systemctl)."
     exit 0
 fi
 
-echo "[4/6] Recargar systemd y (re)arrancar servicio"
+echo "[6/8] Recargar systemd y (re)arrancar servicio"
 systemctl daemon-reload
 systemctl reset-failed blip-eraser-privileged.service 2>/dev/null || true
 # restart (no solo enable --now): si ya corría, hay que recargar el código nuevo
@@ -50,7 +75,7 @@ systemctl enable blip-eraser-privileged.service
 systemctl restart blip-eraser-privileged.service
 sleep 2
 
-echo "[5/6] Verificar servicio"
+echo "[7/8] Verificar servicio"
 if ! systemctl is-active --quiet blip-eraser-privileged.service; then
     echo "[ERROR] El servicio no arrancó. Ver con:"
     echo "  journalctl -u blip-eraser-privileged.service -n 30"
@@ -58,7 +83,7 @@ if ! systemctl is-active --quiet blip-eraser-privileged.service; then
 fi
 echo "[OK] Servicio active."
 
-echo "[6/6] Ping D-Bus"
+echo "[8/8] Ping D-Bus"
 if busctl call com.dinopath.BlipEraser.Privileged \
     /com/dinopath/BlipEraser/Privileged \
     com.dinopath.BlipEraser.Privileged Ping 2>&1 | grep -q "b true"; then

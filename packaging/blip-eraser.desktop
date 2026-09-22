@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=BlipEraser
+GenericName=System Cleaner
+GenericName[es]=Limpiador del sistema
+Comment=Uninstaller and system cleaner for Arch Linux
+Comment[es]=Desinstalador y limpiador del sistema para Arch Linux
+Exec=blip-eraser
+Icon=blip-eraser
+Terminal=false
+Type=Application
+Categories=System;
+Keywords=uninstall;cleaner;pacman;arch;
+Keywords[es]=desinstalar;limpiar;pacman;arch;
+StartupNotify=true

@@ -1,10 +1,15 @@
-# AppArmor profile for BlipEraser Privileged Daemon
+# AppArmor profile for BlipEraser Privileged Daemon (FASE 3, en auditoría).
 # Install to: /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
 # Enable with: sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
+#
+# MODO COMPLAIN a propósito: el perfil aún no cubre todo lo que el daemon
+# necesita (python3, site-packages, loginctl, pacman-key/rm con +x). En
+# enforce lo mataría. Complain registra violaciones en el log para
+# endurecerlo con evidencia (v1.3) sin romper nada.
 
 #include <tunables/global>
 
-/usr/lib/blip-eraser/blip-eraser-privileged {
+/usr/lib/blip-eraser/blip-eraser-privileged flags=(complain) {
   #include <abstractions/base>
   #include <abstractions/dbus>
 
