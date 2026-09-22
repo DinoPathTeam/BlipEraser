@@ -23,10 +23,7 @@ import sys
 from blip_eraser.utils.dependency_check import (
     PYQT6_MISSING_MESSAGE,
     check_pyqt6_available,
-    check_daemon_dependencies,
-    DAEMON_DEPENDENCIES,
 )
-from blip_eraser.utils.phase2_installer import install_daemon_dependency
 from blip_eraser.utils.i18n import (
     load_saved_language,
     set_language,
@@ -91,7 +88,6 @@ def _check_and_install_daemon_deps() -> tuple[bool, list[str]]:
     from PyQt6.QtWidgets import QMessageBox
     from blip_eraser.utils.dependency_check import (
         check_daemon_dependencies,
-        DAEMON_DEPENDENCIES,
     )
     from blip_eraser.utils.phase2_installer import install_daemon_dependency
     
@@ -116,7 +112,7 @@ def _check_and_install_daemon_deps() -> tuple[bool, list[str]]:
     box.setText(msg)
     box.setIcon(QMessageBox.Icon.Question)
     yes_btn = box.addButton("Instalar", QMessageBox.ButtonRole.AcceptRole)
-    no_btn = box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+    box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
     box.exec()
     
     if box.clickedButton() is not yes_btn:
@@ -146,7 +142,6 @@ def main() -> int:
         return EXIT_PYQT6_MISSING
 
     from PyQt6.QtWidgets import QApplication
-    from PyQt6.QtCore import QTimer
 
     app = QApplication(sys.argv)
     # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a

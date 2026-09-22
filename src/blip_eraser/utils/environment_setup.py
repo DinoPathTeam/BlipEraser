@@ -5,8 +5,6 @@ cumpla con los requisitos mínimos de la aplicación antes de iniciar la GUI.
 """
 
 from .dependency_check import check_pyqt6_available, find_missing_dependencies, PYQT6_MISSING_MESSAGE, REQUIRED_BINARIES
-from .privileged_daemon_manager import PrivilegedDaemonManager
-from ..errors import BlipEraserEnvironmentError
 
 
 class EnvironmentValidator:

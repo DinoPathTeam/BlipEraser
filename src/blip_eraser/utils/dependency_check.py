@@ -120,9 +120,6 @@ def find_missing_dependencies(
 # ----------------------------------------------------------------------
 # Nivel 3 — Dependencias del Daemon Privilegiado (Fase 2)
 # ----------------------------------------------------------------------
-import time
-from functools import lru_cache
-
 # Cache para resultados de verificación de dependencias daemon (TTL 1 hora)
 _DAEMON_DEPS_CACHE: tuple[list[DaemonDependency], float] | None = None
 _DAEMON_DEPS_CACHE_TTL = 3600  # 1 hora

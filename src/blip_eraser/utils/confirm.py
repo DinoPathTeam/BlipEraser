@@ -13,7 +13,6 @@ el diálogo ni este módulo persiste ningún estado de confirmación.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 

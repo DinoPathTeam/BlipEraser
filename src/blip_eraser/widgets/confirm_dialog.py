@@ -73,7 +73,6 @@ def ask_destructive_confirmation(parent: QWidget | None, plan: ConfirmPlan, titl
 
 def _friendly_error_message(error: RemovalError) -> str:
     """Traduce un RemovalError estructurado a un mensaje claro y localizado."""
-    detail = error.detail.strip() if error.detail else ""
     first_path = str(error.paths[0]) if error.paths else ""
     if error.code == "cancelled":
         return tr("priv_error_cancelled")
@@ -137,7 +136,7 @@ def run_destructive_action(
                 errors.append(tr("priv_error_failed").format(path=item.label))
         except FileNotFoundError:
             errors.append(tr("priv_error_missing"))
-        except (OSError, PermissionError) as e:
+        except (OSError, PermissionError):
             errors.append(tr("priv_error_failed").format(path=item.label))
         except ValueError as e:
             # Paquetes no válidos (rechazados por validación en pacman.py)
@@ -153,7 +152,7 @@ def run_destructive_action(
 
             QApplication.quit()
             return False
-        except Exception as e:  # noqa: BLE001 - límite de la capa GUI
+        except Exception:  # noqa: BLE001 - límite de la capa GUI
             errors.append(tr("priv_error_failed").format(path=item.label))
 
     if removed:

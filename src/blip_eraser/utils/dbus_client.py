@@ -12,7 +12,7 @@ import subprocess
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from blip_eraser.utils.log import write_diagnostic
 

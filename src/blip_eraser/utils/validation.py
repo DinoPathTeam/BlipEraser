@@ -99,7 +99,7 @@ def is_symlink_or_reparse(path: Path) -> bool:
 
             FILE_ATTRIBUTE_REPARSE_POINT = 0x400
             attrs = GetFileAttributesW(str(path))
-            if attrs != 0xFFFFFFFF and (attrs & 0x400):
+            if attrs != 0xFFFFFFFF and (attrs & FILE_ATTRIBUTE_REPARSE_POINT):
                 return True
         except Exception:
             # Si falla la API de Windows, asumir seguro (no bloquear por false positive)

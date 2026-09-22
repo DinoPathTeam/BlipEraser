@@ -26,7 +26,6 @@ from blip_eraser.widgets.logo import app_icon
 if not hasattr(QtGui, "QRect"):
     QtGui.QRect = QRect
 from PyQt6.QtWidgets import (
-    QApplication,
     QLabel,
     QGraphicsOpacityEffect,
     QWidget,
@@ -191,7 +190,7 @@ class SplashScreen(QWidget):
 
         hero_w = self._hero.width()
         logo_w, logo_h = self._logo.width(), self._logo.height()
-        title_w, title_h = self._title.width(), self._title.height()
+        title_w = self._title.width()
 
         logo_y = 0
         title_y = logo_h + 12

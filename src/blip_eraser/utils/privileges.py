@@ -28,10 +28,6 @@ Seguridad (Fase 1 + Fase 2):
 
 from __future__ import annotations
 
-import os
-import subprocess
-import threading
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
@@ -40,11 +36,10 @@ from blip_eraser.utils.validation import (
     validate_path,
     reject_symlinks,
     is_symlink_or_reparse,
-    ALLOWED_SYSTEM_PREFIXES,
+    ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; performance/tests lo importaban de aquí)
     HOME_DENYLIST_PREFIXES,
 )
 from blip_eraser.utils.dbus_client import (
-    PrivilegedAPI,
     get_privileged_api,
     DBusError,
     OperationResult,

@@ -9,11 +9,9 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from blip_eraser.utils.dbus_client import get_privileged_api
 from blip_eraser.utils.log import write_diagnostic
-from blip_eraser.utils.privileges import ALLOWED_SYSTEM_PREFIXES
 
 
 @dataclass
@@ -77,7 +75,7 @@ def _write_root_file(path: Path, content: str) -> bool:
     """Escribe archivo root via pkexec tee."""
     try:
         # Usar tee con pkexec para escribir archivo root
-        proc = subprocess.run(
+        subprocess.run(
             ["pkexec", "tee", str(path)],
             input=content,
             capture_output=True,

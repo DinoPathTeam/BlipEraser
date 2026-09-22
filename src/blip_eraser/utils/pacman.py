@@ -18,7 +18,6 @@ from pathlib import Path
 
 from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.dbus_client import (
-    PrivilegedAPI,
     get_privileged_api,
     DBusError,
     OperationResult,
