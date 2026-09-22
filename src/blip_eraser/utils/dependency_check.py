@@ -147,14 +147,10 @@ DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
         install_cmd="pkexec pacman -S --noconfirm gst-libav",
         check_active_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
     ),
-    DaemonDependency(
-        name="AppArmor",
-        # Verificar módulo kernel + perfiles cargados (más rápido y fiable que systemctl)
-        check_cmd="lsmod | grep -q apparmor && [ -d /sys/kernel/security/apparmor ] && ls /sys/kernel/security/apparmor/profiles 2>/dev/null | grep -q .",
-        install_cmd="pkexec pacman -S --noconfirm apparmor",
-        check_active_cmd="lsmod | grep -q apparmor && [ -d /sys/kernel/security/apparmor ] && ls /sys/kernel/security/apparmor/profiles 2>/dev/null | grep -q .",
-        requires_restart=True,
-    ),
+    # NOTA: AppArmor (Fase 3) es OPCIONAL y no bloquea el arranque: el
+    # perfil vive en packaging/apparmor/ para quien lo quiera activar.
+    # Estuvo aquí y mostraba un modal en cada inicio aunque el daemon
+    # funciona sin él.
     DaemonDependency(
         name="D-Bus System Bus (dbus.service)",
         check_cmd="systemctl is-active dbus 2>/dev/null",
