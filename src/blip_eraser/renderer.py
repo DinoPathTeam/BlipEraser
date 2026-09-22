@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -307,13 +308,29 @@ class MainWindow(QMainWindow):
     # Idioma
     # ------------------------------------------------------------------
     def _switch_language(self, code: str):
+        """Guarda el idioma y pide reiniciar para aplicarlo (sin cambio en caliente).
+
+        El cambio en caliente reconstruía todas las tablas en plena sesión
+        (tirones, UI en dos idiomas, más superficie de RuntimeError). Con
+        reinicio, todo se construye una vez en el idioma final. El diálogo
+        sale ya en el idioma elegido.
+        """
+        if code == get_current_language():
+            return
         set_language(code)
         for lang, action in self.language_actions.items():
             action.setChecked(lang == code)
-        self.retranslate()
-        log_buffer.add(
-            tr("log_language_changed").format(language=tr(f"lang_name_{code}"))
-        )
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("lang_restart_title"))
+        box.setText(tr("lang_restart_body"))
+        box.setIcon(QMessageBox.Icon.Information)
+        restart_btn = box.addButton(tr("lang_restart_now"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("lang_restart_later"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is restart_btn:
+            app = QApplication.instance()
+            if app is not None:
+                app.quit()
 
     def retranslate(self):
         self.setWindowTitle(_app_title())

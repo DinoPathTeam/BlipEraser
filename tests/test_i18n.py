@@ -29,9 +29,16 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 def mock_lang(monkeypatch, lang_code):
-    """Fuerza locale.getlocale() a devolver (lang_code, encoding)."""
+    """Fuerza getlocale() y getdefaultlocale() a devolver (lang_code, encoding).
+
+    Ambas fuentes deben mockearse: detect_system_language() consulta las
+    dos (proceso y entorno) y basta una en español para devolver 'es'.
+    """
     monkeypatch.setattr(
         i18n.locale, "getlocale", lambda: (lang_code, "UTF-8")
+    )
+    monkeypatch.setattr(
+        i18n.locale, "getdefaultlocale", lambda: (lang_code, "UTF-8")
     )
 
 
@@ -58,7 +65,16 @@ class TestDetectSystemLanguage:
             raise locale.Error("invalid locale")
 
         monkeypatch.setattr(i18n.locale, "getlocale", boom)
+        monkeypatch.setattr(i18n.locale, "getdefaultlocale", lambda: (None, None))
         assert detect_system_language() == "en"
+
+    def test_env_fallback_when_getlocale_empty(self, monkeypatch):
+        """getlocale() vacío + entorno español → 'es' (regresión)."""
+        monkeypatch.setattr(i18n.locale, "getlocale", lambda: (None, None))
+        monkeypatch.setattr(
+            i18n.locale, "getdefaultlocale", lambda: ("es_ES", "UTF-8")
+        )
+        assert detect_system_language() == "es"
 
 
 class TestTr:

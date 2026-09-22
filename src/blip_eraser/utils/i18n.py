@@ -254,6 +254,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_timeout": (
             "La operación tardó demasiado y se canceló. Inténtalo de nuevo."
         ),
+        "lang_restart_title": "Reinicio necesario",
+        "lang_restart_body": (
+            "El idioma se aplicará al reiniciar BlipEraser."
+        ),
+        "lang_restart_now": "Reiniciar ahora",
+        "lang_restart_later": "Más tarde",
         "tools_title": "Configuración",
         "tools_hint": (
             "Configuración y utilidades auxiliares: personalización, tema "
@@ -420,7 +426,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "log_theme_changed": "Tema cambiado a {theme}",
         "log_mode_changed": "Modo cambiado a {mode}",
         "log_font_changed": "Fuente cambiada a {font}",
-        "log_language_changed": "Idioma cambiado a {language}",
         "log_scan_finished": "Escaneo completado: {count} elemento(s)",
         "log_deleted_items": "Eliminados: {count}",
         "log_uninstalled_packages": "Desinstalados: {packages}",
@@ -657,6 +662,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_timeout": (
             "The operation took too long and was cancelled. Please try again."
         ),
+        "lang_restart_title": "Restart required",
+        "lang_restart_body": (
+            "The language will apply when you restart BlipEraser."
+        ),
+        "lang_restart_now": "Restart now",
+        "lang_restart_later": "Later",
         "tools_title": "Settings",
         "tools_hint": (
             "App configuration and utilities: personalization, appearance "
@@ -822,7 +833,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "log_theme_changed": "Theme changed to {theme}",
         "log_mode_changed": "Mode changed to {mode}",
         "log_font_changed": "Font changed to {font}",
-        "log_language_changed": "Language changed to {language}",
         "log_scan_finished": "Scan finished: {count} item(s)",
         "log_deleted_items": "Deleted: {count}",
         "log_uninstalled_packages": "Uninstalled: {packages}",
@@ -841,12 +851,20 @@ _current_language: str | None = None
 # ----------------------------------------------------------------------
 def detect_system_language() -> str:
     """'es' si el idioma del sistema empieza por 'es'; en cualquier otro
-    caso (incluyendo detección fallida/None) devuelve 'en'."""
-    try:
-        lang_code, _encoding = locale.getlocale()
-    except (locale.Error, TypeError):
-        return "en"
-    if lang_code and lang_code.lower().startswith("es"):
+    caso (incluyendo detección fallida/None) devuelve 'en' (universal).
+
+    Consulta el locale del proceso y el del entorno (LANG/LC_*): basta
+    que uno sea español. Así cubre arranques en locale C puro donde
+    getlocale() devuelve (None, None)."""
+    codes: list[str] = []
+    for getter in (locale.getlocale, locale.getdefaultlocale):
+        try:
+            lang_code, _encoding = getter()
+        except (locale.Error, TypeError):
+            continue
+        if lang_code:
+            codes.append(lang_code.lower())
+    if any(code.startswith("es") for code in codes):
         return "es"
     return "en"
 
