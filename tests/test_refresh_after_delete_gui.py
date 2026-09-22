@@ -51,12 +51,20 @@ def _pump_until(app, condition, timeout_ms=3000):
     return condition()
 
 
+def _mock_destroy_ok(*a, **k):
+    """Mock de run_destructive_action: éxito inmediato vía callback (como la real)."""
+    cb = k.get("on_finished")
+    if cb is not None:
+        cb(True)
+    return None
+
+
 class TestCleanerRefreshesAfterDelete:
     def test_delete_selected_retriggers_scan(self, app, monkeypatch):
         """Tras eliminar, delete_selected re-escanea y repinta la tabla."""
         calls = {"scan": 0}
         monkeypatch.setattr(
-            cleaner_mod, "run_destructive_action", lambda *a, **k: True
+            cleaner_mod, "run_destructive_action", _mock_destroy_ok
         )
         monkeypatch.setattr(cleaner_mod, "scan_cleanup_items", lambda: [])
 
@@ -83,7 +91,7 @@ class TestCleanerRefreshesAfterDelete:
 
     def test_delete_selected_repaints_table_rows(self, app, monkeypatch):
         """Tras re-escaneo, la tabla refleja el nuevo resultado (menos filas)."""
-        monkeypatch.setattr(cleaner_mod, "run_destructive_action", lambda *a, **k: True)
+        monkeypatch.setattr(cleaner_mod, "run_destructive_action", _mock_destroy_ok)
         monkeypatch.setattr(
             cleaner_mod,
             "scan_cleanup_items",
@@ -111,7 +119,7 @@ class TestOverviewRefreshesAfterCleanup:
 
     def test_cleanup_now_updates_metrics_and_summary(self, app, monkeypatch):
         """Tras 'Limpiar ahora' exitoso, resumen Y métricas se repintan."""
-        monkeypatch.setattr(overview_mod, "run_destructive_action", lambda *a, **k: True)
+        monkeypatch.setattr(overview_mod, "run_destructive_action", _mock_destroy_ok)
         page = self._page(monkeypatch)
 
         cleanup = {
@@ -136,7 +144,7 @@ class TestOverviewRefreshesAfterCleanup:
             return real_scan(*a, **k)
 
         monkeypatch.setattr(overview_mod, "scan_cleanup", spy)
-        monkeypatch.setattr(overview_mod, "run_destructive_action", lambda *a, **k: True)
+        monkeypatch.setattr(overview_mod, "run_destructive_action", _mock_destroy_ok)
         page = self._page(monkeypatch)
         # Forzar el hilo de resumen a emitir directo (sin esperar el thread).
         page._refresh_cleanup_summary = lambda: page._on_cleanup_summary_ready(

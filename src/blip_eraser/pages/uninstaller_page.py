@@ -548,16 +548,21 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             )
 
         plan = build_confirmation_plan(items)
-        if run_destructive_action(
+
+        def _after_uninstall(ok: bool):
+            if ok:
+                log_buffer.add(
+                    tr("log_uninstalled_packages").format(
+                        packages=", ".join(a.name for a in apps)
+                    )
+                )
+            self.load_apps()
+
+        run_destructive_action(
             self, plan, tr("uninstaller_confirm_title"),
             invalidate_sections=(SECTION_UNINSTALLER,),
-        ):
-            log_buffer.add(
-                tr("log_uninstalled_packages").format(
-                    packages=", ".join(a.name for a in apps)
-                )
-            )
-        self.load_apps()
+            on_finished=_after_uninstall,
+        )
 
     def request_uninstall(self, name: str, source: str, detail: str = ""):
         """Desinstala por nombre+fuente+detalle (llamado desde Overview)."""
@@ -580,9 +585,14 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             )
 
         plan = build_confirmation_plan([item])
-        if run_destructive_action(
+
+        def _after_request(ok: bool):
+            if ok:
+                log_buffer.add(tr("log_uninstalled_packages").format(packages=name))
+            self.load_apps()
+
+        run_destructive_action(
             self, plan, tr("uninstaller_confirm_title"),
             invalidate_sections=(SECTION_UNINSTALLER,),
-        ):
-            log_buffer.add(tr("log_uninstalled_packages").format(packages=name))
-        self.load_apps()
+            on_finished=_after_request,
+        )

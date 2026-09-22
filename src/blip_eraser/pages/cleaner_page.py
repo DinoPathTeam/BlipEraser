@@ -205,8 +205,8 @@ class _SectionBase(QWidget, BackgroundScanMixin):
             build_confirmation_plan(self._confirm_items(rows)),
             tr(self._confirm_title_key()),
             invalidate_sections=(self._cache_section,),
+            on_finished=lambda _ok: self.scan(),
         )
-        self.scan()
 
 
 class _RecommendedSection(_SectionBase):

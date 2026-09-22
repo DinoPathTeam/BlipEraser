@@ -260,6 +260,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "lang_restart_now": "Reiniciar ahora",
         "lang_restart_later": "Más tarde",
+        "delete_progress_label": "Eliminando",
         "tools_title": "Configuración",
         "tools_hint": (
             "Configuración y utilidades auxiliares: personalización, tema "
@@ -668,6 +669,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "lang_restart_now": "Restart now",
         "lang_restart_later": "Later",
+        "delete_progress_label": "Removing",
         "tools_title": "Settings",
         "tools_hint": (
             "App configuration and utilities: personalization, appearance "

@@ -213,13 +213,17 @@ def _convert_dbus_error_to_removal(paths: list[Path], error: DBusError) -> Remov
     return RemovalError(paths=paths, code=code, detail=error.message)
 
 
-def remove_paths(paths: list[Path]) -> RemovalOutcome:
+def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | None = None) -> RemovalOutcome:
     """Borra `paths` con el nivel de privilegios que corresponde a cada uno.
 
     - Rutas de $HOME: `delete_path` directo.
     - Rutas de sistema: UNA sola llamada al daemon D-Bus (con fallback a
       `pkexec rm -rf`) con todo el lote (una única solicitud de autenticación
       para el lote).
+
+    `on_progress(done, total)` se llama tras cada ruta de $HOME y una vez
+    al completar el lote de sistema (para diálogos de progreso; el lote es
+    una sola operación indivisible).
 
     VALIDACIONES DE SEGURIDAD (Fase 1 + Fase 2):
     - Cada ruta de sistema debe pasar _validate_path (allowlist estricta)
@@ -231,6 +235,14 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
     outcome = RemovalOutcome()
     home_paths: list[Path] = []
     system_paths: list[Path] = []
+    total = len(paths)
+    done = 0
+
+    def _tick(step: int = 1) -> None:
+        nonlocal done
+        done += step
+        if on_progress is not None:
+            on_progress(done, total)
 
     for path in paths:
         safe = path.expanduser()
@@ -242,6 +254,7 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
             err = RemovalError(paths=[path], code="validation_failed", detail="path_in_home_denylist")
             outcome.errors.append(err)
             _audit_log("remove_home", [path], "rejected", "path_in_home_denylist")
+            _tick()
             continue
         try:
             delete_path(path)
@@ -250,6 +263,7 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
         except (OSError, PermissionError) as exc:
             outcome.errors.append(_home_removal_error(path, exc))
             _audit_log("remove_home", [path], "failed", str(exc))
+        _tick()
 
     if system_paths:
         # Validación estricta ANTES de invocar operación privilegiada
@@ -282,6 +296,7 @@ def remove_paths(paths: list[Path]) -> RemovalOutcome:
                     err = RemovalError(paths=validated_paths, code="failed", detail="unknown_error")
                     outcome.errors.append(err)
                     _audit_log("remove_system", validated_paths, "failed", "unknown_error")
+            _tick(len(validated_paths))
         elif not outcome.errors:
             # Todas las rutas de sistema fueron rechazadas por validación
             _audit_log("remove_system", system_paths, "rejected_all", "no_valid_paths_after_validation")

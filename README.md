@@ -219,6 +219,9 @@ BlipEraser checks its dependencies on **two levels**:
 - [ ] **v1.1 — Order and quality (in progress)**:
   - Green suite (9 failures today from environment drift) + minimal CI
     (`pytest` + `compileall`) so it never regresses silently.
+  - Background deletion with progress dialog ("Removing… n/N", auto-close):
+    no more "Not responding" freezes; modal with no cancel (a half
+    deletion cannot be interrupted safely).
   - Single allowlist/denylist in `utils/validation.py` (triplicated today).
   - Sync `pyproject.toml` version → `1.0.0`.
   - Root cleanup (`exit`, `Z:/`, stray logs → `docs/` or out).
@@ -473,6 +476,9 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
 - [ ] **v1.1 — Orden y calidad (en curso)**:
   - Suite verde (hoy 9 fallos por deriva de entorno) + CI mínimo
     (`pytest` + `compileall`) para que no vuelva a pasar.
+  - Borrado en segundo plano con diálogo de progreso ("Eliminando… n/N",
+    se cierra solo): adiós al "No responde"; modal sin cancelar (un
+    borrado a medias no se puede interrumpir).
   - Allowlist/denylist única en `utils/validation.py` (hoy triplicada).
   - Sincronizar versión `pyproject.toml` → `1.0.0`.
   - Limpieza de raíz (`exit`, `Z:/`, logs sueltos → `docs/` o fuera).

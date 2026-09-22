@@ -294,15 +294,13 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             for cat_key, path, size in entries
         ]
         # Mismo flujo compartido que la sección "Limpieza recomendada".
-        if run_destructive_action(
+        run_destructive_action(
             self,
             build_confirmation_plan(items),
             tr("cleanup_confirm_title"),
             invalidate_sections=(SECTION_CLEANER_RECOMMENDED,),
-        ):
-            # Se eliminó al menos un elemento: refresca el resumen con lo que
-            # queda, sin re-escanear apps (solo tamaños de las 3 categorías).
-            self._refresh_cleanup_summary()
+            on_finished=lambda ok: self._refresh_cleanup_summary() if ok else None,
+        )
 
     def _refresh_cleanup_summary(self):
         """Recomputa SOLO el resumen 'SYSTEM CLEANUP RECOMMENDED' en segundo plano."""
