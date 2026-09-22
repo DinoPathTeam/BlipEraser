@@ -143,15 +143,6 @@ reject_symlinks_atomic = _reject_symlinks_atomic
 validate_path_resolved = _validate_path_resolved
 ALLOWED_SYSTEM_PREFIXES = _VALIDATION_ALLOWED_SYSTEM_PREFIXES
 
-_OS_OPENAT: Any = getattr(os, "openat", None)
-_OS_FSTATAT: Any = getattr(os, "fstatat", None)
-_OS_UNLINKAT: Any = getattr(os, "unlinkat", None)
-_OS_O_PATH = getattr(os, "O_PATH", 0)
-_OS_O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
-_OS_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-_OS_AT_REMOVEDIR = getattr(os, "AT_REMOVEDIR", 0)
-
-
 def _get_euid() -> int:
     get_euid: Any = getattr(os, "geteuid", None)
     if not callable(get_euid):
@@ -166,61 +157,50 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
     Borra un path de forma atómica usando file descriptors para evitar TOCTOU.
     Retorna (success, error_message).
     """
-    try:
-        if not all((_OS_FSTATAT, _OS_UNLINKAT)):
-            return False, "Atomic filesystem APIs are unavailable"
+    parent = path.parent
+    name = path.name
 
-        # Abrir el directorio padre con O_DIRECTORY | O_NOFOLLOW
-        parent = path.parent
-        name = path.name
-        
-        # Verificar que el padre está en allowlist (string check rápido)
-        if not _validate_path_str(str(parent)):
-            return False, f"Parent path not in allowlist: {parent}"
-        
-        # Abrir fd del padre con O_PATH | O_NOFOLLOW | O_DIRECTORY
-        # O_PATH no requiere permisos de lectura, solo execute en el directorio
+    # Verificar que el padre está en allowlist (string check rápido)
+    if not _validate_path_str(str(parent)):
+        return False, f"Parent path not in allowlist: {parent}"
+
+    # Abrir fd del padre con O_RDONLY | O_DIRECTORY | O_NOFOLLOW
+    # (O_PATH no sirve: scandir necesita un fd real).
+    try:
+        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        return False, f"Cannot open parent directory: {e}"
+
+    try:
+        # Verificar que el entry existe y no es symlink (sin seguirlo).
         try:
-            parent_fd = os.open(parent, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
+            st = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         except OSError as e:
-            return False, f"Cannot open parent directory: {e}"
-        
-        try:
-            # Verificar que el entry existe y no es symlink (usando fstatat)
-            try:
-                st = _OS_FSTATAT(parent_fd, name, follow_symlinks=False)
-            except OSError as e:
-                return False, f"Entry not found or inaccessible: {e}"
-            
-            # Verificar que no es symlink usando fstatat (no sigue symlinks) - TOCTOU fix
-            try:
-                st = _OS_FSTATAT(parent_fd, name, follow_symlinks=False)
-                if stat.S_ISLNK(st.st_mode):
-                    os.close(parent_fd)
-                    return False, "Entry is a symlink (TOCTOU protection)"
-                is_dir = stat.S_ISDIR(st.st_mode)
-            except OSError:
-                is_dir = False
-            
-            if is_dir:
-                # Para directorios, usar unlinkat con AT_REMOVEDIR
-                # Primero vaciar recursivamente (también con fd)
-                _rm_rf_dir_atomic(parent_fd, name)
-                _OS_UNLINKAT(parent_fd, name, _OS_AT_REMOVEDIR)
-            else:
-                _OS_UNLINKAT(parent_fd, name, 0)
-            
-            return True, ""
-        finally:
-            os.close(parent_fd)
-            
+            return False, f"Entry not found or inaccessible: {e}"
+        if stat.S_ISLNK(st.st_mode):
+            return False, "Entry is a symlink (TOCTOU protection)"
+
+        if stat.S_ISDIR(st.st_mode):
+            # Vaciar recursivamente (también con fd) y luego quitar el dir.
+            _rm_rf_dir_atomic(parent_fd, name)
+            os.rmdir(name, dir_fd=parent_fd)
+        else:
+            os.unlink(name, dir_fd=parent_fd)
+
+        return True, ""
     except OSError as e:
         return False, f"Atomic removal failed: {e}"
+    finally:
+        os.close(parent_fd)
 
 
 def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
     """Vacía un directorio recursivamente usando fd atómico.
-    
+
+    Lista y borra SIEMPRE dentro de `dir_name` (hijo de `dir_fd`):
+    la versión anterior listaba el padre y borraba hermanos.
+    Los symlinks se eliminan como enlaces, nunca se siguen.
+
     Args:
         dir_fd: File descriptor del directorio padre
         dir_name: Nombre del subdirectorio a vaciar
@@ -230,46 +210,25 @@ def _rm_rf_dir_atomic(dir_fd: int, dir_name: str, depth: int = 0) -> None:
     if depth > 256:
         _audit_log("rm_rf_depth_exceeded", f"dir={dir_name} depth={depth}")
         return
-    
-    # Abrir fd del subdirectorio
+
+    # O_RDONLY (no O_PATH): scandir necesita un fd listable.
     try:
-        if _OS_OPENAT is None or _OS_UNLINKAT is None:
-            return
-        subdir_fd = _OS_OPENAT(dir_fd, dir_name, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
+        subdir_fd = os.open(dir_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
     except OSError:
-        return  # No existe o no accesible
-    
+        return  # No existe, no accesible, o es un symlink (ELOOP)
+
     try:
-        # Iterar entradas usando os.scandir (devuelve DirEntry con info de tipo)
-        with os.scandir(dir_fd) as it:
+        with os.scandir(subdir_fd) as it:
             for entry in it:
                 if entry.name in ('.', '..'):
                     continue
                 try:
-                    # entry.is_dir(follow_symlinks=False) usa la info del DirEntry (sin syscall extra)
-                    # y no sigue symlinks
                     if entry.is_dir(follow_symlinks=False):
-                        # Abrir fd del subdirectorio para recursión
-                        try:
-                            subdir_fd = _OS_OPENAT(dir_fd, entry.name, _OS_O_PATH | _OS_O_DIRECTORY | _OS_O_NOFOLLOW)
-                        except OSError:
-                            continue
-                        # Validar que el fd abierto es efectivamente un directorio
-                        try:
-                            st = os.fstat(subdir_fd)
-                            if not stat.S_ISDIR(st.st_mode):
-                                os.close(subdir_fd)
-                                continue
-                        except OSError:
-                            os.close(subdir_fd)
-                            continue
-                        try:
-                            _rm_rf_dir_atomic(subdir_fd, entry.name, depth + 1)
-                            _OS_UNLINKAT(dir_fd, entry.name, _OS_AT_REMOVEDIR)
-                        finally:
-                            os.close(subdir_fd)
+                        _rm_rf_dir_atomic(subdir_fd, entry.name, depth + 1)
+                        os.rmdir(entry.name, dir_fd=subdir_fd)
                     else:
-                        _OS_UNLINKAT(dir_fd, entry.name, 0)
+                        # Archivos y symlinks: unlink sin seguir.
+                        os.unlink(entry.name, dir_fd=subdir_fd)
                 except OSError:
                     pass  # Ignorar errores individuales
     finally:

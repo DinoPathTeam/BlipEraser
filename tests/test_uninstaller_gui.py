@@ -306,6 +306,9 @@ class TestUninstallerFilters:
         assert page._filter_state.date_mode == DateFilterMode.ALL
         assert page._filter_state.type_filter is None
         assert page._filter_state.date_format == "AUTO"
+        # La UI debe mostrar lo mismo que el estado (regresión P2: el combo
+        # no tenía item AUTO y setCurrentText era no-op silencioso).
+        assert page.filter_date_format.currentText() == "AUTO"
         assert not page.filter_weight_threshold.isVisible()
         assert not page.filter_date_format.isVisible()
         assert not page.filter_date_from.isVisible()

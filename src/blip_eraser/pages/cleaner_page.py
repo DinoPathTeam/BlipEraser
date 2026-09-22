@@ -51,19 +51,59 @@ from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 
 
-class _RecommendedSection(QWidget, BackgroundScanMixin):
-    """Sección (a): 'Limpieza recomendada' (basura + caché + registros)."""
+class _SectionBase(QWidget, BackgroundScanMixin):
+    """Base común de las secciones del Limpiador (recomendada y manual).
 
+    Ambas comparten esqueleto (tabla + refrescar/eliminar + scan en fondo +
+    defensa dura); solo cambian la fuente de datos, las columnas y los
+    textos. Los hooks a implementar están marcados abajo.
+    """
+
+    # -- hooks (subclase) -------------------------------------------------
+    _columns: int = 0
+    _cache_section: str = ""
+    _forensic: str = ""
+
+    def _headers(self) -> list[str]:
+        raise NotImplementedError
+
+    def _scan_source(self):
+        """Callable sin args que devuelve la lista encontrada."""
+        raise NotImplementedError
+
+    def _log_key(self) -> str:
+        raise NotImplementedError
+
+    def _matches(self, item, needle: str) -> bool:
+        raise NotImplementedError
+
+    def _cells(self, item) -> list[str]:
+        """Textos de las celdas (sin contar la columna 0 del checkbox)."""
+        raise NotImplementedError
+
+    def _nothing_key(self) -> str:
+        raise NotImplementedError
+
+    def _confirm_title_key(self) -> str:
+        raise NotImplementedError
+
+    def _confirm_items(self, rows: list[int]) -> list[ConfirmItem]:
+        raise NotImplementedError
+
+    def _results_updated(self) -> None:
+        """Hook tras recibir resultados (la manual invalida su caché de tamaños)."""
+
+    # -- esqueleto compartido ----------------------------------------------
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._found: list[tuple[str, Path, int]] = []
-        self._visible: list[tuple[str, Path, int]] = []
+        self._found: list = []
+        self._visible: list = []
         self._filter = ""
         self._build_ui()
         self._init_scan_buttons([self.refresh_btn, self.delete_btn])
 
         write_diagnostic(
-            f"CleanerRecommendedSection CREATED id={id(self)} table_id={id(self.table)}"
+            f"Cleaner{self._forensic.title()}Section CREATED id={id(self)} table_id={id(self.table)}"
         )
 
     def _build_ui(self):
@@ -71,16 +111,13 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
         layout.setContentsMargins(0, 8, 0, 0)
         layout.setSpacing(8)
 
-        self.table = CheckTable(4)
-        self.table.setHorizontalHeaderLabels(
-            ["", tr("col_category"), tr("col_name"), tr("col_size")]
-        )
+        self.table = CheckTable(self._columns)
+        self.table.setHorizontalHeaderLabels(self._headers())
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        for col in range(1, self._columns):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
-        self.table.setColumnWidth(3, 110)
+        self.table.setColumnWidth(self._columns - 1, 110)
         self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
         layout.addWidget(self.table)
 
@@ -98,9 +135,7 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
     def retranslate(self):
         self.refresh_btn.setText(tr("refresh_button"))
         self.delete_btn.setText(tr("delete_button"))
-        self.table.setHorizontalHeaderLabels(
-            ["", tr("col_category"), tr("col_name"), tr("col_size")]
-        )
+        self.table.setHorizontalHeaderLabels(self._headers())
         self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
         self._render()
 
@@ -110,25 +145,23 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if is_stale(SECTION_CLEANER_RECOMMENDED):
+        if is_stale(self._cache_section):
             QTimer.singleShot(0, self.scan)
 
-    # ------------------------------------------------------------------
-    # Escaneo
-    # ------------------------------------------------------------------
     def scan(self):
-        self._start_background_scan(scan_cleanup_items, self._on_scan_ready)
+        self._start_background_scan(self._scan_source(), self._on_scan_ready)
 
-    def _on_scan_ready(self, entries: list[tuple[str, Path, int]]):
+    def _on_scan_ready(self, entries: list):
         # Defensa dura de TODA la cadena del resultado (la pila dice cuál falló).
         try:
             self._found = entries
-            log_buffer.add(tr("log_cleanup_scanned").format(count=len(self._found)))
+            self._results_updated()
+            log_buffer.add(tr(self._log_key()).format(count=len(self._found)))
             self._render()
-            mark_scanned(SECTION_CLEANER_RECOMMENDED)
+            mark_scanned(self._cache_section)
         except RuntimeError as exc:
             self._render_failure(
-                "cleaner_recommended._on_scan_ready",
+                f"cleaner_{self._forensic}._on_scan_ready",
                 exc,
                 table=self.table,
                 extra={"entries_total": len(self._found)},
@@ -136,43 +169,80 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
 
     def _render(self):
         if self._filter:
-            self._visible = [
-                entry for entry in self._found if self._filter in str(entry[1]).lower()
-            ]
+            self._visible = [e for e in self._found if self._matches(e, self._filter)]
         else:
             self._visible = list(self._found)
 
         try:
+            self.table.blockSignals(True)
             self.table.setRowCount(0)
-            for cat_key, path, size in self._visible:
+            for item in self._visible:
                 row = self.table.add_check_row()
-                self.table.setItem(
-                    row, 1, QTableWidgetItem(tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")))
-                )
-                self.table.setItem(row, 2, QTableWidgetItem(str(path)))
-                self.table.setItem(row, 3, QTableWidgetItem(human_size(size)))
+                for col, text in enumerate(self._cells(item), start=1):
+                    self.table.setItem(row, col, QTableWidgetItem(text))
+            self.table.blockSignals(False)
             self.table.refresh_header_state()
         except RuntimeError as exc:
             # Defensa dura (mismo patrón que el crash de Overview en CachyOS):
             # la tabla puede morir en C++ con la sección viva; no tumba la app.
             self._render_failure(
-                "cleaner_recommended._render",
+                f"cleaner_{self._forensic}._render",
                 exc,
                 table=self.table,
                 extra={"rows": len(self._visible)},
             )
 
-    # ------------------------------------------------------------------
-    # Borrado
-    # ------------------------------------------------------------------
     def delete_selected(self):
         rows = self.table.checked_rows()
         if not rows:
             QMessageBox.information(
-                self, tr("nothing_selected_title"), tr("cleanup_nothing_selected")
+                self, tr("nothing_selected_title"), tr(self._nothing_key())
             )
             return
 
+        run_destructive_action(
+            self,
+            build_confirmation_plan(self._confirm_items(rows)),
+            tr(self._confirm_title_key()),
+            invalidate_sections=(self._cache_section,),
+        )
+        self.scan()
+
+
+class _RecommendedSection(_SectionBase):
+    """Sección (a): 'Limpieza recomendada' (basura + caché + registros)."""
+
+    _columns = 4
+    _cache_section = SECTION_CLEANER_RECOMMENDED
+    _forensic = "recommended"
+
+    def _headers(self):
+        return ["", tr("col_category"), tr("col_name"), tr("col_size")]
+
+    def _scan_source(self):
+        return scan_cleanup_items
+
+    def _log_key(self):
+        return "log_cleanup_scanned"
+
+    def _matches(self, item, needle):
+        return needle in str(item[1]).lower()
+
+    def _cells(self, item):
+        cat_key, path, size = item
+        return [
+            tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")),
+            str(path),
+            human_size(size),
+        ]
+
+    def _nothing_key(self):
+        return "cleanup_nothing_selected"
+
+    def _confirm_title_key(self):
+        return "cleanup_confirm_title"
+
+    def _confirm_items(self, rows):
         items = []
         for row in rows:
             cat_key, path, size = self._visible[row]
@@ -184,153 +254,60 @@ class _RecommendedSection(QWidget, BackgroundScanMixin):
                     paths=[path],
                 )
             )
-
-        run_destructive_action(
-            self,
-            build_confirmation_plan(items),
-            tr("cleanup_confirm_title"),
-            invalidate_sections=(SECTION_CLEANER_RECOMMENDED,),
-        )
-        self.scan()
+        return items
 
 
-class _ManualSection(QWidget, BackgroundScanMixin):
-    """Sección (b): 'Aplicaciones instaladas' (carpetas sueltas/AppImages).
+class _ManualSection(_SectionBase):
+    """Sección (b): 'Aplicaciones instaladas' (carpetas sueltas/AppImages)."""
 
-    Reutiliza el patrón de checkboxes junto con el diálogo compartido.
-    """
+    _columns = 3
+    _cache_section = SECTION_CLEANER_MANUAL
+    _forensic = "manual"
 
     def __init__(self, parent=None):
+        # Tamaños cacheados por ruta: evita I/O a disco en cada tecla de filtro.
+        self._sizes: dict[Path, int] = {}
         super().__init__(parent)
-        self._found: list[Path] = []
-        self._visible: list[Path] = []
-        self._filter = ""
-        self._build_ui()
-        self._init_scan_buttons([self.refresh_btn, self.delete_btn])
 
-        write_diagnostic(
-            f"CleanerManualSection CREATED id={id(self)} table_id={id(self.table)}"
-        )
+    def _results_updated(self) -> None:
+        self._sizes.clear()
 
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
-        layout.setSpacing(8)
+    def _headers(self):
+        return ["", tr("col_name"), tr("col_size")]
 
-        self.table = CheckTable(3)
-        self.table.setHorizontalHeaderLabels(["", tr("col_name"), tr("col_size")])
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        header.setStretchLastSection(False)
-        self.table.setColumnWidth(2, 110)
-        self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
-        layout.addWidget(self.table)
+    def _scan_source(self):
+        return lambda: scan_manual_entries(tuple(get_scan_paths()))
 
-        buttons = QHBoxLayout()
-        self.refresh_btn = QPushButton(tr("refresh_button"))
-        self.refresh_btn.clicked.connect(self.scan)
-        buttons.addWidget(self.refresh_btn)
+    def _log_key(self):
+        return "log_scan_finished"
 
-        self.delete_btn = QPushButton(tr("delete_button"))
-        self.delete_btn.clicked.connect(self.delete_selected)
-        buttons.addWidget(self.delete_btn)
+    def _matches(self, item, needle):
+        return needle in str(item).lower()
 
-        layout.addLayout(buttons)
+    def _size_of(self, path: Path) -> int:
+        if path not in self._sizes:
+            self._sizes[path] = path_size_for_display(path)
+        return self._sizes[path]
 
-    def retranslate(self):
-        self.refresh_btn.setText(tr("refresh_button"))
-        self.delete_btn.setText(tr("delete_button"))
-        self.table.setHorizontalHeaderLabels(["", tr("col_name"), tr("col_size")])
-        self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
-        self._render()
+    def _cells(self, item):
+        return [str(item), human_size(self._size_of(item))]
 
-    def set_search_filter(self, text: str):
-        self._filter = text.strip().lower()
-        self._render()
+    def _nothing_key(self):
+        return "manual_nothing_selected"
 
-    def showEvent(self, event):
-        super().showEvent(event)
-        if is_stale(SECTION_CLEANER_MANUAL):
-            QTimer.singleShot(0, self.scan)
+    def _confirm_title_key(self):
+        return "delete_confirm_title"
 
-    # ------------------------------------------------------------------
-    # Escaneo
-    # ------------------------------------------------------------------
-    def scan(self):
-        self._start_background_scan(
-            lambda: scan_manual_entries(tuple(get_scan_paths())),
-            self._on_scan_ready,
-        )
-
-    def _on_scan_ready(self, found: list[Path]):
-        # Defensa dura de TODA la cadena del resultado (la pila dice cuál falló).
-        try:
-            self._found = found
-            log_buffer.add(tr("log_scan_finished").format(count=len(self._found)))
-            self._render()
-            mark_scanned(SECTION_CLEANER_MANUAL)
-        except RuntimeError as exc:
-            self._render_failure(
-                "cleaner_manual._on_scan_ready",
-                exc,
-                table=self.table,
-                extra={"entries_total": len(self._found)},
-            )
-
-    def _render(self):
-        if self._filter:
-            self._visible = [p for p in self._found if self._filter in str(p).lower()]
-        else:
-            self._visible = list(self._found)
-
-        try:
-            self.table.setRowCount(0)
-            for path in self._visible:
-                row = self.table.add_check_row()
-                self.table.setItem(row, 1, QTableWidgetItem(str(path)))
-                self.table.setItem(
-                    row, 2, QTableWidgetItem(human_size(path_size_for_display(path)))
-                )
-            self.table.refresh_header_state()
-        except RuntimeError as exc:
-            # Defensa dura (mismo patrón que el crash de Overview en CachyOS):
-            # la tabla puede morir en C++ con la sección viva; no tumba la app.
-            self._render_failure(
-                "cleaner_manual._render",
-                exc,
-                table=self.table,
-                extra={"rows": len(self._visible)},
-            )
-
-    # ------------------------------------------------------------------
-    # Borrado
-    # ------------------------------------------------------------------
-    def delete_selected(self):
-        rows = self.table.checked_rows()
-        if not rows:
-            QMessageBox.information(
-                self, tr("nothing_selected_title"), tr("manual_nothing_selected")
-            )
-            return
-
-        items = [
+    def _confirm_items(self, rows):
+        return [
             ConfirmItem(
                 label=str(path),
                 category_label=tr("kind_folder"),
-                size_bytes=path_size_for_display(path),
+                size_bytes=self._size_of(path),
                 paths=[path],
             )
             for path in (self._visible[row] for row in rows)
         ]
-
-        run_destructive_action(
-            self,
-            build_confirmation_plan(items),
-            tr("delete_confirm_title"),
-            invalidate_sections=(SECTION_CLEANER_MANUAL,),
-        )
-        self.scan()
 
 
 class CleanerPage(BasePage):

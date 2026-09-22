@@ -10,7 +10,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from blip_eraser.utils.dbus_client import get_privileged_api
 from blip_eraser.utils.log import write_diagnostic
 
 
@@ -60,9 +59,6 @@ def _systemctl_is_active(unit: str) -> bool:
 def _install_pkg_via_pkexec(pkg: str) -> bool:
     """Instala paquete via pkexec pacman. Retorna True si éxito."""
     try:
-        api = get_privileged_api()
-        result = api.remove_packages([pkg])  # remove_packages usa pacman -Rns, no -S
-        # Necesitamos una operación de instalación, usar pkexec directo
         _run_cmd(["pkexec", "pacman", "-S", "--needed", "--noconfirm", pkg], check=True)
         write_diagnostic(f"AUDIT action=install_pkg pkg={pkg} result=success")
         return True

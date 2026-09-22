@@ -64,6 +64,20 @@ class TestUtils:
         import subprocess
         assert _systemctl_is_enabled("fstrim.timer") is False
 
+    def test_install_pkg_uses_pacman_S_only(self, monkeypatch):
+        """Instalar NO debe desinstalar antes: solo `pacman -S` (regresión P1)."""
+        calls = []
+
+        def mock_run(cmd, **kwargs):
+            calls.append(cmd)
+            mock = MagicMock()
+            mock.returncode = 0
+            return mock
+
+        monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
+        assert _install_pkg_via_pkexec("reflector") is True
+        assert calls == [["pkexec", "pacman", "-S", "--needed", "--noconfirm", "reflector"]]
+
 
 class TestTweakRegistry:
     """Tests del registro de tweaks."""

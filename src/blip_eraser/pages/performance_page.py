@@ -9,7 +9,7 @@ Al activar cualquiera de las opciones, se muestra un aviso informativo
 recomendando reiniciar para que el cambio tome efecto completo.
 """
 
-from PyQt6.QtCore import QRectF, QTimer, Qt
+from PyQt6.QtCore import QRectF, QThread, QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QLinearGradient, QPainter
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -133,13 +133,32 @@ class _EffectPreview(QWidget):
         painter.end()
 
 
+class _TweakWorker(QThread):
+    """Aplica un tweak en fondo (systemd/pkexec pueden tardar). Una sola definición
+    a nivel de módulo: antes se redefinía en cada toggle."""
+
+    finished = pyqtSignal(object)  # TweakResult
+
+    def __init__(self, k: str, enable: bool):
+        super().__init__()
+        self._key = k
+        self._enable = enable
+
+    def run(self):
+        self.finished.emit(apply_tweak(self._key, self._enable))
+
+
 class PerformancePage(BasePage):
+    # Si pkexec/systemd cuelga, no dejar la fila bloqueada para siempre.
+    _TWEAK_TIMEOUT_MS = 120_000
+
     def __init__(self):
         super().__init__()
         self._rows: list[dict] = []
         self._previews: list[_EffectPreview] = []
         self._reboot_banner: QLabel | None = None
         self._applying: set[str] = set()  # keys being applied (prevent re-entry)
+        self._workers: dict[str, QThread] = {}  # vivos mientras aplican (anti-GC)
         accent = theme_mod.THEMES[load_prefs().get("theme", "red")]["accent"]
         self._build_ui(accent)
         # Cargar estado persistido y sincronizar con sistema real
@@ -262,26 +281,14 @@ class PerformancePage(BasePage):
         
         # Deshabilitar checkbox durante la operación
         checkbox.setEnabled(False)
-        
+
         # Ejecutar en hilo para no bloquear UI (operaciones systemd/pkexec pueden tardar)
-        from PyQt6.QtCore import QThread, pyqtSignal
-        
-        class TweakWorker(QThread):
-            finished = pyqtSignal(object)  # TweakResult
-            
-            def __init__(self, k: str, enable: bool):
-                super().__init__()
-                self._key = k
-                self._enable = enable
-            
-            def run(self):
-                result = apply_tweak(self._key, self._enable)
-                self.finished.emit(result)
-        
         def on_finished(result: TweakResult):
+            if self._workers.pop(key, None) is None:
+                return  # ya gestionado por el timeout
             self._applying.discard(key)
             checkbox.setEnabled(True)
-            
+
             if result.success:
                 # Guardar intención del usuario en config
                 save_prefs({key: checked})
@@ -290,7 +297,7 @@ class PerformancePage(BasePage):
                 checkbox.blockSignals(True)
                 checkbox.setChecked(actual)
                 checkbox.blockSignals(False)
-                
+
                 # Mostrar mensaje de éxito
                 msg = result.message
                 if result.installed_deps:
@@ -304,13 +311,30 @@ class PerformancePage(BasePage):
                 checkbox.setChecked(not checked)
                 checkbox.blockSignals(False)
                 self._show_status(f"Error: {result.message}", success=False)
-            
+
             self._update_reboot_banner()
             worker.deleteLater()
-        
-        worker = TweakWorker(key, checked)
+
+        def on_timeout():
+            worker = self._workers.pop(key, None)
+            if worker is None:
+                return  # terminó a tiempo
+            worker.terminate()
+            worker.wait(3000)
+            worker.deleteLater()
+            self._applying.discard(key)
+            checkbox.blockSignals(True)
+            checkbox.setChecked(not checked)
+            checkbox.blockSignals(False)
+            checkbox.setEnabled(True)
+            self._show_status(tr("perf_timeout"), success=False)
+            self._update_reboot_banner()
+
+        worker = _TweakWorker(key, checked)
+        self._workers[key] = worker
         worker.finished.connect(on_finished)
         worker.start()
+        QTimer.singleShot(self._TWEAK_TIMEOUT_MS, on_timeout)
 
     def _show_status(self, message: str, success: bool) -> None:
         """Muestra mensaje temporal en el banner (reusa reboot_banner)."""
@@ -320,7 +344,6 @@ class PerformancePage(BasePage):
         self._reboot_banner.setObjectName("StatusBanner" if success else "ErrorBanner")
         self._reboot_banner.setVisible(True)
         # Volver al estado normal tras 5s
-        from PyQt6.QtCore import QTimer
         QTimer.singleShot(5000, self._update_reboot_banner)
 
     def _update_reboot_banner(self) -> None:

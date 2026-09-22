@@ -158,7 +158,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         row.addWidget(self.filter_date_combo)
 
         self.filter_date_format = QComboBox()
-        cast(Any, self.filter_date_format).addItems(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"])
+        cast(Any, self.filter_date_format).addItems(["AUTO", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"])
         self.filter_date_format.setCurrentText(self._filter_state.date_format)
         self.filter_date_format.setToolTip(tr("filter_date_format_hint"))
         self.filter_date_format.setVisible(False)

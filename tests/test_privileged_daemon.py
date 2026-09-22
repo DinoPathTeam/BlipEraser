@@ -332,6 +332,68 @@ class TestAtomicRemoval:
         from blip_eraser.daemon.privileged_daemon import _rm_rf_dir_atomic
         assert callable(_rm_rf_dir_atomic)
 
+    def _allow_all(self, monkeypatch):
+        import blip_eraser.daemon.privileged_daemon as daemon_mod
+        monkeypatch.setattr(daemon_mod, "_validate_path_str", lambda p: True)
+
+    def test_removes_file_keeps_sibling(self, tmp_path, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_atomic
+        self._allow_all(monkeypatch)
+        target = tmp_path / "borrar.txt"
+        sibling = tmp_path / "quedar.txt"
+        target.write_text("x")
+        sibling.write_text("y")
+        ok, err = _rm_rf_atomic(target)
+        assert ok, err
+        assert not target.exists()
+        assert sibling.read_text() == "y"
+
+    def test_removes_tree_keeps_parent_and_sibling(self, tmp_path, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_atomic
+        self._allow_all(monkeypatch)
+        target = tmp_path / "target"
+        (target / "sub" / "deep").mkdir(parents=True)
+        (target / "sub" / "deep" / "f.bin").write_bytes(b"0" * 100)
+        (target / "top.txt").write_text("t")
+        sibling = tmp_path / "hermano"
+        sibling.mkdir()
+        (sibling / "s.txt").write_text("s")
+        ok, err = _rm_rf_atomic(target)
+        assert ok, err
+        assert not target.exists()
+        # El padre y el hermano quedan intactos (regresión P5: antes se
+        # listaba el padre y se borraban los hermanos).
+        assert tmp_path.exists()
+        assert (sibling / "s.txt").read_text() == "s"
+
+    def test_symlinks_removed_as_links_target_untouched(self, tmp_path, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_atomic
+        self._allow_all(monkeypatch)
+        outside = tmp_path / "fuera"
+        outside.mkdir()
+        secret = outside / "secreto.txt"
+        secret.write_text("no tocar")
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / "link_file").symlink_to(secret)
+        (target / "link_dir").symlink_to(outside, target_is_directory=True)
+        ok, err = _rm_rf_atomic(target)
+        assert ok, err
+        assert not target.exists()
+        assert secret.read_text() == "no tocar"
+
+    def test_top_level_symlink_rejected(self, tmp_path, monkeypatch):
+        from blip_eraser.daemon.privileged_daemon import _rm_rf_atomic
+        self._allow_all(monkeypatch)
+        real = tmp_path / "real.txt"
+        real.write_text("r")
+        link = tmp_path / "enlace"
+        link.symlink_to(real)
+        ok, err = _rm_rf_atomic(link)
+        assert not ok
+        assert real.read_text() == "r"
+        assert link.is_symlink()
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -251,6 +251,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "perf_reboot_required": (
             "Este cambio requiere reiniciar el equipo para tomar efecto completo."
         ),
+        "perf_timeout": (
+            "La operación tardó demasiado y se canceló. Inténtalo de nuevo."
+        ),
         "tools_title": "Configuración",
         "tools_hint": (
             "Configuración y utilidades auxiliares: personalización, tema "
@@ -650,6 +653,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "perf_reboot_required": (
             "This change requires a reboot to take full effect."
+        ),
+        "perf_timeout": (
+            "The operation took too long and was cancelled. Please try again."
         ),
         "tools_title": "Settings",
         "tools_hint": (
