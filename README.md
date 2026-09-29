@@ -269,10 +269,10 @@ BlipEraser checks its dependencies on **two levels**:
   without `--break-system-packages` (venv `--system-site-packages`).
   > Note: the AUR upload itself is paused — the 3 files in
   > `packaging/aur/` are ready to push when reactivated.
-- [ ] **v1.3 — Production**: AppArmor enforce (today complain/audit),
-  final hardening + release tag. Done already: real `check_for_updates`
-  (GitHub Releases), audit of the daemon's fd-atomic `rm -rf`,
-  D-Bus rate limiting.
+- [x] **v1.3 — Production (done)**: AppArmor enforce verified on a real
+  host (systemd `AppArmorProfile=`, evidence-hardened profile, 0 DENIED),
+  real `check_for_updates` (GitHub Releases), audit of the daemon's
+  fd-atomic `rm -rf`, D-Bus rate limiting, release tags `v1.0.0`/`v1.0.1`.
 - [ ] **Future**: migrate i18n to gettext, E2E tests, PyGObject in the
   Flatpak bundle (today pkexec-host fallback), **Flathub ⏸️**.
 
@@ -569,10 +569,10 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
   `--break-system-packages` (venv `--system-site-packages`).
   > Nota: la subida a AUR está en pausa — los 3 archivos de
   > `packaging/aur/` están listos para pushear cuando se reactive.
-- [ ] **v1.3 — Producción**: AppArmor en enforce (hoy complain/auditoría),
-  hardening final + tag release. Ya hecho: `check_for_updates` real
-  (GitHub Releases), auditoría del `rm -rf` fd-atómico del daemon,
-  rate-limit D-Bus.
+- [x] **v1.3 — Producción (hecho)**: AppArmor en enforce verificado en
+  host real (`AppArmorProfile=` en systemd, perfil endurecido con
+  evidencia, 0 DENIED), `check_for_updates` real (GitHub Releases),
+  auditoría del `rm -rf` fd-atómico, rate-limit D-Bus, tags `v1.0.0`/`v1.0.1`.
 - [ ] **Futuro**: migrar i18n a gettext, tests E2E, PyGObject en el bundle
   Flatpak (hoy fallback pkexec-host), **Flathub ⏸️**.
 

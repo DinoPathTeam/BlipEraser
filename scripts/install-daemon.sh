@@ -46,13 +46,13 @@ if [[ -z "$DEST" ]]; then
     gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 fi
 
-echo "[5/8] AppArmor (modo auditoría, Fase 3)"
+echo "[5/8] AppArmor (enforce, Fase 3)"
 if [[ -d /sys/kernel/security/apparmor ]] && command -v apparmor_parser >/dev/null; then
     install -Dm 644 "$REPO/packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged" \
         "$DEST/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
     if [[ -z "$DEST" ]]; then
         apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged \
-            && echo "[OK] Perfil cargado en modo complain (solo registra)."
+            && echo "[OK] Perfil cargado en enforce."
     fi
 else
     echo "[WARN] Kernel sin AppArmor: perfil copiado pero sin cargar (solo aviso)."

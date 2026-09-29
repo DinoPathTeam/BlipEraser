@@ -1,61 +1,85 @@
-# AppArmor profile for BlipEraser Privileged Daemon (FASE 3, en auditoría).
+# AppArmor profile for BlipEraser Privileged Daemon (Fase 3, ENFORCE).
 # Install to: /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
 # Enable with: sudo apparmor_parser -r /etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged
 #
-# MODO COMPLAIN a propósito: el perfil aún no cubre todo lo que el daemon
-# necesita (python3, site-packages, loginctl, pacman-key/rm con +x). En
-# enforce lo mataría. Complain registra violaciones en el log para
-# endurecerlo con evidencia (v1.3) sin romper nada.
+# Enforce desde v1.0.2: endurecido con evidencia real (audit.log).
+# Adjunción vía systemd AppArmorProfile= (sin eso el kernel ejecuta
+# python3 y el perfil jamás se aplica). Sin reglas `deny` explícitas:
+# en complain se aplican EN SILENCIO y rompían los borrados.
 
 #include <tunables/global>
 
-/usr/lib/blip-eraser/blip-eraser-privileged flags=(complain) {
+/usr/lib/blip-eraser/blip-eraser-privileged {
   #include <abstractions/base>
   #include <abstractions/dbus>
+  #include <abstractions/python>
 
-  # Basic execution
+  # Capacidades mínimas (rm sobre archivos de sólo lectura, DAC)
   capability dac_override,
   capability dac_read_search,
   capability fowner,
-  capability setuid,
-  capability setgid,
 
-  # D-Bus communication
-  dbus (send, receive) bus=system
-    peer=(label=unconfined),
+  # D-Bus: clientes sin confinar (busctl, flatpak-spawn) y GUI confinada
+  dbus (send, receive) bus=system peer=(label=unconfined),
+  dbus (send, receive) bus=system peer=(label=/usr/bin/blip-eraser),
 
-  # Filesystem access - read-only
-  /usr/bin/pacman      r,
-  /usr/bin/pacman-key  r,
-  /usr/bin/rm          r,
+  # Binarios que el daemon ejecuta (heredan el confinamiento).
+  # gpg/grep/pacman-conf los invoca pacman-key al verificar firmas.
+  /usr/bin/pacman      rix,
+  /usr/bin/pacman-key  rix,
+  /usr/bin/pacman-conf rix,
+  /usr/bin/loginctl    rix,
+  /usr/bin/gpg         rix,
+  /usr/bin/gpgconf     rix,
+  /usr/bin/gpgsm       rix,
+  /usr/bin/grep        rix,
   /usr/lib/blip-eraser/blip-eraser-privileged r,
 
-  # Read-only system directories
+  # Lecturas de pacman/pacman-key (conf, mirrorlists, helpers makepkg)
+  /etc/pacman.conf r,
+  /etc/pacman.d/** r,
+  /usr/share/makepkg/** r,
+  /dev/tty rw,
+
+  # Usuarios/sesiones (loginctl, userdb, wheel)
   /etc/group r,
   /etc/passwd r,
+  /etc/nsswitch.conf r,
   /etc/machine-id r,
+  /run/systemd/userdb/ r,
+  /run/systemd/userdb/** r,
 
-  # Read-write paths for privileged operations
+  # Listados de los propios dirs (/** no cubre el dir en sí)
+  /var/cache/pacman/pkg/ r,
+  /var/log/ r,
+  /var/lib/pacman/ r,
+  /dev/null rw,
+
+  # Introspección que hacen python/systemd (boot_id, mounts propios)
+  /proc/sys/kernel/random/boot_id r,
+  /proc/*/mounts r,
+
+  # La interfaz D-Bus la lee gi en tiempo de ejecución
+  /usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml r,
+
+  # Rutas con escritura: las operaciones privilegiadas
   /var/cache/pacman/pkg/** rw,
   /var/log/** rw,
   /var/lib/pacman/** rw,
 
-  # D-Bus socket
+  # Socket D-Bus del sistema
   /run/dbus/system_bus_socket rw,
 
-  # Network access (if needed for pacman mirror sorting via reflector)
+  # Sin red (el daemon no la usa; mirror sorting corre en el cliente)
   # network inet,
   # network inet6,
-
-  # Deny by default
-  deny /** w,
-
-  # Audit
-  audit deny /** w,
 }
 
 # Profile for the BlipEraser UI (unprivileged)
-/usr/bin/blip-eraser {
+# NOTA: dormido hasta que exista /usr/bin/blip-eraser (pip/AUR) o el
+# flatpak lo use. No se endurece aquí: la GUI necesita medio sistema
+# (Qt plugins, fuentes, portales) y eso es otro perfil entero.
+/usr/bin/blip-eraser flags=(complain) {
   #include <abstractions/base>
   #include <abstractions/dbus>
 
@@ -78,7 +102,4 @@
   # Config and cache
   owner @{HOME}/.config/blip-eraser/** rw,
   owner @{HOME}/.cache/blip-eraser/** rw,
-
-  # No privileged operations
-  deny /** wx,
 }

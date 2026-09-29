@@ -25,6 +25,23 @@ Versión del código: `1.0.1` (definida en `src/blip_eraser/__init__.py`).
   auto-generado de GitHub daba 404; el repo es privado y AUR exige
   fuentes de descarga anónima — ver decisión pendiente).
 
+### 🛡️ AppArmor en enforce (Fase 3 verificada en host real)
+
+- **Hallazgo**: el daemon corría `unconfined` — con shebang el kernel
+  ejecuta `python3` y el perfil jamás se adjuntaba. Fix: `AppArmorProfile=`
+  en la unidad systemd (`packaging/systemd/`).
+- **Trampa documentada**: las reglas `deny /** w` se aplican INCLUSO en
+  complain (niegan en silencio, sin log) y rompían todo borrado. Fuera:
+  por defecto ya niega lo no permitido.
+- **Perfil endurecido con evidencia** (`audit.log`): `abstractions/python`,
+  exec `pacman/pacman-key/pacman-conf/loginctl/gpg/gpgconf/gpgsm/grep`
+  (`rix`), lecturas makepkg/`pacman.conf`/mirrorlists/`nsswitch`/`userdb`,
+  `boot_id`, `mounts`, XML de la interfaz, `/dev/tty rw`, `/dev/null`,
+  peer D-Bus `unconfined` + GUI; capacidades mínimas (sin setuid/setgid);
+  sin red. Perfil GUI a complain (dormido: no existe `/usr/bin/blip-eraser`).
+- **Verificado en enforce**: Ping + `CleanSystemPaths` real + rechazo de
+  `RemovePackages`, **0 DENIED**. `install-daemon.sh` ahora carga enforce.
+
 ### ✅ v1.1 cerrado + release v1.0.0 con Flatpak descargable
 
 - **v1.1 (hecho)**: suite verde (`591 passed, 3 skipped`) + CI mínimo

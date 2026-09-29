@@ -11,6 +11,11 @@ ExecStart=/usr/bin/python3 /usr/lib/blip-eraser/blip-eraser-privileged
 User=root
 Group=root
 
+# Confinamiento AppArmor (Fase 3): sin esto el kernel ejecuta el
+# intérprete python3 y el perfil jamás se adjunta (queda unconfined).
+# El perfil vive en /etc/apparmor.d (lo instala install-daemon.sh).
+AppArmorProfile=/usr/lib/blip-eraser/blip-eraser-privileged
+
 # Working directory
 WorkingDirectory=/usr/lib/blip-eraser
 
