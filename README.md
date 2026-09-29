@@ -127,6 +127,25 @@ flatpak run io.github.DinoPathTeam.BlipEraser
 > The flatpak manages the host via `flatpak-spawn` (needs `--filesystem=host`:
 > it is a system tool). Privileged operations use pkexec on the host.
 
+**AUR (Arch Linux):**
+
+```bash
+yay -S blip-eraser
+# then enable the privileged daemon (needs wheel group):
+sudo systemctl enable --now blip-eraser-privileged.service
+```
+
+No AUR helper? Build it manually (same files as `packaging/aur/`):
+
+```bash
+git clone https://github.com/DinoPathTeam/BlipEraser.git
+cd BlipEraser
+gh release download v1.0.1 -p "BlipEraser-1.0.1.tar.gz"
+mkdir build && cp packaging/aur/PKGBUILD packaging/aur/blip-eraser.install build/
+cp BlipEraser-1.0.1.tar.gz build/blip-eraser-1.0.1.tar.gz
+cd build && makepkg -si
+```
+
 **Recommended (native):** deploy the privileged daemon (code + systemd + D-Bus + polkit) with the installer script — it is idempotent, re-run it after every code change:
 
 ```bash
@@ -401,6 +420,25 @@ flatpak run io.github.DinoPathTeam.BlipEraser
 
 > El flatpak gestiona el host vía `flatpak-spawn` (pide `--filesystem=host`:
 > es una herramienta de sistema). Las operaciones con privilegios usan pkexec en el host.
+
+**AUR (Arch Linux):**
+
+```bash
+yay -S blip-eraser
+# y habilita el daemon privilegiado (requiere grupo wheel):
+sudo systemctl enable --now blip-eraser-privileged.service
+```
+
+¿Sin ayudante AUR? Compílalo a mano (mismos archivos de `packaging/aur/`):
+
+```bash
+git clone https://github.com/DinoPathTeam/BlipEraser.git
+cd BlipEraser
+gh release download v1.0.1 -p "BlipEraser-1.0.1.tar.gz"
+mkdir build && cp packaging/aur/PKGBUILD packaging/aur/blip-eraser.install build/
+cp BlipEraser-1.0.1.tar.gz build/blip-eraser-1.0.1.tar.gz
+cd build && makepkg -si
+```
 
 **Muy importante:** PyQt6, PyGObject y gst-libav se instalan con el gestor del sistema, **no por pip**.
 
