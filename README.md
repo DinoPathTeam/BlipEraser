@@ -113,7 +113,21 @@ pacman/systemd/loginctl/gst-libav (H.264) · Bash (installers/wrappers).
 
 ## Installation
 
-**Recommended:** deploy the privileged daemon (code + systemd + D-Bus + polkit) with the installer script — it is idempotent, re-run it after every code change:
+**Easiest:** download `BlipEraser-v1.0.0-x86_64.flatpak` from
+[Releases](https://github.com/DinoPathTeam/BlipEraser/releases/tag/v1.0.0) and:
+
+```bash
+# 1. Privileged daemon on the host (one time only)
+./scripts/install-daemon.sh   # or fetch the script from the repo
+# 2. Install and run the flatpak
+flatpak install --user BlipEraser-v1.0.0-x86_64.flatpak
+flatpak run io.github.DinoPathTeam.BlipEraser
+```
+
+> The flatpak manages the host via `flatpak-spawn` (needs `--filesystem=host`:
+> it is a system tool). Privileged operations use pkexec on the host.
+
+**Recommended (native):** deploy the privileged daemon (code + systemd + D-Bus + polkit) with the installer script — it is idempotent, re-run it after every code change:
 
 ```bash
 # 1. System dependencies (includes gst-libav for splash screen video intro)
@@ -368,6 +382,20 @@ pacman/systemd/loginctl/gst-libav (H.264) · Bash (instaladores/wrappers).
 ---
 
 ## 📦 Instalación
+
+**Lo más fácil:** descarga `BlipEraser-v1.0.0-x86_64.flatpak` desde
+[Releases](https://github.com/DinoPathTeam/BlipEraser/releases/tag/v1.0.0) y:
+
+```bash
+# 1. Daemon privilegiado en el host (una sola vez)
+./scripts/install-daemon.sh   # o baja el script del repo
+# 2. Instalar y lanzar el flatpak
+flatpak install --user BlipEraser-v1.0.0-x86_64.flatpak
+flatpak run io.github.DinoPathTeam.BlipEraser
+```
+
+> El flatpak gestiona el host vía `flatpak-spawn` (pide `--filesystem=host`:
+> es una herramienta de sistema). Las operaciones con privilegios usan pkexec en el host.
 
 **Muy importante:** PyQt6, PyGObject y gst-libav se instalan con el gestor del sistema, **no por pip**.
 
