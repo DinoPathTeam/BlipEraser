@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blip-eraser"
-version = "1.0.0"
+version = "1.0.1"
 description = "Desinstalador de aplicaciones para Arch Linux"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,14 +49,11 @@ where = ["src"]
     "packaging/systemd/*.service",
 ]
 
-# Instalar archivos de sistema en las ubicaciones correctas
-[tool.setuptools.data-files]
-"/usr/share/polkit-1/actions" = ["packaging/polkit/com.dinopath.blip-eraser.policy"]
-"/etc/polkit-1/rules.d" = ["packaging/polkit/49-blip-eraser.rules"]
-"/usr/share/dbus-1/system.d" = ["packaging/dbus/blip-eraser-privileged.conf"]
-"/usr/share/dbus-1/interfaces" = ["packaging/dbus/com.dinopath.BlipEraser.Privileged.xml"]
-"/usr/lib/systemd/system" = ["packaging/systemd/blip-eraser-privileged.service"]
-"/usr/lib/blip-eraser" = ["packaging/scripts/blip-eraser-privileged"]
+# NOTA: sin [tool.setuptools.data-files]. Los data-files absolutos se
+# instalan MAL desde wheels (quedan anidados bajo site-packages en vez
+# de /usr, /etc). Cada vía de entrega instala los archivos de sistema
+# explícitamente: scripts/install-daemon.sh (nativo), PKGBUILD (AUR).
+# (El flatpak los excluye por diseño: el daemon vive en el host.)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

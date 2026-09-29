@@ -1,0 +1,52 @@
+# Maintainer: DinoPathTeam <https://github.com/DinoPathTeam>
+pkgname=blip-eraser
+pkgver=1.0.1
+pkgrel=1
+pkgdesc="Desinstalador de apps y limpiador del sistema para Arch Linux (PyQt6)"
+arch=('x86_64')
+url="https://github.com/DinoPathTeam/BlipEraser"
+license=('MIT')
+depends=('python' 'python-pyqt6' 'python-gobject' 'polkit' 'systemd')
+optdepends=('gst-libav: video de intro del splash (H.264)'
+            'apparmor: confinamiento del daemon privilegiado')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/DinoPathTeam/BlipEraser/releases/download/v$pkgver/BlipEraser-$pkgver.tar.gz")
+sha256sums=('51e740ce7b24ab30ececadf8f73730a455888ca434666f521f17f4a35627cef1')
+install=$pkgname.install
+
+build() {
+  cd "BlipEraser-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "BlipEraser-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  # Licencia
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # Archivos de sistema (el wheel ya no trae data-files: iban a site-packages)
+  install -Dm644 packaging/polkit/com.dinopath.blip-eraser.policy \
+    "$pkgdir/usr/share/polkit-1/actions/com.dinopath.blip-eraser.policy"
+  install -Dm644 packaging/polkit/49-blip-eraser.rules \
+    "$pkgdir/etc/polkit-1/rules.d/49-blip-eraser.rules"
+  install -Dm644 packaging/dbus/blip-eraser-privileged.conf \
+    "$pkgdir/usr/share/dbus-1/system.d/blip-eraser-privileged.conf"
+  install -Dm644 packaging/dbus/com.dinopath.BlipEraser.Privileged.xml \
+    "$pkgdir/usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml"
+  install -Dm644 packaging/systemd/blip-eraser-privileged.service \
+    "$pkgdir/usr/lib/systemd/system/blip-eraser-privileged.service"
+  # Daemon en /usr/lib (código sin assets GUI, igual que install-daemon.sh)
+  mkdir -p "$pkgdir/usr/lib/blip-eraser"
+  cp -r src/blip_eraser "$pkgdir/usr/lib/blip-eraser/"
+  find "$pkgdir/usr/lib/blip-eraser" -name __pycache__ -type d -prune -exec rm -rf {} +
+  rm -rf "$pkgdir/usr/lib/blip-eraser/blip_eraser/assets"
+  install -Dm755 packaging/scripts/blip-eraser-privileged \
+    "$pkgdir/usr/lib/blip-eraser/blip-eraser-privileged"
+  # AppArmor (perfil del host, no del venv)
+  install -Dm644 packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged \
+    "$pkgdir/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
+  # Acceso directo + icono (Icon= exige el .desktop)
+  install -Dm644 packaging/blip-eraser.desktop "$pkgdir/usr/share/applications/blip-eraser.desktop"
+  install -Dm644 packaging/icons/hicolor/512x512/apps/blip-eraser.png \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
+}

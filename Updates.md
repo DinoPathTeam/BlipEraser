@@ -5,11 +5,25 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.1` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 📦 v1.0.1: AUR (PKGBUILD validado con makepkg)
+
+- **Fix**: eliminados `data-files` absolutos de `pyproject.toml` (el wheel
+  los anidaba bajo `site-packages` en vez de `/usr`, `/etc`). Cada vía
+  instala lo suyo: `install-daemon.sh` (nativo), `package()` del PKGBUILD
+  (AUR); el flatpak los excluye por diseño.
+- **Nuevo**: `packaging/aur/` (`PKGBUILD`, `blip-eraser.install`) —
+  paquete `blip-eraser` validado con `makepkg`: binario, daemon en
+  `/usr/lib/blip-eraser`, systemd + D-Bus + polkit + AppArmor + `.desktop`
+  + icono + licencia, todo en su sitio.
+- Fuente AUR: asset `BlipEraser-1.0.1.tar.gz` del release (el tarball
+  auto-generado de GitHub daba 404; el repo es privado y AUR exige
+  fuentes de descarga anónima — ver decisión pendiente).
 
 ### ✅ v1.1 cerrado + release v1.0.0 con Flatpak descargable
 
