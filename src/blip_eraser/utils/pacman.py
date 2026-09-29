@@ -17,6 +17,7 @@ import threading
 from pathlib import Path
 
 from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.host_cmd import host_cmd
 from blip_eraser.utils.dbus_client import (
     get_privileged_api,
     DBusError,
@@ -67,7 +68,7 @@ def _verify_package_signatures() -> bool:
 
             # Verificar firma con pacman-key
             result = subprocess.run(
-                ["pacman-key", "--verify", str(sig_file), str(pkg_file)],
+                host_cmd(["pacman-key", "--verify", str(sig_file), str(pkg_file)]),
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -112,7 +113,7 @@ def _load_package_cache() -> set[str]:
         # Cargar lista de paquetes
         try:
             result = subprocess.run(
-                ["pacman", "-Q"],
+                host_cmd(["pacman", "-Q"]),
                 capture_output=True,
                 text=True,
                 check=True,
@@ -171,7 +172,7 @@ def _query_packages(flag: str) -> list[tuple[str, str]]:
     si el comando falla. La GUI se encarga de mostrar el mensaje.
     """
     result = subprocess.run(
-        ["pacman", flag],
+        host_cmd(["pacman", flag]),
         capture_output=True,
         text=True,
         check=True,

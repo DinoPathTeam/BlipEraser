@@ -26,7 +26,8 @@ class PrivilegedDaemonManager:
         """Verifica si el servicio del daemon está activo."""
         try:
             import subprocess
-            result = subprocess.run(["systemctl", "is-active", "blip-eraser-privileged.service"], capture_output=True, text=True, timeout=5)
+            from blip_eraser.utils.host_cmd import host_cmd
+            result = subprocess.run(host_cmd(["systemctl", "is-active", "blip-eraser-privileged.service"]), capture_output=True, text=True, timeout=5)
             return result.returncode == 0 and result.stdout.strip() == "active"
         except Exception:
             return False

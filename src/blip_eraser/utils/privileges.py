@@ -45,6 +45,7 @@ from blip_eraser.utils.dbus_client import (
     OperationResult,
 )
 from blip_eraser.utils.file_utils import delete_path
+from blip_eraser.utils.host_cmd import expanduser as _expand_host, host_home
 from blip_eraser.utils.log import write_diagnostic
 
 # Backward compatibility aliases for tests and legacy code
@@ -152,9 +153,9 @@ def _audit_log(action: str, paths: list[Path], result: str, detail: str = "") ->
 def _is_path_denied_in_home(path: Path, home: Path | None = None) -> bool:
     """True si la ruta está en el denylist de $HOME (nunca borrar)."""
     if home is None:
-        home = Path.home()
+        home = host_home()
     try:
-        expanded = path.expanduser()
+        expanded = _expand_host(path)
         resolved = expanded.resolve()
         rel = resolved.relative_to(home.resolve())
         rel_str = str(rel).replace("\\", "/")
@@ -172,8 +173,8 @@ def needs_elevation(path: Path, home: Path | None = None) -> bool:
          (nunca se asume sobre una ruta arbitraria del usuario).
     """
     if home is None:
-        home = Path.home()
-    expanded = path.expanduser()
+        home = host_home()
+    expanded = _expand_host(path)
     try:
         resolved = expanded.resolve()
     except OSError:
@@ -245,7 +246,7 @@ def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | No
             on_progress(done, total)
 
     for path in paths:
-        safe = path.expanduser()
+        safe = _expand_host(path)
         (system_paths if needs_elevation(safe) else home_paths).append(safe)
 
     for path in home_paths:

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.host_cmd import host_cmd
 from blip_eraser.utils.validation import (
     ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; fuente única en validation.py)
     reject_symlinks,
@@ -173,7 +174,7 @@ PKEXEC_RC_EXECUTION_FAILED = 127
 
 
 def _run_pkexec_rm(paths: list[Path]) -> str:
-    cmd = ["pkexec", "rm", "-rf", "--", *(str(p) for p in paths)]
+    cmd = host_cmd(["pkexec", "rm", "-rf", "--", *(str(p) for p in paths)])
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
@@ -187,7 +188,7 @@ def _run_pkexec_rm(paths: list[Path]) -> str:
 
 
 def _run_pkexec_pacman(packages: list[str], noconfirm: bool = True) -> str:
-    cmd = ["pkexec", "pacman", "-Rns"]
+    cmd = host_cmd(["pkexec", "pacman", "-Rns"])
     if noconfirm:
         cmd.append("--noconfirm")
     cmd.extend(packages)

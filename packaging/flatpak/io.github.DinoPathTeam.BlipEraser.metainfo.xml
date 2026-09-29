@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.DinoPathTeam.BlipEraser</id>
+  <name>BlipEraser</name>
+  <summary>Desinstalador de apps y limpiador del sistema para Arch Linux</summary>
+  <summary xml:lang="es">Desinstalador de apps y limpiador del sistema para Arch Linux</summary>
+  <description>
+    <p>Desinstalador de aplicaciones y limpiador del sistema para Arch Linux y derivadas. Detecta apps no gestionadas por pacman (AppImages, carpetas sueltas) y limpia caché, registros y paquetes huérfanos.</p>
+    <p>La versión Flatpak gestiona el sistema anfitrión vía flatpak-spawn; el daemon privilegiado se instala en el host con install-daemon.sh.</p>
+  </description>
+  <launchable type="desktop-id">io.github.DinoPathTeam.BlipEraser.desktop</launchable>
+  <provides>
+    <binary>blip-eraser</binary>
+  </provides>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/DinoPathTeam/BlipEraser</url>
+  <url type="bugtracker">https://github.com/DinoPathTeam/BlipEraser/issues</url>
+</component>

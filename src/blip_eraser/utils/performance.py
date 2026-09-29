@@ -10,6 +10,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from blip_eraser.utils.host_cmd import host_cmd
 from blip_eraser.utils.log import write_diagnostic
 
 
@@ -25,8 +26,8 @@ class TweakResult:
 # ─── Utilidades ────────────────────────────────────────────────────────────
 
 def _run_cmd(cmd: list[str], check: bool = True) -> subprocess.CompletedProcess:
-    """Ejecuta comando y retorna CompletedProcess."""
-    return subprocess.run(cmd, capture_output=True, text=True, check=check)
+    """Ejecuta comando y retorna CompletedProcess (en el host si Flatpak)."""
+    return subprocess.run(host_cmd(cmd), capture_output=True, text=True, check=check)
 
 
 def _pkg_installed(pkg: str) -> bool:

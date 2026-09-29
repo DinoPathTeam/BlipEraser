@@ -11,6 +11,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from blip_eraser.utils.host_cmd import host_cmd
+
 _CPU_STAT = Path("/proc/stat")
 _MEMINFO = Path("/proc/meminfo")
 _CPUINFO = Path("/proc/cpuinfo")
@@ -123,7 +125,7 @@ def gpu_model() -> str | None:
     """
     try:
         out = subprocess.run(
-            ["lspci"], capture_output=True, text=True, check=False, timeout=5
+            host_cmd(["lspci"]), capture_output=True, text=True, check=False, timeout=5
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return None

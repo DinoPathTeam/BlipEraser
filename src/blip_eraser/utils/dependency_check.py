@@ -18,10 +18,11 @@ Nada de aquí llama a sys.exit() ni lanza QMessageBox: devuelve valores
 from __future__ import annotations
 
 import importlib
-import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass
 import subprocess
+
+from blip_eraser.utils.host_cmd import host_shell, host_which, is_flatpak
 
 # Asume distro Arch — revisar si se soporta multi-distro a futuro
 PYQT6_MODULE = "PyQt6.QtWidgets"
@@ -106,8 +107,8 @@ def check_pyqt6_available() -> bool:
 # Nivel 2 — binarios externos
 # ----------------------------------------------------------------------
 def check_binary_available(binary: str) -> bool:
-    """True si `binary` está disponible en el PATH (vía shutil.which)."""
-    return shutil.which(binary) is not None
+    """True si `binary` está disponible en el PATH (del host en Flatpak)."""
+    return host_which(binary) is not None
 
 
 def find_missing_dependencies(
@@ -172,20 +173,21 @@ def _check_daemon_deps_cached() -> list[DaemonDependency]:
             return cached_result
     
     missing = []
+    use_shell = not is_flatpak()  # en Flatpak: lista flatpak-spawn, sin shell
     for dep in DAEMON_DEPENDENCIES:
         try:
             # Use shell=True for commands with pipes/redirections, but they're hardcoded
             result = subprocess.run(
-                dep.check_cmd, shell=True, capture_output=True, timeout=5
+                host_shell(dep.check_cmd), shell=use_shell, capture_output=True, timeout=5
             )
             if result.returncode != 0:
                 missing.append(dep)
                 continue
-            
+
             # Verificar si está activo (para los que tienen check_active_cmd)
             if dep.check_active_cmd:
                 active_result = subprocess.run(
-                    dep.check_active_cmd, shell=True, capture_output=True, timeout=5
+                    host_shell(dep.check_active_cmd), shell=use_shell, capture_output=True, timeout=5
                 )
                 if active_result.returncode != 0:
                     missing.append(dep)

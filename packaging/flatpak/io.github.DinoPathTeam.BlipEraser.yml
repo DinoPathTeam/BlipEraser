@@ -1,0 +1,51 @@
+app-id: io.github.DinoPathTeam.BlipEraser
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: blip-eraser
+finish-args:
+  # Pantalla + GPU
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Puente al host: TODA la gestión del sistema (pacman, pkexec, systemctl)
+  # sale del sandbox vía `flatpak-spawn --host` (ver utils/host_cmd.py)
+  - --talk-name=org.freedesktop.Flatpak
+  # Daemon privilegiado instalado en el host (scripts/install-daemon.sh)
+  - --system-talk-name=com.dinopath.BlipEraser.Privileged
+  # Limpieza del sistema = necesita ver los paths reales del host
+  - --filesystem=host
+modules:
+  - name: python-deps
+    buildsystem: simple
+    build-commands:
+      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" PyQt6
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/c3/a0/bd1399740dfa80c0a94d20b02d89962a31458233dcf70eaa09bfbccf3d0f/pyqt6-6.11.0-cp310-abi3-manylinux_2_34_x86_64.whl
+        sha256: 8555277989fa7d114cb3c3443fd261d566909f7268ceedd41d93a5f02d37ec05
+      - type: file
+        url: https://files.pythonhosted.org/packages/69/ef/e34054e814c874f5230326ffc791f602a13b2f5590ca9599ba45b5fc4bc0/pyqt6_qt6-6.11.2-py3-none-manylinux_2_34_x86_64.whl
+        sha256: da7d747ad917f044d841ff834f17d2c50a0cc5d0e3b16479d8662544207d0567
+      - type: file
+        url: https://files.pythonhosted.org/packages/63/4c/3d4217383269153a3026e825dd109968561638d20394671e4dc8e13c6a95/pyqt6_sip-13.12.0-cp312-cp312-manylinux1_x86_64.manylinux_2_5_x86_64.whl
+        sha256: 3476132fc5c85d7136eb14cb7d9e1909e9f5ee94a85d892e4ac244990ba541b3
+
+  - name: bliperaser
+    buildsystem: simple
+    build-commands:
+      # Código (sin pip: evita que data-files del host contaminen /app)
+      - mkdir -p /app/blip-eraser-pkg
+      - cp -r src/blip_eraser /app/blip-eraser-pkg/
+      - find /app/blip-eraser-pkg -name __pycache__ -type d -prune -exec rm -rf {} +
+      # Lanzador
+      - install -Dm755 packaging/flatpak/blip-eraser /app/bin/blip-eraser
+      # Integración escritorio (nombres = app-id, exige Flatpak)
+      - install -Dm644 packaging/blip-eraser.desktop /app/share/applications/io.github.DinoPathTeam.BlipEraser.desktop
+      - sed -i 's/^Icon=.*/Icon=io.github.DinoPathTeam.BlipEraser/' /app/share/applications/io.github.DinoPathTeam.BlipEraser.desktop
+      - install -Dm644 packaging/icons/hicolor/512x512/apps/blip-eraser.png /app/share/icons/hicolor/512x512/apps/io.github.DinoPathTeam.BlipEraser.png
+      - install -Dm644 packaging/flatpak/io.github.DinoPathTeam.BlipEraser.metainfo.xml /app/share/metainfo/io.github.DinoPathTeam.BlipEraser.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..

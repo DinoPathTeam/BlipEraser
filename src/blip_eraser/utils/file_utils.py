@@ -11,6 +11,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from blip_eraser.utils.host_cmd import expanduser as _expand_host
+
 DEFAULT_SCAN_PATHS = (
     "~/.local/share",
     "~/Games",
@@ -78,7 +80,7 @@ def scan_manual_entries(
         ignore_names = DEFAULT_IGNORE_NAMES
     found: list[Path] = []
     for base in scan_paths:
-        base_path = Path(base).expanduser()
+        base_path = _expand_host(base)
         if not base_path.exists():
             continue
         try:

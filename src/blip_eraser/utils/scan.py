@@ -15,8 +15,8 @@ from datetime import datetime
 from pathlib import Path
 
 from blip_eraser.utils.file_utils import get_dir_size, path_size_for_display
+from blip_eraser.utils.host_cmd import expanduser as _expand_host, host_cmd
 
-_CACHE_DIR = Path("~").expanduser() / ".cache"
 _PACMAN_CACHE = Path("/var/cache/pacman/pkg")
 _LOG_DIR = Path("/var/log")
 
@@ -41,16 +41,22 @@ CLEANUP_CATEGORY_LABEL_KEYS = {
 _C_LOCALE_ENV = {**os.environ, "LANG": "C", "LC_ALL": "C"}
 
 
+def _cache_dir() -> Path:
+    """~/.cache del host (en Flatpak, `~` a secas es el sandbox)."""
+    return _expand_host("~") / ".cache"
+
+
 def _run(cmd: list[str], timeout: int = 8, env: dict | None = None) -> str:
     """Ejecuta un comando de solo lectura y devuelve su stdout.
 
     Nunca lanza: cualquier fallo (comando ausente, timeout, error) se
     traduce en cadena vacía. `env` permite fijar el entorno del proceso
-    hijo (por ejemplo, forzar el locale).
+    hijo (por ejemplo, forzar el locale). En Flatpak el comando corre
+    en el host vía `flatpak-spawn`.
     """
     try:
         proc = subprocess.run(
-            cmd,
+            host_cmd(cmd),
             capture_output=True,
             text=True,
             check=False,
@@ -189,7 +195,7 @@ def best_effort_dir_size(path: Path) -> int:
 def scan_cleanup() -> dict[str, int]:
     """Espacio recuperable por categoría (junk/cache/logs) + huérfanos."""
     return {
-        "junk_bytes": best_effort_dir_size(_CACHE_DIR),
+        "junk_bytes": best_effort_dir_size(_cache_dir()),
         "pacman_cache_bytes": best_effort_dir_size(_PACMAN_CACHE),
         "logs_bytes": best_effort_dir_size(_LOG_DIR),
         "orphan_count": len(orphan_packages()),
@@ -210,7 +216,7 @@ def scan_cleanup_items(
     """
     if categories is None:
         categories = [
-            ("junk", _CACHE_DIR),
+            ("junk", _cache_dir()),
             ("cache", _PACMAN_CACHE),
             ("logs", _LOG_DIR),
         ]
