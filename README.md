@@ -263,13 +263,18 @@ BlipEraser checks its dependencies on **two levels**:
     fail-closed), D-Bus rate limit (10 destructive calls/min per
     sender), tag + GitHub release `v1.0.0` with downloadable Flatpak
     (`io.github.DinoPathTeam.BlipEraser`).
-- [ ] **v1.2 — AUR packaging**: `.desktop` with `Icon=`, PKGBUILD,
-  installer covering polkit + AppArmor (gap today), guide without
-  `--break-system-packages` (venv `--system-site-packages`).
-- [ ] **v1.3 — Production**: AppArmor Phase 3, real `check_for_updates`
+- [x] **v1.2 — AUR packaging (packaged, upload ⏸️)**: `.desktop` with
+  `Icon=`, PKGBUILD 1.0.1 + `.SRCINFO` validated with `makepkg`
+  (`packaging/aur/`), installer covering polkit + AppArmor, guide
+  without `--break-system-packages` (venv `--system-site-packages`).
+  > Note: the AUR upload itself is paused — the 3 files in
+  > `packaging/aur/` are ready to push when reactivated.
+- [ ] **v1.3 — Production**: AppArmor enforce (today complain/audit),
+  final hardening + release tag. Done already: real `check_for_updates`
   (GitHub Releases), audit of the daemon's fd-atomic `rm -rf`,
-  D-Bus rate limiting, final hardening + release tag.
-- [ ] **Future**: migrate i18n to gettext, E2E tests, **Flathub ⏸️**.
+  D-Bus rate limiting.
+- [ ] **Future**: migrate i18n to gettext, E2E tests, PyGObject in the
+  Flatpak bundle (today pkexec-host fallback), **Flathub ⏸️**.
 
 ---
 
@@ -558,13 +563,18 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
     fail-closed), rate-limit D-Bus (10 ops destructivas/min por sender),
     tag + release `v1.0.0` en GitHub con Flatpak descargable
     (`io.github.DinoPathTeam.BlipEraser`).
-- [ ] **v1.2 — Empaquetado AUR**: `.desktop` con `Icon=`, PKGBUILD,
-  instalador que cubra polkit + AppArmor (hoy laguna), guía sin
+- [x] **v1.2 — Empaquetado AUR (empaquetado, subida ⏸️)**: `.desktop`
+  con `Icon=`, PKGBUILD 1.0.1 + `.SRCINFO` validados con `makepkg`
+  (`packaging/aur/`), instalador que cubre polkit + AppArmor, guía sin
   `--break-system-packages` (venv `--system-site-packages`).
-- [ ] **v1.3 — Producción**: AppArmor Fase 3, `check_for_updates` real
+  > Nota: la subida a AUR está en pausa — los 3 archivos de
+  > `packaging/aur/` están listos para pushear cuando se reactive.
+- [ ] **v1.3 — Producción**: AppArmor en enforce (hoy complain/auditoría),
+  hardening final + tag release. Ya hecho: `check_for_updates` real
   (GitHub Releases), auditoría del `rm -rf` fd-atómico del daemon,
-  rate-limit D-Bus, hardening final + tag release.
-- [ ] **Futuro**: migrar i18n a gettext, tests E2E, **Flathub ⏸️**.
+  rate-limit D-Bus.
+- [ ] **Futuro**: migrar i18n a gettext, tests E2E, PyGObject en el bundle
+  Flatpak (hoy fallback pkexec-host), **Flathub ⏸️**.
 
 ---
 
