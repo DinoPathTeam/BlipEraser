@@ -26,6 +26,7 @@ import stat
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, cast
 
@@ -49,6 +50,27 @@ _package_cache: set[str] | None = None
 _CACHE_LOCK = threading.Lock()
 _cache_initialized = False
 _cache_verification_done = False  # Para verificación async de firmas
+
+# Rate-limit: ventana fija por sender para métodos destructivos (Ping exento).
+# Un borrado a medias no se puede interrumpir, así que frenar ráfagas aquí
+# es más barato que contenerlas después. # ponytail: ventana fija en memoria;
+# token bucket persistente si el daemon recibe abuso real.
+_RATE_LIMIT_MAX = 10
+_RATE_LIMIT_WINDOW = 60.0
+_rate_limit_hits: dict[str, list[float]] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+
+def _check_rate_limit(sender: str) -> bool:
+    """True si el sender aún puede llamar; False si superó la cuota."""
+    now = time.monotonic()
+    with _RATE_LIMIT_LOCK:
+        hits = [t for t in _rate_limit_hits.get(sender, []) if now - t < _RATE_LIMIT_WINDOW]
+        if len(hits) >= _RATE_LIMIT_MAX:
+            _rate_limit_hits[sender] = hits
+            return False
+        _rate_limit_hits[sender] = hits + [now]
+        return True
 
 # ─── Auditoría ──────────────────────────────────────────────────────────
 
@@ -681,10 +703,24 @@ class PrivilegedService:
         try:
             if method_name == "RemovePackages":
                 packages = parameters[0]
+                if not _check_rate_limit(sender):
+                    _audit_log("rate_limited", f"sender={sender} method={method_name}")
+                    invocation.return_dbus_error(
+                        "org.freedesktop.DBus.Error.LimitsExceeded",
+                        "Demasiadas operaciones seguidas, espera un minuto"
+                    )
+                    return
                 result = remove_packages(packages)
                 invocation.return_value(GLib.Variant("(s)", (result,)))
             elif method_name == "CleanSystemPaths":
                 paths = parameters[0]
+                if not _check_rate_limit(sender):
+                    _audit_log("rate_limited", f"sender={sender} method={method_name}")
+                    invocation.return_dbus_error(
+                        "org.freedesktop.DBus.Error.LimitsExceeded",
+                        "Demasiadas operaciones seguidas, espera un minuto"
+                    )
+                    return
                 result = clean_system_paths(paths)
                 invocation.return_value(GLib.Variant("(s)", (result,)))
             elif method_name == "Ping":

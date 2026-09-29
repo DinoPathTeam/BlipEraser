@@ -7,7 +7,6 @@ directo (modo desarrollo/tests).
 
 from __future__ import annotations
 
-import os
 import subprocess
 import threading
 from dataclasses import dataclass
@@ -15,6 +14,11 @@ from pathlib import Path
 from typing import Optional
 
 from blip_eraser.utils.log import write_diagnostic
+from blip_eraser.utils.validation import (
+    ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; fuente única en validation.py)
+    reject_symlinks,
+    validate_path,
+)
 
 # Import GLib and Gio lazily to avoid hard dependency at import time
 try:
@@ -158,38 +162,14 @@ class PrivilegedClient:
 
 # ─── Fallback pkexec (síncrono, para tests/dev) ──────────────────────
 
-# Allowlist igual que en privileges.py
-ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
-    "/var/cache/pacman/pkg",
-    "/var/log",
-    "/var/lib/pacman",
-)
+# Allowlist y validación: fuente única en utils.validation (el daemon y
+# privileges.py usan la misma). Los nombres *_pkexec se conservan como
+# alias para no romper imports existentes.
+_validate_path_pkexec = validate_path
+_reject_symlinks_pkexec = reject_symlinks
 
 PKEXEC_RC_AUTH_CANCELLED = 126
 PKEXEC_RC_EXECUTION_FAILED = 127
-
-
-def _validate_path_pkexec(path: Path) -> bool:
-    path_str = str(path).replace("\\", "/")
-    if not any(path_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES):
-        return False
-    if os.name == "posix":
-        try:
-            resolved = path.resolve(strict=False)
-            resolved_str = str(resolved).replace("\\", "/")
-            return any(resolved_str.startswith(prefix) for prefix in ALLOWED_SYSTEM_PREFIXES)
-        except OSError:
-            return False
-    return True
-
-
-def _reject_symlinks_pkexec(path: Path) -> bool:
-    if path.is_symlink():
-        return True
-    for parent in path.parents:
-        if parent.is_symlink():
-            return True
-    return False
 
 
 def _run_pkexec_rm(paths: list[Path]) -> str:

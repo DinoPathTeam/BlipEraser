@@ -1,17 +1,27 @@
-"""Tests de utils/updates.py — lógica pura, sin PyQt6 y sin red.
+"""Tests de utils/updates.py — lógica pura, sin PyQt6 y sin red real.
 
-El stub de check_for_updates() no debe tocar la red ni el sistema, y debe
-devolver siempre "sin actualización" para que el splash avance de forma
-determinista.
+`check_for_updates()` sí usa la red en producción, así que aquí se
+intercepta `urlopen` con respuestas falsas. Ningún test toca la red.
 """
 
-import socket
+import io
+import json
 
+from blip_eraser.utils import updates
 from blip_eraser.utils.updates import UpdateCheckResult, check_for_updates
 
 
-def test_check_for_updates_returns_no_update():
-    result = check_for_updates()
+def _fake_response(tag):
+    payload = json.dumps({"tag_name": tag}).encode()
+    resp = io.BytesIO(payload)
+    resp.__enter__ = lambda s: s
+    resp.__exit__ = lambda s, *a: False
+    return resp
+
+
+def test_check_for_updates_returns_no_update(monkeypatch):
+    monkeypatch.setattr(updates, "urlopen", lambda *a, **k: _fake_response("v1.0.0"))
+    result = check_for_updates(current_version="1.0.0")
     assert isinstance(result, UpdateCheckResult)
     assert result.has_update is False
     assert result.latest_version is None
@@ -23,10 +33,16 @@ def test_check_for_updates_frozen_dataclass_defaults():
     )
 
 
-def test_check_for_updates_makes_no_network_call(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("check_for_updates() no debe usar la red")
+def test_check_for_updates_detects_newer_release(monkeypatch):
+    monkeypatch.setattr(updates, "urlopen", lambda *a, **k: _fake_response("v1.2.0"))
+    result = check_for_updates(current_version="1.0.0")
+    assert result == UpdateCheckResult(has_update=True, latest_version="1.2.0")
 
-    monkeypatch.setattr(socket, "socket", forbidden)
-    result = check_for_updates()
+
+def test_check_for_updates_network_error_is_fail_closed(monkeypatch):
+    def boom(*args, **kwargs):
+        raise OSError("sin red")
+
+    monkeypatch.setattr(updates, "urlopen", boom)
+    result = check_for_updates(current_version="1.0.0")
     assert result.has_update is False

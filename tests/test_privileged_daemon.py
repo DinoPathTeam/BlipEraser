@@ -434,3 +434,28 @@ class TestActiveGraphicalSession:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestRateLimit:
+    """Cuota por sender para métodos destructivos (Ping exento por diseño)."""
+
+    def test_allows_under_quota(self):
+        from blip_eraser.daemon.privileged_daemon import _check_rate_limit
+        assert _check_rate_limit("test-sender-cuota-ok") is True
+
+    def test_blocks_over_quota(self):
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+        sender = "test-sender-cuota-llena"
+        daemon_mod._rate_limit_hits.pop(sender, None)
+        for _ in range(daemon_mod._RATE_LIMIT_MAX):
+            assert daemon_mod._check_rate_limit(sender) is True
+        assert daemon_mod._check_rate_limit(sender) is False
+        daemon_mod._rate_limit_hits.pop(sender, None)
+
+    def test_window_expiry(self, monkeypatch):
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+        sender = "test-sender-ventana"
+        daemon_mod._rate_limit_hits[sender] = [0.0] * daemon_mod._RATE_LIMIT_MAX
+        monkeypatch.setattr(daemon_mod.time, "monotonic", lambda: daemon_mod._RATE_LIMIT_WINDOW + 1)
+        assert daemon_mod._check_rate_limit(sender) is True
+        daemon_mod._rate_limit_hits.pop(sender, None)
