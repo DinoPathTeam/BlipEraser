@@ -20,8 +20,19 @@ modules:
   - name: python-deps
     buildsystem: simple
     build-commands:
+      # Backends de build vendoreados (sin red en el build): primero el
+      # backend meson, luego pycairo y PyGObject desde sdist, luego PyQt6.
+      # Sin PyGObject la app cae a pkexec-host; con él usa el daemon.
+      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation meson-python pyproject-metadata
+      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation pycairo PyGObject
       - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" PyQt6
     sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/37/35/26a6c96ed91fa3baacd64da82f279bc282eade45003c00d99293332b45e1/meson_python-0.22.0-py3-none-any.whl
+        sha256: 0ce9fa40bb8bfaecccba97347063970e1a18cca2730d6e68a341dc0b73b284a4
+      - type: file
+        url: https://files.pythonhosted.org/packages/b9/8e/d883718e872abc214ba053f60f7e6edc2abd5ffbd1544beb01a9c92ddd3c/pyproject_metadata-0.12.1-py3-none-any.whl
+        sha256: f7162d580a96386a8eb096da06215f981f547d1490f03055ef99e323bc2da427
       - type: file
         url: https://files.pythonhosted.org/packages/c3/a0/bd1399740dfa80c0a94d20b02d89962a31458233dcf70eaa09bfbccf3d0f/pyqt6-6.11.0-cp310-abi3-manylinux_2_34_x86_64.whl
         sha256: 8555277989fa7d114cb3c3443fd261d566909f7268ceedd41d93a5f02d37ec05
@@ -31,6 +42,12 @@ modules:
       - type: file
         url: https://files.pythonhosted.org/packages/63/4c/3d4217383269153a3026e825dd109968561638d20394671e4dc8e13c6a95/pyqt6_sip-13.12.0-cp312-cp312-manylinux1_x86_64.manylinux_2_5_x86_64.whl
         sha256: 3476132fc5c85d7136eb14cb7d9e1909e9f5ee94a85d892e4ac244990ba541b3
+      - type: file
+        url: https://files.pythonhosted.org/packages/26/7c/ab4637b028d9ee12280ab9342f28310e613d5ca30c4d72d2aebeaa6a4969/pycairo-1.29.1.tar.gz
+        sha256: 4fbd26b4af24c9787d84cf5448e34eb8dca064b732479aaecd03109520eebd5f
+      - type: file
+        url: https://files.pythonhosted.org/packages/a3/9b/473a5234ec86bce978d3583adc62441c84cc57181c4ea8a8978997c7f0c1/pygobject-3.58.0.tar.gz
+        sha256: 45068697de3ffe46840ca369705f23118b34db4f7deb63f6eff079a6734ddcca
 
   - name: bliperaser
     buildsystem: simple
