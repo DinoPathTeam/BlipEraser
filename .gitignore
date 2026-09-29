@@ -40,5 +40,14 @@ SECURITY_*.md
 *.pacnew
 *.pacorig
 
-# Reviews locales del agente (contexto, nunca subir)
-.agent/reviews/
+# Contexto local del agente (nunca subir: tumba PRs de FlatHub/AUR)
+.agent/
+
+# Config local del agente Kilo (MCP, personal)
+.kilo/
+
+# Artefacto de test de logging (ruta Windows simulada)
+Z*/
+
+# Notas puntuales de fixes ya aplicados (el git log guarda la historia)
+*_FIX.md
