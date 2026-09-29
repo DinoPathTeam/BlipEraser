@@ -11,7 +11,7 @@ optdepends=('gst-libav: video de intro del splash (H.264)'
             'apparmor: confinamiento del daemon privilegiado')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/DinoPathTeam/BlipEraser/releases/download/v$pkgver/BlipEraser-$pkgver.tar.gz")
-sha256sums=('51e740ce7b24ab30ececadf8f73730a455888ca434666f521f17f4a35627cef1')
+sha256sums=('3410214454a6e91e24103d8eb40617a9eef690dc98e65ffde72de7c34949d608')
 install=$pkgname.install
 
 build() {
