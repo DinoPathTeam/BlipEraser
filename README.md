@@ -230,15 +230,20 @@ BlipEraser checks its dependencies on **two levels**:
 - [x] **v1.0 — CachyOS stabilization**: hard `sip.isdeleted` defense,
   `BackgroundScanMixin` on all 3 pages, forensic instrumentation.
   **Current state**: code `1.0.0`, functional on Arch/CachyOS.
-- [ ] **v1.1 — Order and quality (in progress)**:
-  - Green suite (9 failures today from environment drift) + minimal CI
-    (`pytest` + `compileall`) so it never regresses silently.
+- [x] **v1.1 — Order and quality (done)**:
+  - Green suite (591 passed, 3 skipped) + minimal CI
+    (`pytest` + `compileall`) on every push/PR to `main`.
   - Background deletion with progress dialog ("Removing… n/N", auto-close):
     no more "Not responding" freezes; modal with no cancel (a half
     deletion cannot be interrupted safely).
-  - Single allowlist/denylist in `utils/validation.py` (triplicated today).
-  - Sync `pyproject.toml` version → `1.0.0`.
-  - Root cleanup (`exit`, `Z:/`, stray logs → `docs/` or out).
+  - Single allowlist/denylist in `utils/validation.py` (daemon, pkexec
+    client and GUI share it; `dbus_client` only re-exports).
+  - `pyproject.toml` version in sync → `1.0.0`.
+  - Clean root (no `Z:/` artifacts, no stray logs).
+  - Release extras: real `check_for_updates` (GitHub Releases,
+    fail-closed), D-Bus rate limit (10 destructive calls/min per
+    sender), tag + GitHub release `v1.0.0` with downloadable Flatpak
+    (`io.github.DinoPathTeam.BlipEraser`).
 - [ ] **v1.2 — AUR packaging**: `.desktop` with `Icon=`, PKGBUILD,
   installer covering polkit + AppArmor (gap today), guide without
   `--break-system-packages` (venv `--system-site-packages`).
@@ -501,15 +506,20 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
 - [x] **v1.0 — Estabilización CachyOS**: defensa dura `sip.isdeleted`,
   `BackgroundScanMixin` en las 3 páginas, instrumentación forense.
   **Estado actual**: código `1.0.0`, funcional en Arch/CachyOS.
-- [ ] **v1.1 — Orden y calidad (en curso)**:
-  - Suite verde (hoy 9 fallos por deriva de entorno) + CI mínimo
-    (`pytest` + `compileall`) para que no vuelva a pasar.
+- [x] **v1.1 — Orden y calidad (hecho)**:
+  - Suite verde (591 passed, 3 skipped) + CI mínimo
+    (`pytest` + `compileall`) en cada push/PR a `main`.
   - Borrado en segundo plano con diálogo de progreso ("Eliminando… n/N",
     se cierra solo): adiós al "No responde"; modal sin cancelar (un
     borrado a medias no se puede interrumpir).
-  - Allowlist/denylist única en `utils/validation.py` (hoy triplicada).
+  - Allowlist/denylist única en `utils/validation.py` (daemon, cliente
+    pkexec y GUI la comparten; `dbus_client` solo re-exporta).
   - Sincronizar versión `pyproject.toml` → `1.0.0`.
-  - Limpieza de raíz (`exit`, `Z:/`, logs sueltos → `docs/` o fuera).
+  - Limpieza de raíz (sin artefactos `Z:/`, sin logs sueltos).
+  - Extras del release: `check_for_updates` real (GitHub Releases,
+    fail-closed), rate-limit D-Bus (10 ops destructivas/min por sender),
+    tag + release `v1.0.0` en GitHub con Flatpak descargable
+    (`io.github.DinoPathTeam.BlipEraser`).
 - [ ] **v1.2 — Empaquetado AUR**: `.desktop` con `Icon=`, PKGBUILD,
   instalador que cubra polkit + AppArmor (hoy laguna), guía sin
   `--break-system-packages` (venv `--system-site-packages`).

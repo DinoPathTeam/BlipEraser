@@ -11,6 +11,30 @@ Versión del código: `1.0.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### ✅ v1.1 cerrado + release v1.0.0 con Flatpak descargable
+
+- **v1.1 (hecho)**: suite verde (`591 passed, 3 skipped`) + CI mínimo
+  (`.github/workflows/ci.yml`: `compileall` + `pytest` en cada push/PR);
+  allowlist/denylist única en `utils/validation.py` (`dbus_client`
+  deduplicado a re-export); versión `1.0.0` sincronizada; raíz limpia.
+- **v1.3 (parcial, lo que faltaba barato)**: `check_for_updates()` real
+  contra GitHub Releases (stdlib `urllib`, timeout 5s, fail-closed;
+  `tests/test_updates.py` mockea `urlopen`, sin red real) +
+  rate-limit del daemon (10 ops destructivas/min por sender, `Ping`
+  exento, error `LimitsExceeded`) + tests (`TestRateLimit`).
+- **Flatpak sideload** (puente hasta Flathub): `packaging/flatpak/`
+  (`io.github.DinoPathTeam.BlipEraser.yml`, lanzador, metainfo) +
+  shim `utils/host_cmd.py` (`flatpak-spawn --host` + `$HOME`/`~` del
+  host en `scan`, `file_utils`, `privileges`, `pacman`, `system_stats`,
+  `dependency_check`, `performance`, `dbus_client`;
+  `phase2_installer` queda fuera: desde el sandbox se usa
+  `install-daemon.sh` en el host). Verificado: build OK, PyQt 6.11,
+  spawn al host, arranque offscreen 25s sin errores.
+- **Release**: tag `v1.0.0` + asset `BlipEraser-v1.0.0-x86_64.flatpak`
+  (91 MB) + pasos Flatpak en README (EN+ES).
+- **Queda**: AppArmor en enforce (hoy complain), PyGObject en el bundle
+  (hoy fallback pkexec-host), gettext, E2E, Flathub ⏸️.
+
 ### 🎬 Splash Screen con video de intro + migración a QVideoSink
 
 - **Qué**: sustituye la animación de logo del splash por un video real (6.2s, 1080p, H.264) con mensajes de progreso superpuestos.
