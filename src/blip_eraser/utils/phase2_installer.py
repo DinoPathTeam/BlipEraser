@@ -21,6 +21,15 @@ from pathlib import Path
 from typing import Any, List, Tuple
 
 from blip_eraser.utils.dependency_check import DaemonDependency
+from blip_eraser.utils.host_cmd import is_flatpak
+
+#: En Flatpak los archivos del sandbox son invisibles al host y los
+#: destinos (/usr, /etc) no existen: el daemon SOLO se instala con
+#: scripts/install-daemon.sh ejecutado fuera del sandbox.
+FLATPAK_DAEMON_MSG = (
+    "En Flatpak el daemon se instala en el host: ejecuta "
+    "'./scripts/install-daemon.sh' fuera del sandbox y reinicia la app."
+)
 
 
 # Rutas destino en el sistema
@@ -296,6 +305,8 @@ def install_all_phase2() -> Tuple[bool, str, bool]:
     Returns:
         (success, message, needs_restart)
     """
+    if is_flatpak():
+        return False, FLATPAK_DAEMON_MSG, False
     if not ensure_root_or_pkexec():
         return False, "Se requieren privilegios de root (pkexec no disponible)", False
     
@@ -436,6 +447,8 @@ def install_phase2_if_needed() -> Tuple[bool, str]:
     Returns:
         (success, message)
     """
+    if is_flatpak():
+        return False, FLATPAK_DAEMON_MSG
     # Verificar si ya está instalado
     installed, _missing = check_daemon_installed()
     if installed:
