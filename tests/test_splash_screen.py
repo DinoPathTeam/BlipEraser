@@ -17,6 +17,7 @@ QtMultimediaWidgets = pytest.importorskip(
     "PyQt6.QtMultimediaWidgets", reason="QtMultimediaWidgets opcional"
 )
 
+from blip_eraser.widgets import splash_screen
 from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker, _VideoWidget
 
 
@@ -207,7 +208,7 @@ class TestVideoTimingBehavior:
         splash.close()
 
     def test_media_error_fallbacks_to_animation(self, monkeypatch, app):
-        """Error en media player -> fallback silencioso a animación logo."""
+        """Error en media player -> fallback a animación logo (diagnosticado)."""
         from PyQt6.QtMultimedia import QMediaPlayer
 
         splash = SplashScreen()
@@ -327,6 +328,34 @@ class TestSplashScreenMessages:
         finally:
             splash.close()
 
+    def test_media_error_logs_hint_and_falls_back(self, monkeypatch, app):
+        """Error de video: diagnóstico persistente + intro alternativa."""
+        monkeypatch.setattr(splash_screen, "_QMULTIMEDIA_AVAILABLE", False)
+        monkeypatch.setattr(splash_screen, "_QVIDEOSINK_AVAILABLE", False)
+        logged = []
+        monkeypatch.setattr(
+            splash_screen, "write_diagnostic", lambda msg: logged.append(msg)
+        )
+        splash = SplashScreen()
+        try:
+            player = MagicMock()
+            widget = MagicMock()
+            monkeypatch.setattr(splash, "_video_loaded", True)
+            monkeypatch.setattr(splash, "_media_player", player)
+            monkeypatch.setattr(splash, "_video_widget", widget)
+            splash._on_media_error("CodecError", "no decoder H264")
+            assert splash._video_loaded is False
+            assert len(logged) == 1
+            assert "SPLASH_VIDEO_ERROR" in logged[0]
+            assert "gst-libav" in logged[0]
+            assert player.stop.called
+            # La intro alternativa arranca y el aviso queda encolado/visible.
+            from blip_eraser.utils.i18n import tr
+
+            hint = tr("splash_no_video")
+            assert splash._pending_message == hint or splash._message.text() == hint
+        finally:
+            splash.close()
     def test_start_intro_marks_done_in_video_mode(self, monkeypatch, app):
         """En modo video la intro termina al arrancar (mensajes encima)."""
         splash = SplashScreen()

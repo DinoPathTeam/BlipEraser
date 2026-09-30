@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from blip_eraser.utils.host_cmd import host_cmd
+from blip_eraser.utils.host_cmd import host_cmd, is_flatpak
 
 _CPU_STAT = Path("/proc/stat")
 _MEMINFO = Path("/proc/meminfo")
@@ -91,8 +91,44 @@ def memory_usage_percent() -> int | None:
 # ----------------------------------------------------------------------
 # Disco
 # ----------------------------------------------------------------------
+def _host_df_bytes(path: str) -> tuple[int, int] | None:
+    """(total, usados) en bytes vía `df` del host (solo Flatpak).
+
+    En el sandbox `/` es el overlay de Flatpak, no el disco real:
+    se pregunta al host con `df -B1`. None ante cualquier fallo.
+    """
+    try:
+        proc = subprocess.run(
+            host_cmd(["df", "-B1", "--output=size,used,target", path]),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=8,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    for line in (proc.stdout or "").splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 3 and parts[-1] == path:
+            try:
+                return int(parts[0]), int(parts[1])
+            except ValueError:
+                return None
+    return None
+
+
 def disk_usage_percent(path: str = "/") -> int | None:
-    """% de disco usado en `path` (shutil.disk_usage)."""
+    """% de disco usado en `path` (del host si Flatpak)."""
+    if is_flatpak():
+        df = _host_df_bytes(path)
+        if df is None:
+            return None
+        total, used = df
+        if total == 0:
+            return None
+        return max(0, min(100, int(round(used / total * 100))))
     try:
         usage = shutil.disk_usage(path)
     except (OSError, PermissionError):
@@ -153,7 +189,10 @@ def ram_total_bytes() -> int | None:
 
 
 def disk_total_bytes(path: str = "/") -> int | None:
-    """Capacidad total de disco en `path` en bytes."""
+    """Capacidad total de disco en `path` en bytes (del host si Flatpak)."""
+    if is_flatpak():
+        df = _host_df_bytes(path)
+        return df[0] if df is not None else None
     try:
         return shutil.disk_usage(path).total
     except (OSError, PermissionError):

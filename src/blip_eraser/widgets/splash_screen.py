@@ -21,6 +21,8 @@ from PyQt6 import QtGui
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 
 from blip_eraser.widgets.logo import app_icon
+from blip_eraser.utils.i18n import tr
+from blip_eraser.utils.log import write_diagnostic
 
 # Compatibilidad de PyQt6: algunos tests importan QRect desde QtGui,
 # aunque el nombre real existe en QtCore.
@@ -386,6 +388,14 @@ class SplashScreen(QWidget):
                 self._check_both_finished()
 
     def _on_media_error(self, error, error_string) -> None:
+        # Diagnóstico persistente: antes caía al logo en silencio y era
+        # imposible saber si faltaba el archivo, el codec H.264 (gst-libav
+        # en nativo; FFmpeg del bundle en Flatpak) o el backend.
+        write_diagnostic(
+            f"SPLASH_VIDEO_ERROR error={error} detail={error_string} "
+            f"file={ASSET_SPLASH_VIDEO} exists={ASSET_SPLASH_VIDEO.exists()} "
+            "HINT: nativo `sudo pacman -S gst-libav`; Flatpak usa el FFmpeg del bundle"
+        )
         self._video_loaded = False
         if self._video_widget:
             self._video_widget.hide()
@@ -397,6 +407,7 @@ class SplashScreen(QWidget):
             self._media_player = None
         self._video_sink = None
         self._start_fallback_animation()
+        self.set_message(tr("splash_no_video"))
 
     def _check_both_finished(self) -> None:
         if self._video_ended and self._worker_finished:

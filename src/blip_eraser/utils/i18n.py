@@ -108,6 +108,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Escaneando el PC, por favor mantente en espera unos segundos"
         ),
         "splash_welcome": "Escaneo finalizado, ¡Bienvenido!",
+        "splash_no_video": "Video no disponible: mostrando intro alternativa",
         # Navegación lateral
         "nav_packages": "Gestor de paquetes",
         "nav_cleaner": "Limpiador del sistema",
@@ -518,6 +519,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Scanning your PC, please wait a few seconds"
         ),
         "splash_welcome": "Scan finished, welcome!",
+        "splash_no_video": "Video unavailable: showing alternative intro",
         # Sidebar navigation
         "nav_packages": "Package Manager",
         "nav_cleaner": "System Cleaner",

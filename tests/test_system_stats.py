@@ -83,6 +83,46 @@ class TestDisk:
         assert stats.disk_usage_percent("/") is None
 
 
+class TestDiskFlatpak:
+    """En Flatpak el disco se pregunta al host vía `df` (el `/` del
+    sandbox es el overlay, no el disco real)."""
+
+    _DF = "     1B-blocks         Used Target\n500000000000  125000000000 /\n"
+
+    def _fake_run(self, df_stdout, returncode=0):
+        from unittest.mock import MagicMock
+
+        fake = MagicMock()
+        fake.returncode = returncode
+        fake.stdout = df_stdout
+        return lambda *a, **k: fake
+
+    def test_percent_from_host_df(self, monkeypatch):
+        monkeypatch.setattr(stats, "is_flatpak", lambda: True)
+        monkeypatch.setattr(
+            stats.subprocess, "run", self._fake_run(self._DF)
+        )
+        assert stats.disk_usage_percent("/") == 25
+
+    def test_total_from_host_df(self, monkeypatch):
+        monkeypatch.setattr(stats, "is_flatpak", lambda: True)
+        monkeypatch.setattr(
+            stats.subprocess, "run", self._fake_run(self._DF)
+        )
+        assert stats.disk_total_bytes("/") == 500_000_000_000
+
+    def test_df_failure_returns_none(self, monkeypatch):
+        monkeypatch.setattr(stats, "is_flatpak", lambda: True)
+        monkeypatch.setattr(stats.subprocess, "run", self._fake_run("", 1))
+        assert stats.disk_usage_percent("/") is None
+        assert stats.disk_total_bytes("/") is None
+
+    def test_df_unparseable_returns_none(self, monkeypatch):
+        monkeypatch.setattr(stats, "is_flatpak", lambda: True)
+        monkeypatch.setattr(stats.subprocess, "run", self._fake_run("basura\n"))
+        assert stats.disk_usage_percent("/") is None
+
+
 class TestReadLines:
     def test_existing_file(self, tmp_path):
         file = tmp_path / "data.txt"

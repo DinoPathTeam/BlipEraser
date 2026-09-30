@@ -5,11 +5,20 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.2` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.3` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🔧 v1.0.3: disco real en Flatpak + splash diagnosticado
+
+- **Disco**: `shutil.disk_usage("/")` medía el overlay del sandbox → 0%.
+  En Flatpak se pregunta al host (`df -B1` vía spawn) en `disk_usage_percent`
+  y `disk_total_bytes` + tests.
+- **Splash**: `_on_media_error` ya no es silencioso — `SPLASH_VIDEO_ERROR`
+  en bitácora (error + hint `gst-libav`/FFmpeg) y aviso `splash_no_video`
+  (ES/EN) en la barra + tests.
 
 ### 🔧 v1.0.2: GUI (botón SCAN NOW + splash video fullscreen)
 
