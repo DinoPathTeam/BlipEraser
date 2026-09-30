@@ -123,7 +123,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Overview
         "overview_health_title": "SALUD DEL SISTEMA",
         "overview_erase_button": "Escanear ahora",
-        "overview_erase_subtitle": "Iniciar análisis profundo del sistema",
+        "overview_erase_subtitle": "Análisis profundo del sistema",
         "overview_scanning": "ESCANEANDO…",
         "overview_status_good": "BUENA",
         "overview_status_fair": "ACEPTABLE",

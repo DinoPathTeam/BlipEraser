@@ -5,6 +5,8 @@ Patrón del proyecto: pytest.importorskip + fixture app manual (QApplication.ins
 
 import pytest
 
+from unittest.mock import MagicMock
+
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 QtCore = pytest.importorskip("PyQt6.QtCore")
 QtGui = pytest.importorskip("PyQt6.QtGui")
@@ -292,23 +294,52 @@ class TestSplashScreenMessages:
         splash.close()
 
     def test_message_visible_over_video_widget(self, monkeypatch, app):
-        """En modo video, el mensaje se muestra y raise_() lo pone por encima."""
+        """En modo video el texto va al overlay y el video queda debajo."""
         splash = SplashScreen()
         splash._intro_done = True
         splash._video_loaded = True
 
         mock_widget = QtWidgets.QWidget()
         monkeypatch.setattr(splash, "_video_widget", mock_widget)
+        lowered = []
         raised = []
+        monkeypatch.setattr(mock_widget, "lower", lambda: lowered.append(True))
         monkeypatch.setattr(mock_widget, "raise_", lambda: raised.append(True))
 
         splash.set_message("Test over video")
 
-        assert splash._message.text() == "Test over video"
-        assert splash._message.isVisible()
-        # raise_ se llama en _animate_message cuando hay video
-        assert len(raised) == 1
+        assert splash._message_overlay.text() == "Test over video"
+        assert splash._message_overlay.isVisible()
+        assert len(lowered) == 1
+        assert len(raised) == 0
         splash.close()
+
+    def test_video_widget_fills_splash(self, app):
+        """El widget de video ocupa todo el splash (no solo arriba)."""
+        from blip_eraser.widgets.splash_screen import _VideoWidget
+
+        splash = SplashScreen()
+        try:
+            widget = _VideoWidget(splash)
+            widget.resize(splash.size())
+            assert widget.size() == splash.size()
+            assert widget.pos() == QtCore.QPoint(0, 0)
+        finally:
+            splash.close()
+
+    def test_start_intro_marks_done_in_video_mode(self, monkeypatch, app):
+        """En modo video la intro termina al arrancar (mensajes encima)."""
+        splash = SplashScreen()
+        try:
+            player = MagicMock()
+            monkeypatch.setattr(splash, "_video_loaded", True)
+            monkeypatch.setattr(splash, "_media_player", player)
+            splash._start_intro()
+            assert splash._intro_done is True
+            player.play.assert_called_once_with()
+            assert splash._logo.isHidden()
+        finally:
+            splash.close()
 
 
 class TestStartupWorker:

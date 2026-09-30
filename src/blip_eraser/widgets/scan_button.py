@@ -19,8 +19,9 @@ class ScanNowButton(QPushButton):
         self._icon = QIcon.fromTheme(icon_name)
         self._accent = QColor("#E53935")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Altura mínima aumentada para acomodar título + subtítulo + ícono debajo
-        self.setMinimumSize(240, 96)
+        # Altura con margen real: título + subtítulo arriba, badge abajo
+        # sin solape (el subtítulo ES largo invadía el círculo).
+        self.setMinimumSize(240, 112)
 
     def set_texts(self, title: str, subtitle: str):
         self._title = title
@@ -86,16 +87,16 @@ class ScanNowButton(QPushButton):
             self._subtitle,
         )
 
-        # Badge circular con icono DEBAJO del texto (centrado horizontalmente)
-        # Colocado en la parte inferior (aprox. 40% de la altura)
-        icon_bottom_y = rect.top() + rect.height() * 0.72
+        # Badge con icono DEBAJO del texto (centrado horizontalmente).
+        # Círculo de 32px con centro a 26px del borde inferior: deja ~14px
+        # de aire bajo el subtítulo. Sin relleno (transparencia total),
+        # solo el icono de lupa.
+        badge_d = 32
         badge_center_x = rect.center().x()
-        badge_center_y = icon_bottom_y
-        badge_rect = QRectF(badge_center_x - 18, badge_center_y - 18, 36, 36)
+        badge_center_y = rect.bottom() - 8 - badge_d / 2
 
-        painter.setBrush(QColor(255, 255, 255, 40))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(badge_rect)
 
         if not self._icon.isNull():
             pixmap = self._icon.pixmap(20, 20)

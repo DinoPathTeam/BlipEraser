@@ -11,7 +11,15 @@ QtTest = pytest.importorskip("PyQt6.QtTest")
 
 from PyQt6.QtTest import QSignalSpy
 
+from blip_eraser.widgets import splash_screen
 from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
+
+
+@pytest.fixture()
+def no_multimedia(monkeypatch):
+    """Fuerza el fallback animado: estos tests prueban la intro sin video."""
+    monkeypatch.setattr(splash_screen, "_QMULTIMEDIA_AVAILABLE", False)
+    monkeypatch.setattr(splash_screen, "_QVIDEOSINK_AVAILABLE", False)
 
 # Duración total de la animación de entrada:
 #   logo (800) + delay (200) + título (600) = 1600 ms.
@@ -32,7 +40,7 @@ def app():
 
 
 class TestSplashScreen:
-    def test_builds_and_sets_message_after_intro(self, app):
+    def test_builds_and_sets_message_after_intro(self, app, no_multimedia):
         splash = SplashScreen()
         # Durante la intro el mensaje se encola, no se pinta de inmediato.
         splash.set_message("hola")
@@ -44,7 +52,7 @@ class TestSplashScreen:
         assert splash._intro_done is True
         assert splash._message.text() == "hola"
 
-    def test_message_queued_during_intro(self, app):
+    def test_message_queued_during_intro(self, app, no_multimedia):
         splash = SplashScreen()
         splash.set_message("primero")
         splash.set_message("segundo")
@@ -52,7 +60,7 @@ class TestSplashScreen:
         assert splash._pending_message == "segundo"
         assert splash._message.text() == ""
 
-    def test_message_after_intro_applies_after_fade(self, app):
+    def test_message_after_intro_applies_after_fade(self, app, no_multimedia):
         splash = SplashScreen()
         QtTest.QTest.qWait(_INTRO_TOTAL_MS + 100)
         assert splash._intro_done is True

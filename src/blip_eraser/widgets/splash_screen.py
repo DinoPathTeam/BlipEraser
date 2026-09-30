@@ -14,6 +14,7 @@ from PyQt6.QtCore import (
     QRect,
     Qt,
     QTimer,
+    QUrl,
     pyqtSignal,
 )
 from PyQt6 import QtGui
@@ -42,7 +43,7 @@ except Exception:  # pragma: no cover
 _QVIDEOSINK_AVAILABLE = QVideoSink is not None
 
 ASSET_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "BlipEraserLogo.png"
-ASSET_SPLASH_VIDEO = Path(__file__).resolve().parent.parent / "assets" / "splash_video.mp4"
+ASSET_SPLASH_VIDEO = Path(__file__).resolve().parent.parent / "assets" / "splash-intro.mp4"
 SPLASH_LOGO_HEIGHT = 140
 
 _INTRO_LOGO_MS = 800
@@ -66,11 +67,18 @@ class _Signal:
 
 
 class _VideoWidget(QWidget):
-    """Widget que renderiza frames decodificados por QVideoSink."""
+    """Widget que renderiza frames decodificados por QVideoSink.
+
+    Ocupa todo el splash y recorta al estilo KeepAspectRatioByExpanding
+    (sin letterbox): el video 16:9 llena el rectángulo aunque sobre
+    recortar arriba/abajo.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._current_image: QImage | None = None
+        if parent is not None:
+            self.resize(parent.size())
 
     def set_frame(self, image: QImage) -> None:
         if image.isNull():
@@ -82,7 +90,17 @@ class _VideoWidget(QWidget):
         if self._current_image is None or self._current_image.isNull():
             return
         painter = QPainter(self)
-        painter.drawImage(self.rect(), self._current_image)
+        target = self.rect()
+        img = self._current_image
+        # Expande hasta cubrir y recorta el sobrante centrado.
+        scaled = img.scaled(
+            target.size(),
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (scaled.width() - target.width()) // 2
+        y = (scaled.height() - target.height()) // 2
+        painter.drawImage(target, scaled, QRect(x, y, target.width(), target.height()))
         painter.end()
 
 
@@ -153,8 +171,9 @@ class SplashScreen(QWidget):
         self._setup_video_or_fallback()
         self._load_logo("#E53935")
         self._layout_hero_positions()
+        self._layout_message_bar()
         self._center_on_screen()
-        self._start_fallback_animation()
+        self._start_intro()
         self.show()
 
     def _load_logo(self, accent: str) -> None:
@@ -232,6 +251,7 @@ class SplashScreen(QWidget):
                 return
 
             self._video_widget = _VideoWidget(self)
+            self._video_widget.resize(self.size())
             self._video_widget.hide()
 
             self._video_sink = QVideoSink(self)
@@ -239,7 +259,7 @@ class SplashScreen(QWidget):
 
             self._media_player = QMediaPlayer(self)
             self._media_player.setVideoSink(self._video_sink)
-            self._media_player.setSource(self._media_player.source())
+            self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
             self._media_player.mediaStatusChanged.connect(self._on_media_status_changed)
             self._media_player.errorOccurred.connect(self._on_media_error)
 
@@ -257,12 +277,31 @@ class SplashScreen(QWidget):
         if not image.isNull():
             self._video_widget.set_frame(image)
 
+    def _layout_message_bar(self) -> None:
+        """Barra de mensajes abajo, centrada, con geometría explícita.
+
+        Sin esto los QLabel quedan en 0×0 (invisibles) o el video los tapa.
+        """
+        bar_w, bar_h = 600, 40
+        x = (self.width() - bar_w) // 2
+        y = self.height() - bar_h - 18
+        for label in (self._message, self._message_overlay):
+            label.setGeometry(x, y, bar_w, bar_h)
+        self._message_bg.setGeometry(x - 10, y - 6, bar_w + 20, bar_h + 12)
+
     def _start_intro(self) -> None:
         if self._video_loaded and self._media_player:
             self._logo.hide()
             self._title.hide()
             if self._video_widget:
+                self._video_widget.resize(self.size())
+                self._video_widget.lower()
                 self._video_widget.show()
+            # El video ES la intro: los mensajes van encima desde el inicio.
+            self._intro_done = True
+            if self._pending_message is not None:
+                text, self._pending_message = self._pending_message, None
+                self._animate_message(text)
             self._media_player.play()
             return
         self._start_fallback_animation()
@@ -387,18 +426,15 @@ class SplashScreen(QWidget):
 
     def _animate_message(self, text: str) -> None:
         if self._video_loaded:
-            self._message_overlay.show()
-            self._message_bg.show()
-            self._message_overlay.raise_()
-            self._message_bg.raise_()
             self._message_overlay.setText(text)
-            self._message.setText(text)
-            self._message_overlay.adjustSize()
+            # Orden: video abajo del todo, fondo, texto arriba.
             if self._video_widget is not None:
-                self._video_widget.raise_()
-            self._message_overlay_effect.setOpacity(1.0)
+                self._video_widget.lower()
+            self._message_bg.show()
+            self._message_bg.raise_()
             self._message_overlay.show()
-            self._message.show()
+            self._message_overlay.raise_()
+            self._message_overlay_effect.setOpacity(1.0)
         else:
             self._message.show()
             self._message.raise_()
