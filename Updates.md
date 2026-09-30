@@ -5,11 +5,21 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.1` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.2` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🔧 v1.0.2: GUI (botón SCAN NOW + splash video fullscreen)
+
+- Botón: altura 112, badge sin relleno (transparencia total), subtítulo ES
+  acortado; tests de píxeles ES/EN.
+- Splash: asset `splash-intro.mp4`, `setSource` real, `_start_intro()`
+  invocado, video fullscreen con recorte, overlays con geometría y orden
+  video→fondo→texto; `_intro_done` también en modo video.
+- Flatpak de este release construido del tag (el v1.0.1 salió del working
+  tree: misma versión de código, distinta revisión).
 
 ### 📦 v1.0.1: AUR (PKGBUILD validado con makepkg)
 
