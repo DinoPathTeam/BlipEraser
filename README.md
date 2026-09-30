@@ -24,7 +24,7 @@ An app uninstaller and system cleaner for **Arch Linux** (and any Arch-based dis
 
 BlipEraser exists to fill the gap left by traditional graphical package managers:
 apps installed **manually** — AppImages, loose folders from third-party launchers
-such as Hydra Launcher, unpackaged programs — that **are not tracked by any package
+and unpackaged programs — that **are not tracked by any package
 manager** and therefore cannot be detected by the usual "uninstall" tools.
 
 ---
@@ -314,7 +314,7 @@ Desinstalador de aplicaciones y limpiador del sistema para **Arch Linux** (y cua
 
 BlipEraser existe para cubrir el hueco que dejan los gestores gráficos tradicionales:
 apps instaladas **manualmente** — AppImages, carpetas sueltas de lanzadores de terceros
-como Hydra Launcher, programas sin paquete — que **no quedan registradas en ningún
+y programas sin paquete — que **no quedan registradas en ningún
 gestor de paquetes** y que, por tanto, ninguna herramienta tradicional es capaz de detectar.
 
 ---
