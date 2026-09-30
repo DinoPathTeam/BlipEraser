@@ -235,7 +235,7 @@ BlipEraser checks its dependencies on **two levels**:
 - [x] **v0.1 — Foundation**: `src/blip_eraser/` scaffold, pure logic in
   `utils/` without Qt, pacman reading (`-Qe/-Qd/-Qi`), base window and navigation.
 - [x] **v0.2 — Unified uninstaller**: pacman table + manual entries
-  (AppImages, `~/Games`, Hydra), manual selection without "select all",
+  (AppImages, `~/Games`), manual selection without "select all",
   type/size/date filters.
 - [x] **v0.3 — Cleanup and system**: Cleaner (recommended + manual),
   health-gauge Overview, performance tweaks (fstrim/zram/mirrors),
@@ -535,7 +535,7 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
 - [x] **v0.1 — Fundación**: scaffold `src/blip_eraser/`, lógica pura en
   `utils/` sin Qt, lectura pacman (`-Qe/-Qd/-Qi`), ventana y navegación base.
 - [x] **v0.2 — Desinstalador unificado**: tabla pacman + entradas manuales
-  (AppImages, `~/Games`, Hydra), selección manual sin "seleccionar todo",
+  (AppImages, `~/Games`), selección manual sin "seleccionar todo",
   filtros por tipo/peso/fecha.
 - [x] **v0.3 — Limpieza y sistema**: Limpiador (recomendada + manual),
   Overview con gauge de salud, ajustes de rendimiento (fstrim/zram/mirrors),
