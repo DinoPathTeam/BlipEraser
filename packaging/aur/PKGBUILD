@@ -1,6 +1,6 @@
 # Maintainer: DinoPathTeam <https://github.com/DinoPathTeam>
 pkgname=blip-eraser
-pkgver=1.0.1
+pkgver=1.0.2
 pkgrel=1
 pkgdesc="Desinstalador de apps y limpiador del sistema para Arch Linux (PyQt6)"
 arch=('x86_64')
@@ -11,7 +11,7 @@ optdepends=('gst-libav: video de intro del splash (H.264)'
             'apparmor: confinamiento del daemon privilegiado')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/DinoPathTeam/BlipEraser/releases/download/v$pkgver/BlipEraser-$pkgver.tar.gz")
-sha256sums=('3410214454a6e91e24103d8eb40617a9eef690dc98e65ffde72de7c34949d608')
+sha256sums=('2fef6d409e76ee611336400564275a5a249ac1f4d8219c348efa7c5f6a2112e9')
 install=$pkgname.install
 
 build() {
