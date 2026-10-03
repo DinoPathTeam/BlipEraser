@@ -5,11 +5,19 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.3` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.4` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### ⚡ v1.0.4: fluidez (sin hilos duplicados, render por lotes)
+
+- `showEvent` no programa escaneo con otro en vuelo (Desinstalador,
+  Limpiador): navegar y volver ya no apila hilos de `pacman`.
+- `_render` del Desinstalador por lotes (era O(n²) por `itemChanged`);
+  headers a Stretch con mínimo en ambas tablas.
+- Tests de pacman aislados del FS real. Suite 610 passed.
 
 ### 🔧 v1.0.3: disco real en Flatpak + splash diagnosticado
 

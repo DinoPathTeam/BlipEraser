@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blip-eraser"
-version = "1.0.3"
+version = "1.0.4"
 description = "Desinstalador de aplicaciones para Arch Linux"
 readme = "README.md"
 requires-python = ">=3.11"
