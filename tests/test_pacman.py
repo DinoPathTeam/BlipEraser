@@ -90,6 +90,8 @@ class TestUninstallPackages:
             return FakeResult(stdout="ok")
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        # La verificación de firmas usa el FS real: aislarla.
+        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
 
         pacman.uninstall_packages(["firefox", "vim"])
         # Find the pkexec call
@@ -109,6 +111,8 @@ class TestUninstallPackages:
             return FakeResult()
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        # La verificación de firmas usa el FS real: aislarla.
+        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         pacman.uninstall_packages(["x"], noconfirm=False)
         pkexec_calls = [c for c in calls if c[0] == "pkexec"]
         assert len(pkexec_calls) == 1
@@ -137,5 +141,7 @@ class TestUninstallPackages:
             return FakeResult()
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        # La verificación de firmas usa el FS real: aislarla.
+        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         with pytest.raises(ValueError, match="no instalados"):
             pacman.uninstall_packages(["not-installed"])
