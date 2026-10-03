@@ -95,11 +95,13 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             ["", tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
         header = cast(QHeaderView, self.table.horizontalHeader())
-        # Columnas redimensionables arrastrando el borde (Interactive).
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        # Stretch (como el Limpiador): reparte el viewport entre columnas
+        # para que ninguna etiqueta quede cortada con anchos fijos.
+        # Mínimo por sección para que Tipo/Peso no colapsen.
+        header.setMinimumSectionSize(70)
+        for col in range(1, _COLUMNS):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
-        for idx, width in ((1, 200), (2, 130), (3, 320), (4, 90), (5, 130)):
-            self.table.setColumnWidth(idx, width)
         layout.addWidget(self.table)
 
         btn_row = QHBoxLayout()
@@ -440,7 +442,9 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         # Escaneo automático al mostrar la página solo si el caché está
         # viciado (primera vez, timeout de 5 min, o invalidado tras una
         # desinstalación). El botón "Actualizar lista" escanea siempre.
-        if is_stale(SECTION_UNINSTALLER):
+        # Guard en vuelo: volver a la pestaña con el escaneo corriendo
+        # lanzaba otro hilo (sigue stale hasta completar) y se acumulaban.
+        if is_stale(SECTION_UNINSTALLER) and not getattr(self, "_scanning", False):
             cast(Any, QTimer).singleShot(0, self.load_apps)
 
     # ------------------------------------------------------------------
@@ -484,16 +488,31 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             self._visible = filtered
 
         try:
-            self.table.setRowCount(0)
-            for app in self._visible:
-                row = self.table.add_check_row()
-                self.table.setItem(row, 1, QTableWidgetItem(app.name))
-                self.table.setItem(row, 2, QTableWidgetItem(tr(kind_label_key(app.kind))))
-                self.table.setItem(row, 3, QTableWidgetItem(app.detail))
-                self.table.setItem(
-                    row, 4, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
-                )
-                self.table.setItem(row, 5, QTableWidgetItem(app.install_date))
+            # Batch: sin esto cada setItem dispara itemChanged →
+            # refresh_header_state → checked_rows() sobre TODAS las filas
+            # (O(n²) en el hilo GUI con miles de paquetes).
+            self.table.blockSignals(True)
+            self.table.setUpdatesEnabled(False)
+            try:
+                self.table.setRowCount(len(self._visible))
+                for row, app in enumerate(self._visible):
+                    check = QTableWidgetItem()
+                    check.setFlags(
+                        Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
+                    )
+                    check.setCheckState(Qt.CheckState.Unchecked)
+                    self.table.setItem(row, 0, check)
+                    self.table.setItem(row, 1, QTableWidgetItem(app.name))
+                    self.table.setItem(row, 2, QTableWidgetItem(tr(kind_label_key(app.kind))))
+                    self.table.setItem(row, 3, QTableWidgetItem(app.detail))
+                    self.table.setItem(
+                        row, 4, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
+                    )
+                    self.table.setItem(row, 5, QTableWidgetItem(app.install_date))
+            finally:
+                self.table.setUpdatesEnabled(True)
+                self.table.blockSignals(False)
+            # _update_uninstall_btn ya sincroniza el header (una sola vez).
             self._update_uninstall_btn()
         except RuntimeError as exc:
             # Defensa dura: la tabla (widget Qt) puede morir en C++ dejando la

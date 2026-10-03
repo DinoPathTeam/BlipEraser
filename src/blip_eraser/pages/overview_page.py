@@ -304,6 +304,8 @@ class OverviewPage(QWidget, BackgroundScanMixin):
 
     def _refresh_cleanup_summary(self):
         """Recomputa SOLO el resumen 'SYSTEM CLEANUP RECOMMENDED' en segundo plano."""
+        if getattr(self, "_scanning", False):
+            return
         self._start_background_scan(scan_cleanup, self._on_cleanup_summary_ready)
 
     def _on_cleanup_summary_ready(self, cleanup: CleanupSummary) -> None:

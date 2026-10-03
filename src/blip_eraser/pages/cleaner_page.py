@@ -114,6 +114,7 @@ class _SectionBase(QWidget, BackgroundScanMixin):
         self.table = CheckTable(self._columns)
         self.table.setHorizontalHeaderLabels(self._headers())
         header = self.table.horizontalHeader()
+        header.setMinimumSectionSize(70)
         for col in range(1, self._columns):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
@@ -145,7 +146,9 @@ class _SectionBase(QWidget, BackgroundScanMixin):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if is_stale(self._cache_section):
+        # Guard en vuelo (igual que Desinstalador): no apilar hilos al
+        # volver a la pestaña mientras el escaneo anterior sigue corriendo.
+        if is_stale(self._cache_section) and not getattr(self, "_scanning", False):
             QTimer.singleShot(0, self.scan)
 
     def scan(self):
