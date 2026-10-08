@@ -661,24 +661,28 @@ class PrivilegedService:
 
     def _verify_sender(self, connection: Any, sender: str) -> bool:
         """Verifica que el sender es un usuario autorizado (grupo wheel + sesión gráfica activa)."""
+        return self._authorized_uid(connection, sender) is not None
+
+    def _authorized_uid(self, connection: Any, sender: str) -> int | None:
+        """UID autorizado del sender, o None si no pasa las verificaciones."""
         try:
             uid = self._sender_uid(connection, sender)
             if uid is None:
-                return False
-            
+                return None
+
             # Verificar sesión gráfica activa
             if not _check_active_graphical_session(uid):
                 _audit_log("auth_rejected", f"sender={sender} uid={uid} reason=no_active_graphical_session")
-                return False
-            
+                return None
+
             # Verificar que el UID pertenece al grupo wheel (con cache TTL)
             if not _is_user_in_wheel_group(uid):
                 _audit_log("auth_rejected", f"sender={sender} uid={uid} reason=not_in_wheel_group")
-                return False
-            
-            return True
+                return None
+
+            return uid
         except Exception:
-            return False
+            return None
 
     def on_method_call(
         self,
@@ -692,19 +696,23 @@ class PrivilegedService:
     ) -> None:
         """Manejador de llamadas D-Bus con verificación de sender."""
         # Verificar autenticación del sender
-        if not self._verify_sender(connection, sender):
+        uid = self._authorized_uid(connection, sender)
+        if uid is None:
             _audit_log("auth_rejected", f"sender={sender} method={method_name} uid=unknown")
             invocation.return_dbus_error(
                 "org.freedesktop.DBus.Error.AccessDenied",
                 "Acceso denegado: usuario no autorizado (requiere grupo wheel)"
             )
             return
+        # Cuota por UID real: el nombre único D-Bus (:1.NNN) cambia en cada
+        # conexión y permitía evadir el límite reconectando.
+        rate_key = f"uid:{uid}"
 
         try:
             if method_name == "RemovePackages":
                 packages = parameters[0]
-                if not _check_rate_limit(sender):
-                    _audit_log("rate_limited", f"sender={sender} method={method_name}")
+                if not _check_rate_limit(rate_key):
+                    _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
                     invocation.return_dbus_error(
                         "org.freedesktop.DBus.Error.LimitsExceeded",
                         "Demasiadas operaciones seguidas, espera un minuto"
@@ -714,8 +722,8 @@ class PrivilegedService:
                 invocation.return_value(GLib.Variant("(s)", (result,)))
             elif method_name == "CleanSystemPaths":
                 paths = parameters[0]
-                if not _check_rate_limit(sender):
-                    _audit_log("rate_limited", f"sender={sender} method={method_name}")
+                if not _check_rate_limit(rate_key):
+                    _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
                     invocation.return_dbus_error(
                         "org.freedesktop.DBus.Error.LimitsExceeded",
                         "Demasiadas operaciones seguidas, espera un minuto"

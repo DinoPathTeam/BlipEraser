@@ -459,3 +459,44 @@ class TestRateLimit:
         monkeypatch.setattr(daemon_mod.time, "monotonic", lambda: daemon_mod._RATE_LIMIT_WINDOW + 1)
         assert daemon_mod._check_rate_limit(sender) is True
         daemon_mod._rate_limit_hits.pop(sender, None)
+
+    def test_quota_shared_across_senders_same_uid(self, monkeypatch):
+        """Reconectar (sender distinto, mismo UID) NO resetea la cuota."""
+        from unittest.mock import MagicMock
+
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        svc = daemon_mod.PrivilegedService()
+        monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
+        monkeypatch.setattr(
+            daemon_mod, "remove_packages",
+            lambda pkgs: (_ for _ in ()).throw(ValueError("rechazado")),
+        )
+
+        class FakeInv:
+            def __init__(self):
+                self.error = None
+
+            def return_dbus_error(self, name, msg):
+                self.error = name
+
+            def return_value(self, value):
+                pass
+
+        daemon_mod._rate_limit_hits.pop("uid:1000", None)
+        try:
+            for i in range(daemon_mod._RATE_LIMIT_MAX):
+                inv = FakeInv()
+                svc.on_method_call(
+                    MagicMock(), f":1.{100 + i}", "/", "com.dinopath.BlipEraser.Privileged",
+                    "RemovePackages", [["x"]], inv,
+                )
+                assert inv.error == "org.freedesktop.DBus.Error.InvalidArgs"
+            inv = FakeInv()
+            svc.on_method_call(
+                MagicMock(), ":1.999", "/", "com.dinopath.BlipEraser.Privileged",
+                "RemovePackages", [["x"]], inv,
+            )
+            assert inv.error == "org.freedesktop.DBus.Error.LimitsExceeded"
+        finally:
+            daemon_mod._rate_limit_hits.pop("uid:1000", None)

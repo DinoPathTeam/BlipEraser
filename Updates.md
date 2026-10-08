@@ -11,6 +11,15 @@ Versión del código: `1.0.4` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🛡️ Red Team: rate-limit por UID (evadible reconectando)
+
+- **PoC**: 12× `RemovePackages` con conexión nueva cada vez → 0
+  `LimitsExceeded`; misma prueba en una conexión → 11ª y 12ª limitadas.
+  La cuota se indexaba por nombre único D-Bus (`:1.NNN`, efímero).
+- **Fix**: cuota por UID real (`_authorized_uid`, ya resuelto en auth)
+  + test de regresión + verificado en vivo contra el daemon.
+  Redesplegar con `./scripts/install-daemon.sh`.
+
 ### ⚡ v1.0.4: fluidez (sin hilos duplicados, render por lotes)
 
 - `showEvent` no programa escaneo con otro en vuelo (Desinstalador,
