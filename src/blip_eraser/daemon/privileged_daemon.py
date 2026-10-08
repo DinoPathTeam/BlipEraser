@@ -344,7 +344,7 @@ def _verify_package_signatures() -> tuple[bool, list[str]]:
                 failed.append(pkg_file.name)
                 continue
             result = subprocess.run(
-                ["pacman-key", "--verify", str(sig_file), str(pkg_file)],
+                ["/usr/bin/pacman-key", "--verify", str(sig_file), str(pkg_file)],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
@@ -388,7 +388,7 @@ def _load_package_cache() -> set[str]:
         # pero loggeamos los que fallaron verificación
         try:
             result = subprocess.run(
-                ["pacman", "-Q"], capture_output=True, text=True, check=True, timeout=30
+                ["/usr/bin/pacman", "-Q"], capture_output=True, text=True, check=True, timeout=30
             )
             names: set[str] = set()
             for line in result.stdout.splitlines():
@@ -441,7 +441,7 @@ def remove_packages(packages: list[str]) -> str:
         _audit_log("uninstall_rejected", f"packages={invalid} reason=not_installed")
         raise ValueError(f"Paquetes no instalados (rechazados): {', '.join(invalid)}")
     _audit_log("uninstall_started", f"packages={valid}")
-    cmd = ["pacman", "-Rns", "--noconfirm", "--", *valid]
+    cmd = ["/usr/bin/pacman", "-Rns", "--noconfirm", "--", *valid]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     _audit_log("uninstall_success", f"packages={valid}")
     invalidate_package_cache()
@@ -588,7 +588,7 @@ def _check_active_graphical_session(uid: int) -> bool:
     has_active_graphical = False
     try:
         user = subprocess.run(
-            ["loginctl", "show-user", str(uid), "-p", "Sessions"],
+            ["/usr/bin/loginctl", "show-user", str(uid), "-p", "Sessions"],
             capture_output=True, text=True, timeout=5,
         )
         sessions: list[str] = []
@@ -601,7 +601,7 @@ def _check_active_graphical_session(uid: int) -> bool:
             if not sess:
                 continue
             info = subprocess.run(
-                ["loginctl", "show-session", sess, "-p", "Type", "-p", "State"],
+                ["/usr/bin/loginctl", "show-session", sess, "-p", "Type", "-p", "State"],
                 capture_output=True, text=True, timeout=5,
             )
             if info.returncode != 0:

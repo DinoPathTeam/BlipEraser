@@ -11,6 +11,7 @@ tal cual. Sin dependencias nuevas (stdlib).
 
 from __future__ import annotations
 
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -85,12 +86,16 @@ def host_shell(cmd: str) -> str | list[str]:
 
 
 def host_which(binary: str) -> str | None:
-    """Equivalente a `shutil.which` pero contra el PATH del host en Flatpak."""
+    """Equivalente a `shutil.which` pero contra el PATH del host en Flatpak.
+
+    `binary` se cita para `sh -c`: hoy todos los callers pasan constantes,
+    pero un futuro caller con input de usuario no debe romper a RCE.
+    """
     if not is_flatpak():
         return shutil.which(binary)
     try:
         proc = subprocess.run(
-            [SPAWN, "--host", "sh", "-c", f"command -v {binary}"],
+            [SPAWN, "--host", "sh", "-c", f"command -v {shlex.quote(binary)}"],
             capture_output=True,
             text=True,
             timeout=8,
