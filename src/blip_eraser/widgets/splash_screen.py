@@ -242,6 +242,10 @@ class SplashScreen(QWidget):
         self._video_loaded = False
 
         if not _QMULTIMEDIA_AVAILABLE or not _QVIDEOSINK_AVAILABLE:
+            write_diagnostic(
+                "SPLASH_VIDEO_UNAVAILABLE reason=QtMultimedia_no_importa "
+                "HINT: en Flatpak falta libgssapi_krb5 en el runtime"
+            )
             self._video_widget = None
             self._video_sink = None
             self._media_player = None
@@ -250,6 +254,9 @@ class SplashScreen(QWidget):
         try:
             video_path = Path(ASSET_SPLASH_VIDEO)
             if not video_path.exists():
+                write_diagnostic(
+                    f"SPLASH_VIDEO_UNAVAILABLE reason=archivo_ausente file={ASSET_SPLASH_VIDEO}"
+                )
                 return
 
             self._video_widget = _VideoWidget(self)
@@ -266,7 +273,8 @@ class SplashScreen(QWidget):
             self._media_player.errorOccurred.connect(self._on_media_error)
 
             self._video_loaded = True
-        except Exception:
+        except Exception as exc:
+            write_diagnostic(f"SPLASH_VIDEO_UNAVAILABLE reason=excepcion detail={exc}")
             self._video_widget = None
             self._video_sink = None
             self._media_player = None

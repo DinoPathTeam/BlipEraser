@@ -17,6 +17,18 @@ finish-args:
   # Limpieza del sistema = necesita ver los paths reales del host
   - --filesystem=host
 modules:
+  - name: krb5
+    # QtNetwork del wheel enlaza libgssapi_krb5 (ausente en el runtime):
+    # sin esto QtMultimedia ni siquiera importa y el splash cae al logo.
+    buildsystem: simple
+    build-commands:
+      - cd src && ./configure --prefix=/app --without-ldap --without-keyutils --disable-pkinit
+      - cd src && make -j$(nproc)
+      - cd src && make install
+    sources:
+      - type: archive
+        url: https://kerberos.org/dist/krb5/1.21/krb5-1.21.3.tar.gz
+        sha256: b7a4cd5ead67fb08b980b21abd150ff7217e85ea320c9ed0c6dadd304840ad35
   - name: python-deps
     buildsystem: simple
     build-commands:
