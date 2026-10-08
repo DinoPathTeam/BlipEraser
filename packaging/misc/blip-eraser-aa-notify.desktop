@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=BlipEraser AppArmor Notify
+Comment=Alertas de escritorio cuando AppArmor bloquea algo (aa-notify)
+Exec=aa-notify -p -s 1 -l
+Icon=security-high
+Terminal=false
+Categories=System;
+X-GNOME-Autostart-enabled=true
