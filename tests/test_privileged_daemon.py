@@ -174,7 +174,7 @@ class TestOperations:
         result = remove_packages(["pkg1", "pkg2"])
         assert result == "removed"
         mock_run.assert_called_once_with(
-            ["pacman", "-Rns", "--noconfirm", "--", "pkg1", "pkg2"],
+            ["/usr/bin/pacman", "-Rns", "--noconfirm", "--", "pkg1", "pkg2"],
             capture_output=True, text=True, check=True
         )
 
