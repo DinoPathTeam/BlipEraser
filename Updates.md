@@ -5,11 +5,16 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.5` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.6` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### ✨ v1.0.6: splash sin franja gris
+
+- Mensaje del video sin panel: texto blanco en negrita con sombra,
+  legible directo sobre el video (el fallback nunca tuvo panel).
 
 ### 📦 v1.0.5: seguridad auditada + video en Flatpak
 
