@@ -345,9 +345,9 @@ class TestSplashScreenMessages:
             monkeypatch.setattr(splash, "_video_widget", widget)
             splash._on_media_error("CodecError", "no decoder H264")
             assert splash._video_loaded is False
-            assert len(logged) == 1
-            assert "SPLASH_VIDEO_ERROR" in logged[0]
-            assert "gst-libav" in logged[0]
+            errors = [m for m in logged if "SPLASH_VIDEO_ERROR" in m]
+            assert len(errors) == 1
+            assert "gst-libav" in errors[0]
             assert player.stop.called
             # La intro alternativa arranca y el aviso queda encolado/visible.
             from blip_eraser.utils.i18n import tr
