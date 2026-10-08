@@ -441,7 +441,7 @@ def remove_packages(packages: list[str]) -> str:
         _audit_log("uninstall_rejected", f"packages={invalid} reason=not_installed")
         raise ValueError(f"Paquetes no instalados (rechazados): {', '.join(invalid)}")
     _audit_log("uninstall_started", f"packages={valid}")
-    cmd = ["pacman", "-Rns", "--noconfirm", *valid]
+    cmd = ["pacman", "-Rns", "--noconfirm", "--", *valid]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     _audit_log("uninstall_success", f"packages={valid}")
     invalidate_package_cache()

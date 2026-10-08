@@ -147,6 +147,14 @@ class TestSystemPathAllowlist:
         assert not validate_path_str("/var/log-malicioso")
         assert not validate_path_str("/var/cache/pacman/pkg-otro")
 
+    def test_rejects_dotdot_traversal(self):
+        # Hallazgo Strix: `..` sin normalizar pasaba el prefijo.
+        assert not validate_path_str("/var/log/../../etc/shadow")
+        assert not validate_path_str("/var/cache/pacman/pkg/../../etc/passwd")
+        assert not validate_path_str("/var/lib/pacman/..")
+        # Y lo legítimo sigue pasando.
+        assert validate_path_str("/var/log/./journal")
+
     def test_accepts_allowed_directory_and_child(self):
         assert validate_path_str("/var/log")
         assert validate_path_str("/var/log/journal")

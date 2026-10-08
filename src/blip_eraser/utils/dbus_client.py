@@ -191,6 +191,8 @@ def _run_pkexec_pacman(packages: list[str], noconfirm: bool = True) -> str:
     cmd = host_cmd(["pkexec", "pacman", "-Rns"])
     if noconfirm:
         cmd.append("--noconfirm")
+    # `--`: un paquete llamado `-x` nunca se interpreta como opción.
+    cmd.append("--")
     cmd.extend(packages)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=True)

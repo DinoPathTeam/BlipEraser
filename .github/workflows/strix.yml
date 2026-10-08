@@ -24,3 +24,11 @@ jobs:
           LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           STRIX_LLM: ${{ secrets.STRIX_LLM || 'anthropic/claude-sonnet-4-6' }}
         run: strix -n -t ./ --scan-mode quick --max-budget 5
+
+      - name: Upload Strix report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strix-report
+          path: strix_runs/
+          retention-days: 14

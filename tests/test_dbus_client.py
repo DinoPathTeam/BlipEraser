@@ -122,6 +122,7 @@ class TestRunPkexecPacman:
     def test_success(self, monkeypatch):
         def fake_run(cmd, **kwargs):
             assert cmd[:4] == ["pkexec", "pacman", "-Rns", "--noconfirm"]
+            assert cmd[4] == "--"  # fin de opciones antes de paquetes
             mock = MagicMock()
             mock.returncode = 0
             mock.stdout = "removed"

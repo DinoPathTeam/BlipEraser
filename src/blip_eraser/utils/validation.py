@@ -8,6 +8,7 @@ entre el daemon privilegiado y el cliente (privileges.py).
 from __future__ import annotations
 
 import os
+import posixpath
 from pathlib import Path
 
 # ─── Constantes de seguridad ────────────────────────────────────────────
@@ -38,8 +39,13 @@ HOME_DENYLIST_PREFIXES: tuple[str, ...] = (
 # ─── Validaciones de paths ──────────────────────────────────────────────
 
 def validate_path_str(path: str) -> bool:
-    """Valida que una ruta string está dentro de los prefijos permitidos (sin resolve)."""
-    path_str = str(path).replace("\\", "/")
+    """Valida que una ruta string está dentro de los prefijos permitidos.
+
+    Normaliza `..` léxicamente ANTES del prefijo: sin esto
+    `/var/log/../../etc` pasaba el check por empezar con `/var/log/`
+    (hallazgo Strix). Sin resolve: puro string, sin tocar el FS.
+    """
+    path_str = posixpath.normpath(str(path).replace("\\", "/"))
     return any(
         path_str == prefix or path_str.startswith(f"{prefix}/")
         for prefix in ALLOWED_SYSTEM_PREFIXES

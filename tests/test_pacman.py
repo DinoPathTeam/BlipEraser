@@ -98,7 +98,7 @@ class TestUninstallPackages:
         pkexec_calls = [c for c in calls if c[0][0] == "pkexec"]
         assert len(pkexec_calls) == 1
         cmd, kwargs = pkexec_calls[0]
-        assert cmd == ["pkexec", "pacman", "-Rns", "--noconfirm", "firefox", "vim"]
+        assert cmd == ["pkexec", "pacman", "-Rns", "--noconfirm", "--", "firefox", "vim"]
         assert kwargs == {"capture_output": True, "text": True, "check": True}
 
     def test_without_noconfirm(self, monkeypatch):
@@ -116,7 +116,7 @@ class TestUninstallPackages:
         pacman.uninstall_packages(["x"], noconfirm=False)
         pkexec_calls = [c for c in calls if c[0] == "pkexec"]
         assert len(pkexec_calls) == 1
-        assert pkexec_calls[0] == ["pkexec", "pacman", "-Rns", "x"]
+        assert pkexec_calls[0] == ["pkexec", "pacman", "-Rns", "--", "x"]
 
     def test_propagates_errors(self, monkeypatch):
         from blip_eraser.utils.dbus_client import DBusError
