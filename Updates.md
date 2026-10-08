@@ -5,11 +5,21 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.4` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.0.5` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 📦 v1.0.5: seguridad auditada + video en Flatpak
+
+- Rate-limit del daemon por UID (evadible reconectando antes).
+- Hallazgos Strix/Cloudflare: `..` normalizado, `--` en pacman,
+  binarios absolutos, quote sh, pins SHA en CI.
+- Flatpak: krb5 empaquetado (QtMultimedia importaba por
+  `libgssapi_krb5` ausente; H.264 verificado decodificando en sandbox:
+  401 frames, 0 errores) + fallbacks del splash diagnosticados.
+- AppArmor: tune guiado GUI (`aa-tune-gui.sh`) + autostart `aa-notify`.
 
 ### 🛡️ Red Team: rate-limit por UID (evadible reconectando)
 
