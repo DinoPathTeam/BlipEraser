@@ -356,6 +356,19 @@ class TestSplashScreenMessages:
             assert splash._pending_message == hint or splash._message.text() == hint
         finally:
             splash.close()
+    def test_video_message_has_no_background_panel(self, app):
+        """Sin franja gris: el overlay va directo sobre el video con sombra."""
+        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+
+        splash = SplashScreen()
+        try:
+            assert not hasattr(splash, "_message_bg")
+            assert isinstance(
+                splash._message_overlay.graphicsEffect(), QGraphicsDropShadowEffect
+            )
+        finally:
+            splash.close()
+
     def test_start_intro_marks_done_in_video_mode(self, monkeypatch, app):
         """En modo video la intro termina al arrancar (mensajes encima)."""
         splash = SplashScreen()

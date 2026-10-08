@@ -30,6 +30,7 @@ if not hasattr(QtGui, "QRect"):
     QtGui.QRect = QRect
 from PyQt6.QtWidgets import (
     QLabel,
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QWidget,
 )
@@ -158,17 +159,17 @@ class SplashScreen(QWidget):
         self._message_overlay = QLabel(self)
         self._message_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._message_overlay.setWordWrap(True)
-        self._message_overlay_effect = QGraphicsOpacityEffect(self._message_overlay)
-        self._message_overlay_effect.setOpacity(0.0)
+        # Sin panel de fondo (tapaba el video con una franja gris):
+        # texto blanco en negrita con sombra para leerse sobre el video.
+        self._message_overlay.setStyleSheet(
+            "color: white; font-weight: bold; font-size: 15px; background: transparent;"
+        )
+        self._message_overlay_effect = QGraphicsDropShadowEffect(self._message_overlay)
+        self._message_overlay_effect.setBlurRadius(8)
+        self._message_overlay_effect.setOffset(0, 1)
+        self._message_overlay_effect.setColor(QColor(0, 0, 0, 220))
         self._message_overlay.setGraphicsEffect(self._message_overlay_effect)
         self._message_overlay.hide()
-
-        self._message_bg = QWidget(self)
-        self._message_bg.setAutoFillBackground(True)
-        self._message_bg.setStyleSheet(
-            "background: rgba(14, 19, 26, 0.68); border-radius: 10px;"
-        )
-        self._message_bg.hide()
 
         self._setup_video_or_fallback()
         self._load_logo("#E53935")
@@ -297,7 +298,6 @@ class SplashScreen(QWidget):
         y = self.height() - bar_h - 18
         for label in (self._message, self._message_overlay):
             label.setGeometry(x, y, bar_w, bar_h)
-        self._message_bg.setGeometry(x - 10, y - 6, bar_w + 20, bar_h + 12)
 
     def _start_intro(self) -> None:
         if self._video_loaded and self._media_player:
@@ -446,14 +446,11 @@ class SplashScreen(QWidget):
     def _animate_message(self, text: str) -> None:
         if self._video_loaded:
             self._message_overlay.setText(text)
-            # Orden: video abajo del todo, fondo, texto arriba.
+            # Orden: video abajo del todo, texto arriba (sin panel).
             if self._video_widget is not None:
                 self._video_widget.lower()
-            self._message_bg.show()
-            self._message_bg.raise_()
             self._message_overlay.show()
             self._message_overlay.raise_()
-            self._message_overlay_effect.setOpacity(1.0)
         else:
             self._message.show()
             self._message.raise_()
