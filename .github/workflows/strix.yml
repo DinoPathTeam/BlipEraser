@@ -1,0 +1,26 @@
+name: strix
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pentest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Strix
+        run: curl -sSL https://strix.ai/install | bash
+
+      - name: Run Strix
+        env:
+          # El secreto del repo se llama ANTHROPIC_API_KEY; Strix espera LLM_API_KEY.
+          LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          STRIX_LLM: ${{ secrets.STRIX_LLM || 'anthropic/claude-sonnet-4-6' }}
+        run: strix -n -t ./ --scan-mode quick --max-budget 5
