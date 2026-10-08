@@ -17,6 +17,7 @@ from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.host_cmd import host_cmd
 from blip_eraser.utils.validation import (
     ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; fuente única en validation.py)
+    AUDIT_EXCLUDE_PREFIXES,
     reject_symlinks,
     validate_path,
 )
@@ -246,7 +247,12 @@ class PrivilegedAPI:
                 output = self._client.remove_packages(packages)
                 write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=success via=daemon")
                 return OperationResult(success=True, output=output, used_daemon=True)
-            except (DaemonUnavailable, ValidationFailed, ExecutionFailed, CommandNotFound) as e:
+            except ValidationFailed as e:
+                # S3: el rechazo de seguridad del root NO se reintenta por
+                # pkexec (subordinaría su decisión a la del cliente).
+                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_rejected error={e.code}")
+                return OperationResult(success=False, error=e)
+            except (DaemonUnavailable, ExecutionFailed, CommandNotFound) as e:
                 write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_failed error={e.code}")
             except Exception as e:
                 # Defensa en profundidad: captura CUALQUIER excepción inesperada del daemon
@@ -277,7 +283,11 @@ class PrivilegedAPI:
                 output = self._client.clean_system_paths(str_paths)
                 write_diagnostic(f"AUDIT action=clean_system_paths paths={str_paths} result=success via=daemon")
                 return OperationResult(success=True, output=output, used_daemon=True)
-            except (DaemonUnavailable, ValidationFailed, ExecutionFailed, CommandNotFound) as e:
+            except ValidationFailed as e:
+                # S3: igual que en remove_packages, sin fallback.
+                write_diagnostic(f"AUDIT action=clean_system_paths paths={str_paths} result=daemon_rejected error={e.code}")
+                return OperationResult(success=False, error=e)
+            except (DaemonUnavailable, ExecutionFailed, CommandNotFound) as e:
                 write_diagnostic(f"AUDIT action=clean_system_paths paths={str_paths} result=daemon_failed error={e.code}")
             except Exception as e:
                 # Defensa en profundidad: captura CUALQUIER excepción inesperada del daemon
@@ -294,6 +304,17 @@ class PrivilegedAPI:
             if not _validate_path_pkexec(p):
                 write_diagnostic(f"AUDIT action=clean_rejected path={p} reason=path_not_in_allowlist via=pkexec")
                 return OperationResult(success=False, error=ValidationFailed(f"Ruta no permitida: {p}"))
+            # S4: misma exclusión que daemon y privileges (journal + bitácora)
+            try:
+                resolved = str(Path(p).resolve(strict=False)).replace("\\", "/")
+            except OSError:
+                resolved = ""
+            if any(
+                resolved == excl or resolved.startswith(f"{excl}/")
+                for excl in AUDIT_EXCLUDE_PREFIXES
+            ):
+                write_diagnostic(f"AUDIT action=clean_rejected path={p} reason=audit_path_protected via=pkexec")
+                return OperationResult(success=False, error=ValidationFailed(f"Ruta de auditoría protegida: {p}"))
             validated.append(p)
 
         if not validated:

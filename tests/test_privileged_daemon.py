@@ -39,7 +39,11 @@ class TestValidation:
     def test_validate_path_str_allowed_prefixes(self):
         assert _validate_path_str("/var/cache/pacman/pkg/foo.pkg.tar.zst")
         assert _validate_path_str("/var/log/journal")
-        assert _validate_path_str("/var/lib/pacman/local")
+
+    def test_validate_path_str_rejects_libpacman(self):
+        # S2: /var/lib/pacman fuera de la allowlist (nadie lo limpia).
+        assert not _validate_path_str("/var/lib/pacman/local")
+        assert not _validate_path_str("/var/lib/pacman")
 
     def test_validate_path_str_rejects_disallowed(self):
         assert not _validate_path_str("/etc/passwd")
@@ -468,6 +472,7 @@ class TestRateLimit:
 
         svc = daemon_mod.PrivilegedService()
         monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
+        monkeypatch.setattr(svc, "_polkit_authorized", lambda conn, sender, action: True)
         monkeypatch.setattr(
             daemon_mod, "remove_packages",
             lambda pkgs: (_ for _ in ()).throw(ValueError("rechazado")),
@@ -500,3 +505,48 @@ class TestRateLimit:
             assert inv.error == "org.freedesktop.DBus.Error.LimitsExceeded"
         finally:
             daemon_mod._rate_limit_hits.pop("uid:1000", None)
+
+
+class TestPolkitGate:
+    """S1: sin autorización polkit no hay operación destructiva."""
+
+    def _call(self, monkeypatch, authorized):
+        from unittest.mock import MagicMock
+
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        svc = daemon_mod.PrivilegedService()
+        monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
+        monkeypatch.setattr(svc, "_polkit_authorized", lambda conn, sender, action: authorized)
+        called = []
+        monkeypatch.setattr(
+            daemon_mod, "remove_packages", lambda pkgs: called.append(pkgs) or "ok"
+        )
+
+        class FakeInv:
+            def __init__(self):
+                self.error = None
+                self.value = None
+
+            def return_dbus_error(self, name, msg):
+                self.error = name
+
+            def return_value(self, value):
+                self.value = value
+
+        inv = FakeInv()
+        svc.on_method_call(
+            MagicMock(), ":1.77", "/", "com.dinopath.BlipEraser.Privileged",
+            "RemovePackages", [["pkg"]], inv,
+        )
+        return inv, called
+
+    def test_denied_blocks_operation(self, monkeypatch):
+        inv, called = self._call(monkeypatch, False)
+        assert inv.error == "org.freedesktop.DBus.Error.AccessDenied"
+        assert called == []
+
+    def test_authorized_runs_operation(self, monkeypatch):
+        inv, called = self._call(monkeypatch, True)
+        assert inv.error is None
+        assert called == [["pkg"]]

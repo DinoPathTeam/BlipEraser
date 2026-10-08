@@ -38,6 +38,7 @@ from blip_eraser.utils.validation import (
     is_symlink_or_reparse,
     ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; performance/tests lo importaban de aquí)
     HOME_DENYLIST_PREFIXES,
+    AUDIT_EXCLUDE_PREFIXES,
 )
 from blip_eraser.utils.dbus_client import (
     get_privileged_api,
@@ -250,6 +251,20 @@ def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | No
         (system_paths if needs_elevation(safe) else home_paths).append(safe)
 
     for path in home_paths:
+        # D3: invariante — nunca $HOME ni sus ancestros (/, /home…).
+        # needs_elevation() clasifica como "home" todo lo no-sistema,
+        # incluidos ancestros que relative_to() rechazaría después.
+        try:
+            resolved_home = path.resolve()
+            home_dir = host_home()
+            if resolved_home == home_dir or home_dir.is_relative_to(resolved_home):
+                err = RemovalError(paths=[path], code="validation_failed", detail="refuses_home_or_ancestor")
+                outcome.errors.append(err)
+                _audit_log("remove_home", [path], "rejected", "refuses_home_or_ancestor")
+                _tick()
+                continue
+        except OSError:
+            pass
         # Validación denylist en $HOME
         if _is_path_denied_in_home(path):
             err = RemovalError(paths=[path], code="validation_failed", detail="path_in_home_denylist")
@@ -279,6 +294,19 @@ def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | No
                 err = RemovalError(paths=[path], code="validation_failed", detail="path_not_in_allowlist")
                 outcome.errors.append(err)
                 _audit_log("remove_system", [path], "rejected", "path_not_in_allowlist")
+                continue
+            # S4: misma exclusión que el daemon (journal + bitácora propia)
+            try:
+                resolved = str(path.resolve(strict=False)).replace("\\", "/")
+            except OSError:
+                resolved = ""
+            if any(
+                resolved == excl or resolved.startswith(f"{excl}/")
+                for excl in AUDIT_EXCLUDE_PREFIXES
+            ):
+                err = RemovalError(paths=[path], code="validation_failed", detail="audit_path_protected")
+                outcome.errors.append(err)
+                _audit_log("remove_system", [path], "rejected", "audit_path_protected")
                 continue
             validated_paths.append(path)
 

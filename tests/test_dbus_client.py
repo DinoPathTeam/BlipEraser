@@ -33,12 +33,13 @@ class TestValidatePathPkexec:
     def test_allows_allowed_prefixes(self):
         assert _validate_path_pkexec(Path("/var/cache/pacman/pkg/foo.pkg.tar.zst"))
         assert _validate_path_pkexec(Path("/var/log/journal"))
-        assert _validate_path_pkexec(Path("/var/lib/pacman/local"))
 
     def test_rejects_disallowed_prefixes(self):
         assert not _validate_path_pkexec(Path("/etc/passwd"))
         assert not _validate_path_pkexec(Path("/tmp/foo"))
         assert not _validate_path_pkexec(Path("/home/user/foo"))
+        # S2: /var/lib/pacman fuera de la allowlist.
+        assert not _validate_path_pkexec(Path("/var/lib/pacman/local"))
 
     def test_rejects_path_traversal(self):
         # En POSIX, resolve() seguiría symlinks y detectaría el traversal.
@@ -229,6 +230,32 @@ class TestPrivilegedAPI:
         assert not result.success
         assert result.error.code == "VALIDATION_FAILED"
         assert "Ruta no permitida" in result.error.message
+
+    def test_daemon_validation_failed_has_no_pkexec_fallback(self, monkeypatch):
+        # S3: el rechazo de seguridad del root no se reintenta por pkexec.
+        from blip_eraser.utils.dbus_client import ValidationFailed
+
+        api = PrivilegedAPI(prefer_daemon=False)
+        daemon = MagicMock()
+        daemon.is_available.return_value = True
+        daemon.remove_packages.side_effect = ValidationFailed("rechazado")
+        monkeypatch.setattr(api, "_client", daemon)
+        monkeypatch.setattr(api, "_check_daemon", lambda: True)
+
+        def boom(cmd, **kwargs):
+            raise AssertionError("pkexec no debe ejecutarse tras ValidationFailed")
+
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", boom)
+        result = api.remove_packages(["foo"])
+        assert not result.success
+        assert result.error.code == "VALIDATION_FAILED"
+
+    def test_clean_system_paths_fallback_rejects_audit_paths(self):
+        # S4: journal y bitácora también vetados en el fallback pkexec.
+        api = PrivilegedAPI(prefer_daemon=False)
+        result = api.clean_system_paths([Path("/var/log/journal/x.log")])
+        assert not result.success
+        assert result.error.code == "VALIDATION_FAILED"
 
     def test_clean_system_paths_fallback_success(self, monkeypatch):
         api = PrivilegedAPI(prefer_daemon=False)

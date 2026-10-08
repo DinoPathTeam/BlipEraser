@@ -13,11 +13,19 @@ from pathlib import Path
 
 # ─── Constantes de seguridad ────────────────────────────────────────────
 
-# Prefijos permitidos para operaciones de sistema (rm -rf, etc.)
+# Prefijos permitidos para operaciones de sistema (rm -rf, etc.).
+# S2: /var/lib/pacman FUERA (la base de datos de pacman: ningún código la
+# limpia y borrarla deja el sistema sin mantenimiento posible).
 ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
     "/var/cache/pacman/pkg",
     "/var/log",
-    "/var/lib/pacman",
+)
+
+# S4: ni el journal ni la bitácora propia se pueden borrar aunque vivan
+# bajo /var/log (borrar el rastro es parte del abuso).
+AUDIT_EXCLUDE_PREFIXES: tuple[str, ...] = (
+    "/var/log/journal",
+    "/var/log/blip-eraser",
 )
 
 # Denylist dentro de $HOME (nunca se usa en daemon, pero por consistencia)

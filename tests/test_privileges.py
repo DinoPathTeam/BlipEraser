@@ -67,6 +67,21 @@ class TestRemovePathsHome:
         assert len(outcome.errors) == 1
         assert outcome.errors[0].code == "failed"
 
+    def test_home_itself_rejected(self, tmp_path, monkeypatch):
+        # D3: ni $HOME ni sus ancestros se borran jamás.
+        from pathlib import Path as _Path
+
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        monkeypatch.setattr(_Path, "home", classmethod(lambda cls: fake_home))
+        for target in (fake_home, fake_home.parent):
+            outcome = remove_paths([target])
+            assert outcome.removed == 0
+            assert len(outcome.errors) == 1
+            assert outcome.errors[0].code == "validation_failed"
+            assert outcome.errors[0].detail == "refuses_home_or_ancestor"
+        assert fake_home.exists()
+
     def test_home_denylist_rejected(self, tmp_path):
         # .ssh está en denylist - usar home real para que relative_to funcione
         target = Path.home() / ".ssh" / "test_blip_eraser"
@@ -107,7 +122,7 @@ class TestRemovePathsSystem:
 
     def test_success_via_api(self, monkeypatch):
         self._mock_api_success(monkeypatch)
-        outcome = remove_paths([Path("/var/log/journal"), Path("/var/log/pacman.log")])
+        outcome = remove_paths([Path("/var/log/test.log"), Path("/var/log/pacman.log")])
         assert outcome.removed == 2
         assert outcome.errors == []
 
@@ -119,7 +134,7 @@ class TestRemovePathsSystem:
 
     def test_pkexec_missing_structured_error(self, monkeypatch):
         self._mock_api_failure(monkeypatch, "COMMAND_NOT_FOUND", "pkexec not found")
-        outcome = remove_paths([Path("/var/lib/pacman/local")])
+        outcome = remove_paths([Path("/var/log/test.log")])
         assert outcome.errors[0].code == "pkexec_missing"
 
     def test_mixed_batch_splits_home_and_system(self, monkeypatch, tmp_path):
@@ -135,6 +150,22 @@ class TestRemovePathsSystem:
         outcome = remove_paths([Path("/etc/passwd")])
         assert outcome.removed == 0
         assert len(outcome.errors) == 1
+        assert outcome.errors[0].code == "validation_failed"
+        assert outcome.errors[0].detail == "path_not_in_allowlist"
+
+    def test_rejects_audit_paths(self, monkeypatch):
+        # S4: ni journal ni bitácora propia aunque vivan en /var/log.
+        for target in (Path("/var/log/journal/x.log"), Path("/var/log/blip-eraser/daemon.log")):
+            outcome = remove_paths([target])
+            assert outcome.removed == 0
+            assert len(outcome.errors) == 1
+            assert outcome.errors[0].code == "validation_failed"
+            assert outcome.errors[0].detail == "audit_path_protected"
+
+    def test_rejects_removed_libpacman_prefix(self, monkeypatch):
+        # S2: /var/lib/pacman fuera de la allowlist.
+        outcome = remove_paths([Path("/var/lib/pacman/local")])
+        assert outcome.removed == 0
         assert outcome.errors[0].code == "validation_failed"
         assert outcome.errors[0].detail == "path_not_in_allowlist"
 

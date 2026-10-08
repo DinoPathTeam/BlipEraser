@@ -79,6 +79,50 @@ class TestUtils:
         assert calls == [["pkexec", "pacman", "-S", "--needed", "--noconfirm", "reflector"]]
 
 
+class TestRootFileBackup:
+    """D4: copia .blip-bak antes de escribir, restaura al desactivar."""
+
+    def test_write_calls_backup_first(self, monkeypatch):
+        from pathlib import Path as _Path
+
+        import blip_eraser.utils.performance as perf
+
+        order = []
+        monkeypatch.setattr(
+            perf, "_backup_root_file", lambda p: order.append(("backup", str(p)))
+        )
+
+        def fake_run(cmd, **kwargs):
+            order.append(("write", cmd[0]))
+            mock = MagicMock()
+            mock.returncode = 0
+            return mock
+
+        monkeypatch.setattr(perf.subprocess, "run", fake_run)
+        assert perf._write_root_file(_Path("/etc/x.conf"), "data") is True
+        assert order[0][0] == "backup"
+        assert order[0][1].endswith("/etc/x.conf")
+
+    def test_remove_restores_backup(self, monkeypatch):
+        from pathlib import Path as _Path
+
+        import blip_eraser.utils.performance as perf
+
+        cmds = []
+
+        def fake_run(cmd, **kwargs):
+            cmds.append(cmd)
+            mock = MagicMock()
+            mock.returncode = 0
+            return mock
+
+        monkeypatch.setattr(perf, "_run_cmd", fake_run)
+        assert perf._remove_root_file(_Path("/etc/x.conf")) is True
+        shell = " ".join(cmds[0])
+        assert "mv -f" in shell
+        assert "x.conf.blip-bak" in shell
+
+
 class TestTweakRegistry:
     """Tests del registro de tweaks."""
 

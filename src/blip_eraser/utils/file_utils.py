@@ -14,7 +14,8 @@ from pathlib import Path
 from blip_eraser.utils.host_cmd import expanduser as _expand_host
 
 DEFAULT_SCAN_PATHS = (
-    "~/.local/share",
+    # D1: ~/.local/share FUERA por defecto (carteras KDE, Steam, Papelera…:
+    # datos, no apps). El usuario puede añadirlo a mano en Ajustes.
     "~/Games",
     "~/Descargas",
     "~/Applications",

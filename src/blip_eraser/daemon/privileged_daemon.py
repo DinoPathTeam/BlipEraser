@@ -158,12 +158,14 @@ from blip_eraser.utils.validation import (
     reject_symlinks_atomic as _reject_symlinks_atomic,
     validate_path_resolved as _validate_path_resolved,
     ALLOWED_SYSTEM_PREFIXES as _VALIDATION_ALLOWED_SYSTEM_PREFIXES,
+    AUDIT_EXCLUDE_PREFIXES as _AUDIT_EXCLUDE_PREFIXES,
 )
 
 validate_path_str = _validate_path_str
 reject_symlinks_atomic = _reject_symlinks_atomic
 validate_path_resolved = _validate_path_resolved
 ALLOWED_SYSTEM_PREFIXES = _VALIDATION_ALLOWED_SYSTEM_PREFIXES
+AUDIT_EXCLUDE_PREFIXES = _AUDIT_EXCLUDE_PREFIXES
 
 def _get_euid() -> int:
     get_euid: Any = getattr(os, "geteuid", None)
@@ -304,6 +306,15 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
         if not _validate_path_resolved(path):
             rejected.append(p)
             _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=resolved_outside_allowlist")
+            continue
+        # Check 3b (S4): ni journal ni bitácora propia, aunque vivan en /var/log
+        resolved_str = str(path.resolve(strict=False)).replace("\\", "/")
+        if any(
+            resolved_str == excl or resolved_str.startswith(f"{excl}/")
+            for excl in _AUDIT_EXCLUDE_PREFIXES
+        ):
+            rejected.append(p)
+            _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=audit_path_protected")
             continue
         # Check 4: validar que el prefijo allowlist coincidente no sea symlink
         matched_prefix = None
@@ -684,6 +695,49 @@ class PrivilegedService:
         except Exception:
             return None
 
+    # Acciones polkit declaradas en packaging/polkit/*.policy (S1: antes el
+    # daemon no las comprobaba; wheel+sesión no piden contraseña).
+    POLKIT_ACTION_PACKAGES = "com.dinopath.blip-eraser.pacman-remove"
+    POLKIT_ACTION_CLEAN = "com.dinopath.blip-eraser.system-clean"
+
+    def _polkit_authorized(self, connection: Any, sender: str, action_id: str) -> bool:
+        """True si polkit autoriza al sender para `action_id` (con interacción).
+
+        Vía `pkcheck --system-bus-name` (no D-Bus directo): la conexión
+        SERVIDOR del daemon es rechazada por dbus-broker al llamar a
+        polkitd ("Receiver is not authorized"), mientras una conexión
+        cliente fresca sí llega. pkcheck abre la suya propia y resuelve
+        el PID desde el nombre del bus (evita la carrera GetConnectionUnixPID,
+        que fallaba aun con el cliente conectado).
+        Fail-closed: cualquier error o cancelación deniega. El diálogo lo
+        muestra el agente del llamante (sesión gráfica requerida).
+        """
+        try:
+            proc = subprocess.run(
+                ["/usr/bin/pkcheck", "--action-id", action_id,
+                 "--system-bus-name", sender, "--allow-user-interaction"],
+                capture_output=True, text=True, timeout=180,
+            )
+            if proc.returncode != 0:
+                _audit_log("auth_rejected", f"sender={sender} action={action_id} reason=polkit_denied")
+                return False
+            return True
+        except Exception as exc:
+            _audit_log("auth_rejected", f"sender={sender} action={action_id} reason=polkit_error detail={exc}")
+            return False
+
+    def _require_polkit(
+        self, connection: Any, sender: str, method_name: str, action_id: str, invocation: Any
+    ) -> bool:
+        """Aplica CheckAuthorization; ante rechazo responde AccessDenied. True si sigue."""
+        if self._polkit_authorized(connection, sender, action_id):
+            return True
+        invocation.return_dbus_error(
+            "org.freedesktop.DBus.Error.AccessDenied",
+            "Acceso denegado: se requiere autenticación polkit",
+        )
+        return False
+
     def on_method_call(
         self,
         connection: Any,
@@ -711,6 +765,10 @@ class PrivilegedService:
         try:
             if method_name == "RemovePackages":
                 packages = parameters[0]
+                if not self._require_polkit(
+                    connection, sender, method_name, self.POLKIT_ACTION_PACKAGES, invocation
+                ):
+                    return
                 if not _check_rate_limit(rate_key):
                     _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
                     invocation.return_dbus_error(
@@ -722,6 +780,10 @@ class PrivilegedService:
                 invocation.return_value(GLib.Variant("(s)", (result,)))
             elif method_name == "CleanSystemPaths":
                 paths = parameters[0]
+                if not self._require_polkit(
+                    connection, sender, method_name, self.POLKIT_ACTION_CLEAN, invocation
+                ):
+                    return
                 if not _check_rate_limit(rate_key):
                     _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
                     invocation.return_dbus_error(

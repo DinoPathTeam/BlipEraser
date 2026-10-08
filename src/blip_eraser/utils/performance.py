@@ -6,6 +6,7 @@ Todas las operaciones privilegiadas usan la API unificada (daemon/pkexec).
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,8 +70,9 @@ def _install_pkg_via_pkexec(pkg: str) -> bool:
 
 
 def _write_root_file(path: Path, content: str) -> bool:
-    """Escribe archivo root via pkexec tee."""
+    """Escribe archivo root via pkexec tee (D4: con copia .blip-bak previa)."""
     try:
+        _backup_root_file(path)
         # Usar tee con pkexec para escribir archivo root
         subprocess.run(
             ["pkexec", "tee", str(path)],
@@ -86,10 +88,38 @@ def _write_root_file(path: Path, content: str) -> bool:
         return False
 
 
-def _remove_root_file(path: Path) -> bool:
-    """Borra archivo root via pkexec rm."""
+def _backup_root_file(path: Path) -> None:
+    """Copia de seguridad `<path>.blip-bak` si existe y aún no hay copia (D4)."""
     try:
-        _run_cmd(["pkexec", "rm", "-f", str(path)], check=True)
+        backup = path.with_name(path.name + ".blip-bak")
+        if backup.exists():
+            return  # No pisar una copia previa (primera escritura manda).
+        proc = subprocess.run(
+            ["pkexec", "sh", "-c", f"test -f {shlex.quote(str(path))}"],
+            capture_output=True, timeout=15,
+        )
+        if proc.returncode != 0:
+            return  # Nada que respaldar (archivo nuevo).
+        subprocess.run(
+            ["pkexec", "cp", "-p", str(path), str(backup)],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+        write_diagnostic(f"AUDIT action=backup_root_file path={path} result=success")
+    except (subprocess.SubprocessError, OSError) as e:
+        write_diagnostic(f"AUDIT action=backup_root_file path={path} result=failed error={e}")
+
+
+def _remove_root_file(path: Path) -> bool:
+    """Borra archivo root via pkexec rm (D4: restaura .blip-bak si existe)."""
+    try:
+        backup = path.with_name(path.name + ".blip-bak")
+        _run_cmd(
+            ["pkexec", "sh", "-c",
+             f"if test -f {shlex.quote(str(backup))}; then "
+             f"mv -f {shlex.quote(str(backup))} {shlex.quote(str(path))}; else "
+             f"rm -f {shlex.quote(str(path))}; fi"],
+            check=True,
+        )
         write_diagnostic(f"AUDIT action=remove_root_file path={path} result=success")
         return True
     except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:

@@ -29,6 +29,7 @@
   /usr/bin/pacman-key  rix,
   /usr/bin/pacman-conf rix,
   /usr/bin/loginctl    rix,
+  /usr/bin/pkcheck     rix,
   /usr/bin/gpg         rix,
   /usr/bin/gpgconf     rix,
   /usr/bin/gpgsm       rix,
@@ -62,10 +63,15 @@
   # La interfaz D-Bus la lee gi en tiempo de ejecución
   /usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml r,
 
-  # Rutas con escritura: las operaciones privilegiadas
+  # Rutas con escritura: las operaciones privilegiadas.
+  # S2: /var/lib/pacman fuera (nadie lo limpia).
   /var/cache/pacman/pkg/** rw,
   /var/log/** rw,
-  /var/lib/pacman/** rw,
+
+  # S4: el journal y la bitácora propia no se borran aunque vivan en /var/log.
+  # (deny explícito: acota el /** rw de arriba; default-deny no bastaría.)
+  deny /var/log/journal/** w,
+  deny /var/log/blip-eraser/** w,
 
   # Socket D-Bus del sistema
   /run/dbus/system_bus_socket rw,

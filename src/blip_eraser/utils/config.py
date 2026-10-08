@@ -18,7 +18,6 @@ PREFS_DEFAULTS: dict[str, Any] = {
     "theme": "red",
     "font": "system",
     "scan_paths": [
-        "~/.local/share",
         "~/Games",
         "~/Descargas",
         "~/Applications",

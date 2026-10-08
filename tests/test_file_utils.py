@@ -89,8 +89,10 @@ class TestScanManualEntries:
         result = scan_manual_entries([str(p1), str(p2)])
         assert {p.name for p in result} == {"AppA", "AppB"}
 
-    def test_default_paths_include_home(self):
-        assert "~/.local/share" in tuple(DEFAULT_SCAN_PATHS)
+    def test_default_paths_exclude_data_dirs(self):
+        # D1: ~/.local/share fuera por defecto (datos, no apps).
+        assert "~/.local/share" not in tuple(DEFAULT_SCAN_PATHS)
+        assert "~/Games" in tuple(DEFAULT_SCAN_PATHS)
 
 
 class TestPathSizeForDisplay:
