@@ -40,6 +40,12 @@ package() {
   cp -r src/blip_eraser "$pkgdir/usr/lib/blip-eraser/"
   find "$pkgdir/usr/lib/blip-eraser" -name __pycache__ -type d -prune -exec rm -rf {} +
   rm -rf "$pkgdir/usr/lib/blip-eraser/blip_eraser/assets"
+  # Código que ejecuta root: permisos normalizados y sin symlinks
+  if [ -n "$(find "$pkgdir/usr/lib/blip-eraser" -type l -print -quit)" ]; then
+    echo "symlinks en el código del daemon" >&2; return 1
+  fi
+  find "$pkgdir/usr/lib/blip-eraser" -type d -exec chmod 755 {} +
+  find "$pkgdir/usr/lib/blip-eraser" -type f -exec chmod 644 {} +
   install -Dm755 packaging/scripts/blip-eraser-privileged \
     "$pkgdir/usr/lib/blip-eraser/blip-eraser-privileged"
   # AppArmor (perfil del host, no del venv)
