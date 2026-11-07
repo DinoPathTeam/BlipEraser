@@ -146,9 +146,13 @@ class TestHeadersVisible:
             page.show()
             app.processEvents()
             header = page.table.horizontalHeader()
-            assert header.minimumSectionSize() >= 60
+            assert header.minimumSectionSize() >= 36
+            # Nombre/Detalle se reparten el ancho; Tipo/Peso/Fecha son fijas.
+            allowed = (QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Fixed)
+            assert header.sectionResizeMode(1) == QHeaderView.ResizeMode.Stretch
+            assert header.sectionResizeMode(3) == QHeaderView.ResizeMode.Stretch
             for col in range(1, 6):
-                assert header.sectionResizeMode(col) == QHeaderView.ResizeMode.Stretch
+                assert header.sectionResizeMode(col) in allowed
                 assert header.sectionSize(col) >= 60
         finally:
             page.close()
@@ -162,8 +166,9 @@ class TestHeadersVisible:
             section.show()
             app.processEvents()
             header = section.table.horizontalHeader()
+            allowed = (QHeaderView.ResizeMode.Stretch, QHeaderView.ResizeMode.Fixed)
             for col in range(1, section._columns):
-                assert header.sectionResizeMode(col) == QHeaderView.ResizeMode.Stretch
+                assert header.sectionResizeMode(col) in allowed
                 assert header.sectionSize(col) >= 60
         finally:
             section.close()

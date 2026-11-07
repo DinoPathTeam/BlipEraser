@@ -51,9 +51,11 @@ from blip_eraser.utils.table_filters import (
     get_type_display_names,
     parse_size_threshold,
 )
+from blip_eraser.widgets.card import Card
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.scan_worker import BackgroundScanMixin
+from blip_eraser.widgets.table_delegates import KIND_ROLE, SubTextDelegate, TagDelegate
 
 _COLUMNS = 6  # Sel | Nombre | Tipo | Detalle | Peso | Fecha
 
@@ -79,8 +81,12 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 8)
+        layout.setSpacing(8)
 
         self.info_label = QLabel(tr("uninstaller_info"))
+        self.info_label.setObjectName("SubText")
+        self.info_label.setWordWrap(True)
         layout.addWidget(self.info_label)
 
         # Toolbar de filtros
@@ -91,25 +97,38 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
         # Desinstalador solo permite selección manual (una a una o
         # arrastrando) para evitar desinstalaciones masivas accidentales.
         self.table = CheckTable(_COLUMNS, show_select_all=False)
+        self.table.set_right_aligned_columns((4, 5))
         cast(Any, self.table).setHorizontalHeaderLabels(
             ["", tr("col_name"), tr("col_type"), tr("col_detail"), tr("col_weight"), tr("col_date")]
         )
         header = cast(QHeaderView, self.table.horizontalHeader())
-        # Stretch (como el Limpiador): reparte el viewport entre columnas
-        # para que ninguna etiqueta quede cortada con anchos fijos.
-        # Mínimo por sección para que Tipo/Peso no colapsen.
-        header.setMinimumSectionSize(70)
-        for col in range(1, _COLUMNS):
+        # Nombre y Detalle se reparten el ancho; Tipo, Peso y Fecha son fijas
+        # para que las etiquetas y las cifras queden alineadas como en el diseño.
+        header.setMinimumSectionSize(36)
+        for col in (1, 3):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
+        for col, width in ((2, 140), (4, 96), (5, 110)):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+            self.table.setColumnWidth(col, width)
         header.setStretchLastSection(False)
-        layout.addWidget(self.table)
+        self.table.setItemDelegateForColumn(2, TagDelegate(self.table))
+        for col in (3, 4, 5):
+            self.table.setItemDelegateForColumn(col, SubTextDelegate(self.table))
+
+        card = Card(padding=6)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.addWidget(self.table)
+        layout.addWidget(card, 1)
 
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton(tr("refresh_button"))
         cast(Any, self.refresh_btn.clicked).connect(self.load_apps)
         btn_row.addWidget(self.refresh_btn)
+        btn_row.addStretch(1)
 
         self.uninstall_btn = QPushButton(tr("uninstall_button_count").format(n=0))
+        self.uninstall_btn.setObjectName("PrimaryButton")
         self.uninstall_btn.setEnabled(False)
         cast(Any, self.uninstall_btn.clicked).connect(self.uninstall_selected)
         btn_row.addWidget(self.uninstall_btn)
@@ -131,7 +150,7 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
 
         self.filter_type_button = QToolButton()
         self.filter_type_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.filter_type_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.filter_type_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.filter_type_button.setMinimumWidth(140)
         self.filter_type_button.setToolTip(tr("filter_type_all"))
         self._populate_type_button()
@@ -485,13 +504,19 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             try:
                 for row, app in enumerate(self._visible):
                     if app.source == "manual" and app.size_bytes:
-                        self.table.setItem(row, 4, QTableWidgetItem(human_size(app.size_bytes)))
+                        self.table.setItem(row, 4, self._right_item(human_size(app.size_bytes)))
             finally:
                 self.table.blockSignals(False)
         except RuntimeError as exc:
             self._render_failure(
                 "uninstaller_page._on_sizes_filled", exc, table=self.table
             )
+
+    @staticmethod
+    def _right_item(text: str) -> QTableWidgetItem:
+        item = QTableWidgetItem(text)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return item
 
     def _render(self):
         # Aplicar filtros de columna (Tipo, Peso, Fecha) usando filter_apps
@@ -527,12 +552,14 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
                     check.setCheckState(Qt.CheckState.Unchecked)
                     self.table.setItem(row, 0, check)
                     self.table.setItem(row, 1, QTableWidgetItem(app.name))
-                    self.table.setItem(row, 2, QTableWidgetItem(tr(kind_label_key(app.kind))))
+                    kind_item = QTableWidgetItem(tr(kind_label_key(app.kind)))
+                    kind_item.setData(KIND_ROLE, app.kind)
+                    self.table.setItem(row, 2, kind_item)
                     self.table.setItem(row, 3, QTableWidgetItem(app.detail))
                     self.table.setItem(
-                        row, 4, QTableWidgetItem(human_size(app.size_bytes) if app.size_bytes else "")
+                        row, 4, self._right_item(human_size(app.size_bytes) if app.size_bytes else "")
                     )
-                    self.table.setItem(row, 5, QTableWidgetItem(app.install_date))
+                    self.table.setItem(row, 5, self._right_item(app.install_date))
             finally:
                 self.table.setUpdatesEnabled(True)
                 self.table.blockSignals(False)
