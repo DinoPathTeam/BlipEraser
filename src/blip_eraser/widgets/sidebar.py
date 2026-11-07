@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyledItemDelegate
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QSizePolicy, QStyle, QStyledItemDelegate
 
 from blip_eraser.utils.i18n import tr
 
@@ -132,6 +132,7 @@ class Sidebar(QListWidget):
         self.setIconSize(_ICON_SIZE)
         self.setSpacing(4)
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._icon_color = "#ffffff"
         self._rows: list[tuple[int, str]] = []
@@ -142,6 +143,12 @@ class Sidebar(QListWidget):
             self._rows.append((row, section))
         self.refresh_icons()
         self.setCurrentRow(0)
+        # Altura justa al contenido: el espacio libre de la barra lateral
+        # queda para la actividad reciente.
+        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(
+            self.count() * (self.sizeHintForRow(0) + 2 * self.spacing()) + 2 * self.frameWidth()
+        )
 
     def refresh_icons(self) -> None:
         """Recarga los iconos: primero assets propios (color completo, sin tinte),

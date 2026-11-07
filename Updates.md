@@ -69,6 +69,13 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   StatusNotifierWatcher).
 - Claves i18n nuevas `tray_*` (ES/EN). Tests: `test_tray_logic.py`,
   `test_tray_gui.py`.
+### Sin versionar: actividad reciente en la barra lateral
+
+- **Barra lateral**: el espacio libre bajo la navegación muestra ahora las últimas
+  6 entradas del registro (la más nueva arriba, resaltada con el acento). Es un
+  resumen de solo lectura; el historial completo y el borrado siguen en el
+  panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
+  `sidebar_activity_empty`.
 
 ### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
 

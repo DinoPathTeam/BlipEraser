@@ -164,6 +164,11 @@ QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color
 QComboBox, QListWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; padding: 4px; }}
 QLabel#SubText {{ color: {p['subtext']}; }}
 QLabel#PanelTitle {{ color: {p['subtext']}; font-size: 11px; font-weight: bold; }}
+QWidget#SidebarActivity {{ background: transparent; }}
+QWidget#ActivityRow {{ background: transparent; border-left: 2px solid {p['border']}; }}
+QWidget#ActivityRow[latest="true"] {{ border-left: 2px solid {accent}; }}
+QLabel#ActivityTime {{ color: {p['subtext']}; font-size: 10px; }}
+QLabel#ActivityMsg {{ color: {p['text']}; font-size: 11px; }}
 QLabel#KindTagApp {{ color: #4CAF50; border: 1px solid #4CAF50; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}
 QLabel#KindTagDep {{ color: #FFB300; border: 1px solid #FFB300; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}
 QLabel#KindTagFolder {{ color: #42A5F5; border: 1px solid #42A5F5; border-radius: 7px; padding: 1px 7px; font-size: 10px; font-weight: bold; }}

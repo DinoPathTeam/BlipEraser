@@ -43,7 +43,7 @@ from blip_eraser.utils.i18n import (
     tr,
 )
 from blip_eraser.utils.log import log as log_buffer
-from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SystemStatusBar
+from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SidebarActivity, SystemStatusBar
 from blip_eraser.widgets.logo import AppLogo, app_icon
 
 _SECTION_ORDER = [
@@ -130,6 +130,8 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         self.sidebar = Sidebar()
         sidebar_layout.addWidget(self.sidebar)
+        self.sidebar_activity = SidebarActivity()
+        sidebar_layout.addWidget(self.sidebar_activity, 1)
         body.addWidget(sidebar_wrap)
 
         self.stack = QStackedWidget()
@@ -353,6 +355,7 @@ class MainWindow(QMainWindow):
         for code, action in self.language_actions.items():
             action.setText(tr(f"lang_name_{code}"))
         self.sidebar.retranslate()
+        self.sidebar_activity.retranslate()
         self.log_panel.retranslate()
         self.statusBar().retranslate()
         for page in self._pages.values():
