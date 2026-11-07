@@ -11,6 +11,23 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔒 Daemon: apertura de rutas sin seguir symlinks en ningún tramo
+
+- **Hueco**: `_rm_rf_atomic` abría el directorio padre con `O_NOFOLLOW`, que solo
+  protege el último componente; un symlink intermedio cambiado entre la
+  validación y la apertura se seguía.
+- **Ahora**: `_open_dir_nofollow` abre el prefijo de la allowlist y recorre cada
+  componente restante con `O_NOFOLLOW | O_DIRECTORY` relativo al fd anterior
+  (equivale a `openat2` con `RESOLVE_NO_SYMLINKS`, en Python puro). Exige ruta
+  absoluta canónica dentro de un prefijo permitido.
+- **Por qué no `openat2`**: requeriría `ctypes` (choca con
+  `MemoryDenyWriteExecute`/AppArmor) y kernel >= 5.6.
+- **Por qué no desde `/`**: el perfil de AppArmor solo permite abrir los propios
+  prefijos (`/var/log/`, `/var/cache/pacman/pkg/`); además los tramos por encima
+  son de root y los que pueden pertenecer a cuentas de servicio están debajo.
+- Tests: symlink intermedio y final, rutas no canónicas, fuera de allowlist,
+  prefijo más largo, y borrado a través de un enlace intermedio.
+
 ### 🔒 Instalador: código de root con permisos normalizados
 
 - **Riesgo**: `install-daemon.sh` copiaba `src/blip_eraser` a `/usr/lib/blip-eraser`

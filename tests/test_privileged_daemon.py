@@ -231,6 +231,14 @@ class TestAtomicRemoval:
         from blip_eraser.daemon.privileged_daemon import _rm_rf_dir_atomic
         assert callable(_rm_rf_dir_atomic)
 
+    @pytest.fixture(autouse=True)
+    def _anchor_allowlist(self, monkeypatch, tmp_path):
+        """_rm_rf_atomic abre el prefijo de la allowlist: se ancla en tmp_path."""
+        import blip_eraser.daemon.privileged_daemon as daemon_mod
+        monkeypatch.setattr(
+            daemon_mod, "ALLOWED_SYSTEM_PREFIXES", (str(tmp_path),)
+        )
+
     def _allow_all(self, monkeypatch):
         import blip_eraser.daemon.privileged_daemon as daemon_mod
         monkeypatch.setattr(daemon_mod, "_validate_path_str", lambda p: True)
