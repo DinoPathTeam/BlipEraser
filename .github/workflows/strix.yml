@@ -1,7 +1,7 @@
 name: strix
+# Solo ejecución manual (Actions → strix → Run workflow): cada corrida gasta
+# crédito de la API (hasta --max-budget USD), así que no se lanza en cada PR.
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
