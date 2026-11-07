@@ -1,6 +1,5 @@
 """Tests para la lógica pura de escaneo y tamaños (sin PyQt6 ni pacman)."""
 
-from pathlib import Path
 
 import pytest
 

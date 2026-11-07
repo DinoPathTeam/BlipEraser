@@ -1,6 +1,5 @@
 """Tests para utils/scan_cache.py (lógica pura, sin PyQt6)."""
 
-import time
 
 import pytest
 

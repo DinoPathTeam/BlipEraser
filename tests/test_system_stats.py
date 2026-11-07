@@ -1,6 +1,5 @@
 """Tests para utils/system_stats.py (métricas, sin /proc en Windows)."""
 
-import pytest
 
 from blip_eraser.utils import system_stats as stats
 

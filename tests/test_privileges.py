@@ -5,10 +5,9 @@ rutas temporales para la parte de $HOME.
 """
 
 import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,9 +16,8 @@ from blip_eraser.utils.privileges import (
     RemovalError,
     needs_elevation,
     remove_paths,
-    get_privileged_api,
 )
-from blip_eraser.utils.dbus_client import OperationResult, DBusError, reset_privileged_api
+from blip_eraser.utils.dbus_client import OperationResult, DBusError
 
 
 @dataclass

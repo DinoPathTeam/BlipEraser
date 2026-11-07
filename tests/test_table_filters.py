@@ -10,7 +10,6 @@ Cubre:
 
 from datetime import datetime
 
-import pytest
 
 from blip_eraser.utils.table_filters import (
     DateFilterMode,

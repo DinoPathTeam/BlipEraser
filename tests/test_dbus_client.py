@@ -7,19 +7,14 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from blip_eraser.utils.dbus_client import (
     DBusError,
-    DaemonUnavailable,
-    ValidationFailed,
-    ExecutionFailed,
-    CommandNotFound,
     PrivilegedClient,
     PrivilegedAPI,
-    OperationResult,
     get_privileged_api,
     reset_privileged_api,
     _run_pkexec_rm,

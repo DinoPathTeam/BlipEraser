@@ -46,8 +46,6 @@ class TestDeleteProgress:
         )
         monkeypatch.setattr(dlg_mod.QMessageBox, "warning", lambda *a, **k: None)
 
-        seen = []
-
         def fake_remove(paths, on_progress=None):
             out = RemovalOutcome()
             for i, _p in enumerate(paths, start=1):

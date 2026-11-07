@@ -14,7 +14,6 @@ from blip_eraser.pages.uninstaller_page import UninstallerPage
 from blip_eraser.utils.table_filters import (
     DateFilterMode,
     WeightFilterMode,
-    FilterState,
 )
 from blip_eraser.utils.apps import KIND_APP, KIND_DEPENDENCY, KIND_FOLDER
 

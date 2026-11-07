@@ -1,6 +1,5 @@
 """Tests para utils/scan.py (escaneo y tamaños de pacman, sin PyQt6)."""
 
-import pytest
 
 from blip_eraser.utils import scan
 

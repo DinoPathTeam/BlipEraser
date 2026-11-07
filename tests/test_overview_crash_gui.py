@@ -23,7 +23,6 @@ import pytest
 QtWidgets = pytest.importorskip("PyQt6.QtWidgets")
 QtCore = pytest.importorskip("PyQt6.QtCore")
 
-from pathlib import Path
 
 from PyQt6 import sip
 
