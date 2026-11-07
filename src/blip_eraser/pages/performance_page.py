@@ -29,6 +29,7 @@ from blip_eraser.utils.performance import (
     check_tweak_state,
     apply_tweak,
     get_all_tweak_states,
+    get_tweak_block_reason,
     TweakResult,
 )
 
@@ -247,7 +248,18 @@ class PerformancePage(BasePage):
         for row in self._rows:
             key = row["key"]
             checkbox = row["checkbox"]
-            
+
+            block = get_tweak_block_reason(key)
+            if block is not None:
+                # Configuración gestionada por el sistema: no se toca ni se
+                # sobrescribe la preferencia guardada.
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+                checkbox.setEnabled(False)
+                checkbox.setToolTip(block.message)
+                continue
+
             # Estado persistido en config
             persisted = prefs.get(key, False)
             # Estado real en el sistema
