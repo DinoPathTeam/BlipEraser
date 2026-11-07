@@ -39,9 +39,10 @@ RestrictRealtime=yes
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 
-# System call filter - permitir operaciones necesarias
-# @system-service + llamadas necesarias para subprocess y D-Bus
-SystemCallFilter=@system-service @clock @cpu-emulation @debug @module @obsolete @raw-io @system-service
+# Filtro de syscalls: solo @system-service (E/S de ficheros, procesos, red
+# local, señales, hilos). Se retiran @clock, @cpu-emulation, @debug, @module,
+# @obsolete y @raw-io: el daemon solo borra ficheros y atiende D-Bus.
+SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 
 # Solo permitimos escritura en las rutas necesarias para las operaciones
