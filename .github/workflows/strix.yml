@@ -18,7 +18,12 @@ jobs:
       - name: Install Strix
         run: curl -sSL https://strix.ai/install | bash
 
+      # Escaneo de apoyo, no una puerta de calidad: depende de un servicio de
+      # pago externo (crédito de la API). Si falla por facturación o red, el
+      # PR no debe quedar bloqueado; el informe se sube igualmente. La puerta
+      # real es el job `ci` (pytest + compileall).
       - name: Run Strix
+        continue-on-error: true
         env:
           # El secreto del repo se llama ANTHROPIC_API_KEY; Strix espera LLM_API_KEY.
           LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
