@@ -11,6 +11,15 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🤖 Dependabot: subidas menores y parches en un solo PR
+
+- Las acciones de GitHub están pineadas por SHA en las mismas líneas de
+  `ci.yml`, así que fusionar un PR de Dependabot dejaba en conflicto a los
+  demás (ya ocurrió con #12-#14). Ahora un grupo `actions-minor-patch` reúne
+  todas las subidas menores y parches en un único PR por semana.
+- Las subidas **mayores** siguen llegando en PR separados: son las que hay que
+  revisar con calma. Frecuencia semanal y límite de 3 PR abiertos sin cambios.
+
 ### 🔔 Aviso de versión nueva (con caché de 24 h)
 
 - **Hallazgo**: `check_for_updates()` existía (con tests) pero nada la llamaba, y
