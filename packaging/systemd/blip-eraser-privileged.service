@@ -45,9 +45,9 @@ SystemCallFilter=@system-service @clock @cpu-emulation @debug @module @obsolete 
 SystemCallErrorNumber=EPERM
 
 # Solo permitimos escritura en las rutas necesarias para las operaciones
-# (S2: /var/lib/pacman fuera, nadie lo limpia).
+# (El daemon solo limpia caché y logs; no ejecuta pacman.)
 ReadWritePaths=/var/cache/pacman/pkg /var/log /var/log/blip-eraser
-ReadOnlyPaths=/usr/bin/pacman /usr/bin/pacman-key /usr/bin/rm /usr/lib/blip-eraser
+ReadOnlyPaths=/usr/lib/blip-eraser
 
 # Capabilities mínimas necesarias
 CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_FOWNER

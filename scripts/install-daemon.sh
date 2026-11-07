@@ -84,12 +84,20 @@ fi
 echo "[OK] Servicio active."
 
 echo "[8/8] Ping D-Bus"
-if busctl call com.dinopath.BlipEraser.Privileged \
+# El daemon solo atiende a usuarios wheel con sesión gráfica activa: root (sudo)
+# siempre es rechazado, así que el ping se hace como el usuario que invocó sudo.
+PING_USER="${SUDO_USER:-}"
+if [[ -z "$PING_USER" || "$PING_USER" == "root" ]]; then
+    echo "[INFO] Sin usuario normal (SUDO_USER): ping omitido. Prueba como tu usuario:"
+    echo "  busctl call com.dinopath.BlipEraser.Privileged /com/dinopath/BlipEraser/Privileged com.dinopath.BlipEraser.Privileged Ping"
+elif sudo -u "$PING_USER" busctl call com.dinopath.BlipEraser.Privileged \
     /com/dinopath/BlipEraser/Privileged \
     com.dinopath.BlipEraser.Privileged Ping 2>&1 | grep -q "b true"; then
-    echo "[OK] Daemon responde Ping en el bus de sistema."
+    echo "[OK] Daemon responde Ping en el bus de sistema (usuario $PING_USER)."
 else
-    echo "[WARN] Servicio activo pero Ping no responde (¿usuario fuera de wheel?)."
-    echo "  La app usará fallback pkexec. Revisa: groups \$USER"
+    echo "[WARN] Servicio activo pero Ping no responde para $PING_USER."
+    echo "  Causas: no está en wheel, o no hay sesión gráfica activa (corre esto"
+    echo "  desde una terminal dentro de tu sesión). Revisa: groups $PING_USER"
+    echo "  La app usará fallback pkexec."
 fi
 echo "[OK] Listo. Tras cambiar código, re-ejecuta este script."

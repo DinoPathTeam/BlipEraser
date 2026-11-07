@@ -69,16 +69,19 @@ class TestListDependencyPackages:
 
 
 class TestUninstallPackages:
-    def test_blocks_uninstall_when_package_identity_is_untrusted(self, monkeypatch):
-        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: False)
-        monkeypatch.setattr(
-            pacman.subprocess,
-            "run",
-            lambda *args, **kwargs: pytest.fail("pacman no debe ejecutarse"),
-        )
+    def test_failed_pacman_query_is_not_treated_as_empty_db(self, monkeypatch):
+        """Regresión: pacman -Q con error NO significa 'no hay paquetes instalados'."""
+        def fake_run(cmd, **kwargs):
+            raise subprocess.CalledProcessError(255, cmd, stderr="error: could not open database")
 
-        with pytest.raises(pacman.PackageIdentityUntrustedError, match="Identidad"):
+        monkeypatch.setattr(pacman.subprocess, "run", fake_run)
+        with pytest.raises(RuntimeError, match="could not open database"):
             pacman.uninstall_packages(["firefox"])
+
+    def test_no_signature_gate_when_cache_has_unsigned_packages(self):
+        """Regresión: la caché de CachyOS/AUR no trae .sig; no debe bloquear nada."""
+        assert not hasattr(pacman, "_verify_package_signatures")
+        assert not hasattr(pacman, "PackageIdentityUntrustedError")
 
     def test_builds_command_with_noconfirm(self, monkeypatch):
         calls = []
@@ -90,8 +93,6 @@ class TestUninstallPackages:
             return FakeResult(stdout="ok")
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
-        # La verificación de firmas usa el FS real: aislarla.
-        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
 
         pacman.uninstall_packages(["firefox", "vim"])
         # Find the pkexec call
@@ -111,8 +112,6 @@ class TestUninstallPackages:
             return FakeResult()
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
-        # La verificación de firmas usa el FS real: aislarla.
-        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         pacman.uninstall_packages(["x"], noconfirm=False)
         pkexec_calls = [c for c in calls if c[0] == "pkexec"]
         assert len(pkexec_calls) == 1
@@ -127,9 +126,6 @@ class TestUninstallPackages:
             raise subprocess.CalledProcessError(126, cmd)
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
-        # La verificación de firmas usa el FS real: aislarla (igual que el
-        # test del path untrusted hace lo contrario en la línea 73).
-        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         with pytest.raises(DBusError) as exc:
             pacman.uninstall_packages(["sudo"])
         assert exc.value.code == "CANCELLED"
@@ -141,7 +137,5 @@ class TestUninstallPackages:
             return FakeResult()
 
         monkeypatch.setattr(pacman.subprocess, "run", fake_run)
-        # La verificación de firmas usa el FS real: aislarla.
-        monkeypatch.setattr(pacman, "_verify_package_signatures", lambda: True)
         with pytest.raises(ValueError, match="no instalados"):
             pacman.uninstall_packages(["not-installed"])
