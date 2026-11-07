@@ -6,6 +6,9 @@
   <vendor_url>https://github.com/blip-eraser/blip-eraser</vendor_url>
   <icon_name>blip-eraser</icon_name>
 
+  <!-- allow_active=auth_admin: sin el .rules (p. ej. instalación parcial) pkexec
+       sigue pidiendo contraseña de admin en vez de denegar siempre. El .rules
+       restringe además a miembros de wheel. -->
   <action id="com.dinopath.blip-eraser.pacman-remove">
     <description>Desinstalar paquetes con pacman -Rns</description>
     <description xml:lang="en">Uninstall packages with pacman -Rns</description>
@@ -14,7 +17,7 @@
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
-      <allow_active>no</allow_active>
+      <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/pacman</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">-Rns</annotate>
@@ -29,7 +32,7 @@
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
-      <allow_active>no</allow_active>
+      <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rm</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">-rf</annotate>

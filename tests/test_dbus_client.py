@@ -231,24 +231,27 @@ class TestPrivilegedAPI:
         assert result.error.code == "VALIDATION_FAILED"
         assert "Ruta no permitida" in result.error.message
 
-    def test_daemon_validation_failed_has_no_pkexec_fallback(self, monkeypatch):
-        # S3: el rechazo de seguridad del root no se reintenta por pkexec.
-        from blip_eraser.utils.dbus_client import ValidationFailed
-
+    def test_remove_packages_never_uses_daemon(self, monkeypatch):
+        """El daemon no desinstala paquetes: siempre `pkexec pacman -Rns`."""
         api = PrivilegedAPI(prefer_daemon=False)
         daemon = MagicMock()
         daemon.is_available.return_value = True
-        daemon.remove_packages.side_effect = ValidationFailed("rechazado")
         monkeypatch.setattr(api, "_client", daemon)
         monkeypatch.setattr(api, "_check_daemon", lambda: True)
+        calls = []
 
-        def boom(cmd, **kwargs):
-            raise AssertionError("pkexec no debe ejecutarse tras ValidationFailed")
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return MagicMock(returncode=0, stdout="ok", stderr="")
 
-        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", boom)
+        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", fake_run)
         result = api.remove_packages(["foo"])
-        assert not result.success
-        assert result.error.code == "VALIDATION_FAILED"
+        assert result.success and not result.used_daemon
+        assert calls == [["pkexec", "pacman", "-Rns", "--noconfirm", "--", "foo"]]
+        assert not daemon.method_calls
+
+    def test_privileged_client_has_no_remove_packages(self):
+        assert not hasattr(PrivilegedClient, "remove_packages")
 
     def test_clean_system_paths_fallback_rejects_audit_paths(self):
         # S4: journal y bitácora también vetados en el fallback pkexec.
@@ -320,39 +323,6 @@ class TestDaemonFailureFallback:
         assert result.success
         assert not result.used_daemon
         assert "Eliminadas 1 ruta(s)" in result.output
-        reset_privileged_api()
-
-    def test_remove_packages_daemon_raises_unexpected_exception_falls_back_to_pkexec(
-        self, monkeypatch
-    ):
-        """Simula: is_available() reporta True pero la llamada real lanza excepción genérica.
-        
-        Debe caer a pkexec sin propagar la excepción ni crashear.
-        """
-        reset_privileged_api()
-        api = PrivilegedAPI(prefer_daemon=True)  # Forzar uso de daemon para test
-        
-        # Mock: is_available() devuelve True (daemon "disponible")
-        def mock_is_available(self):
-            return True
-        monkeypatch.setattr(PrivilegedClient, "is_available", mock_is_available)
-        
-        # Mock: remove_packages del cliente lanza RuntimeError (bug inesperado)
-        def mock_remove_packages(self, packages):
-            raise RuntimeError("Daemon internal error")
-        monkeypatch.setattr(PrivilegedClient, "remove_packages", mock_remove_packages)
-        
-        # Mock: pkexec pacman funciona
-        def fake_run(cmd, **kwargs):
-            return MagicMock(returncode=0, stdout="removed", stderr="")
-        monkeypatch.setattr("blip_eraser.utils.dbus_client.subprocess.run", fake_run)
-        
-        # La operación NO debe crashear, debe caer a pkexec
-        result = api.remove_packages(["foo", "bar"])
-        
-        assert result.success
-        assert not result.used_daemon
-        assert result.output == "removed"
         reset_privileged_api()
 
     def test_is_available_pings_daemon_with_timeout(self, monkeypatch):

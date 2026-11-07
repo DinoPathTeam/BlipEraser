@@ -141,16 +141,6 @@ class PrivilegedClient:
         )
         return result[0]  # bool
 
-    def remove_packages(self, packages: list[str]) -> str:
-        """Desinstala paquetes (síncrono)."""
-        proxy = self._get_proxy()
-        result = proxy.call_sync(
-            "RemovePackages",
-            GLib.Variant("(as)", (packages,)),
-            Gio.DBusCallFlags.NONE, -1, None
-        )
-        return result[0]  # string
-
     def clean_system_paths(self, paths: list[str]) -> str:
         """Limpia rutas de sistema (síncrono)."""
         proxy = self._get_proxy()
@@ -237,30 +227,16 @@ class PrivilegedAPI:
         return self._daemon_available
 
     def remove_packages(self, packages: list[str], noconfirm: bool = True) -> OperationResult:
-        """Desinstala paquetes."""
+        """Desinstala paquetes con `pkexec pacman -Rns` (autorización polkit).
+
+        El daemon NO desinstala paquetes: pacman ejecuta hooks (snapper,
+        initramfs…) y escribe en /usr, /etc y /var/lib/pacman, algo que no
+        encaja con el sandbox estricto del daemon. Cada llamada pide su
+        propia autenticación polkit.
+        """
         if not packages:
             return OperationResult(success=True, output="")
 
-        # Intentar daemon
-        if self._check_daemon():
-            try:
-                output = self._client.remove_packages(packages)
-                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=success via=daemon")
-                return OperationResult(success=True, output=output, used_daemon=True)
-            except ValidationFailed as e:
-                # S3: el rechazo de seguridad del root NO se reintenta por
-                # pkexec (subordinaría su decisión a la del cliente).
-                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_rejected error={e.code}")
-                return OperationResult(success=False, error=e)
-            except (DaemonUnavailable, ExecutionFailed, CommandNotFound) as e:
-                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_failed error={e.code}")
-            except Exception as e:
-                # Defensa en profundidad: captura CUALQUIER excepción inesperada del daemon
-                # (ej. NameError por import faltante, bugs futuros, etc.)
-                # Registra en bitácora forense y SIEMPRE cae al fallback pkexec
-                write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=daemon_crashed error={type(e).__name__}: {e}")
-
-        # Fallback pkexec
         try:
             output = _run_pkexec_pacman(packages, noconfirm=noconfirm)
             write_diagnostic(f"AUDIT action=uninstall_packages packages={packages} result=success via=pkexec")

@@ -88,9 +88,10 @@ utils/ ×24 PURE modules, no Qt (testable without display)
   i18n/theme/config/log/confirm/table_filters/system_stats...
       │                               │
       ▼                               ▼
-D-Bus system bus → root daemon   pkexec fallback
-RemovePackages/CleanSystem        pacman -Rns / rm -rf allowlist
-Paths/Ping (Type=dbus)            (1 auth prompt per batch)
+D-Bus system bus → root daemon   pkexec + polkit
+CleanSystemPaths/Ping             pacman -Rns (uninstall)
+(Type=dbus, sandboxed;            (1 auth prompt per action;
+ only cleans cache and logs)       rm -rf allowlist if no daemon)
 ```
 
 **Stack:** Python ≥3.11 (everything) · PyQt6 + QSS (GUI/themes) ·
@@ -244,7 +245,7 @@ BlipEraser checks its dependencies on **two levels**:
   package validation, mandatory confirmation, ≥5 GiB warning,
   forensic audit (`diagnostics.log`).
 - [x] **v0.5 — Phase 2 privileges + startup**: systemd D-Bus daemon
-  (`RemovePackages`/`CleanSystemPaths`/`Ping`) with pkexec fallback,
+  (`CleanSystemPaths`/`Ping`) with pkexec fallback; package uninstall goes through `pkexec pacman -Rns`,
   video splash, background scans with token, custom app icon.
 - [x] **v1.0 — CachyOS stabilization**: hard `sip.isdeleted` defense,
   `BackgroundScanMixin` on all 3 pages, forensic instrumentation.
@@ -387,9 +388,10 @@ utils/ ×24 módulos PUROS, sin Qt (testeables sin display)
   i18n/theme/config/log/confirm/table_filters/system_stats...
       │                               │
       ▼                               ▼
-D-Bus bus sistema → daemon root   fallback pkexec
-RemovePackages/CleanSystem        pacman -Rns / rm -rf allowlist
-Paths/Ping (Type=dbus)            (1 auth por lote)
+D-Bus bus sistema → daemon root   pkexec + polkit
+CleanSystemPaths/Ping             pacman -Rns (desinstalar)
+(Type=dbus, con sandbox;          (1 auth por acción;
+ solo limpia caché y logs)         rm -rf con allowlist si no hay daemon)
 ```
 
 **Stack:** Python ≥3.11 (todo) · PyQt6 + QSS (GUI/temas) ·
@@ -544,7 +546,7 @@ BlipEraser comprueba sus dependencias en **dos niveles**:
   validación de paquetes, confirmación obligatoria, aviso ≥5 GiB,
   auditoría forense (`diagnostics.log`).
 - [x] **v0.5 — Privilegios Fase 2 + arranque**: daemon D-Bus systemd
-  (`RemovePackages`/`CleanSystemPaths`/`Ping`) con fallback pkexec,
+  (`CleanSystemPaths`/`Ping`) con fallback pkexec; la desinstalación de paquetes va por `pkexec pacman -Rns`,
   splash con vídeo, escaneos en segundo plano con token, icono propio.
 - [x] **v1.0 — Estabilización CachyOS**: defensa dura `sip.isdeleted`,
   `BackgroundScanMixin` en las 3 páginas, instrumentación forense.
