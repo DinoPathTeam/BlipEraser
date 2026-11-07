@@ -67,6 +67,32 @@ def _check_rate_limit(sender: str) -> bool:
         _rate_limit_hits[sender] = hits + [now]
         return True
 
+# Concurrencia: cada llamada D-Bus se atiende en su propio hilo (daemon) para
+# que un prompt de polkit (hasta _POLKIT_TIMEOUT s) no congele Ping ni a otros
+# usuarios. Topes: un solo prompt/operación por UID y _MAX_WORKERS en total.
+_POLKIT_TIMEOUT = 180
+_MAX_WORKERS = 8
+_worker_slots = threading.BoundedSemaphore(_MAX_WORKERS)
+_inflight_uids: set[int] = set()
+_INFLIGHT_LOCK = threading.Lock()
+# El borrado/limpieza en sí se serializa: dos rm -rf simultáneos no aportan nada.
+_OPERATION_LOCK = threading.Lock()
+
+
+def _begin_inflight(uid: int) -> bool:
+    """True si el UID no tenía ya una operación destructiva en curso."""
+    with _INFLIGHT_LOCK:
+        if uid in _inflight_uids:
+            return False
+        _inflight_uids.add(uid)
+        return True
+
+
+def _end_inflight(uid: int) -> None:
+    with _INFLIGHT_LOCK:
+        _inflight_uids.discard(uid)
+
+
 # ─── Auditoría ──────────────────────────────────────────────────────────
 
 # Intentar usar systemd journal nativo para logging estructurado
@@ -582,7 +608,7 @@ class PrivilegedService:
             proc = subprocess.run(
                 ["/usr/bin/pkcheck", "--action-id", action_id,
                  "--system-bus-name", sender, "--allow-user-interaction"],
-                capture_output=True, text=True, timeout=180,
+                capture_output=True, text=True, timeout=_POLKIT_TIMEOUT,
             )
             if proc.returncode != 0:
                 _audit_log("auth_rejected", f"sender={sender} action={action_id} reason=polkit_denied")
@@ -614,7 +640,50 @@ class PrivilegedService:
         parameters: Any,
         invocation: Any,
     ) -> None:
-        """Manejador de llamadas D-Bus con verificación de sender."""
+        """Despacha la llamada a un hilo y vuelve al instante al bucle principal.
+
+        Antes todo (loginctl, pkcheck con hasta 180 s de prompt, rm) corría en el
+        bucle GLib: un solo usuario con un diálogo abierto dejaba al daemon sin
+        responder ni a Ping. GDBus permite responder desde cualquier hilo.
+        """
+        if not _worker_slots.acquire(blocking=False):
+            _audit_log("busy_rejected", f"sender={sender} method={method_name}")
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.LimitsExceeded",
+                "Servidor ocupado, inténtalo de nuevo en un momento",
+            )
+            return
+
+        def _run() -> None:
+            try:
+                self._handle_call(
+                    connection, sender, object_path, interface_name,
+                    method_name, parameters, invocation,
+                )
+            except Exception as exc:  # noqa: BLE001 - nunca dejar la llamada sin respuesta
+                _audit_log("operation_error", f"method={method_name} error={type(exc).__name__}: {exc}")
+                try:
+                    invocation.return_dbus_error(
+                        "org.freedesktop.DBus.Error.Failed", f"Error interno: {exc}"
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+            finally:
+                _worker_slots.release()
+
+        threading.Thread(target=_run, name=f"dbus-{method_name}", daemon=True).start()
+
+    def _handle_call(
+        self,
+        connection: Any,
+        sender: str,
+        object_path: str,
+        interface_name: str,
+        method_name: str,
+        parameters: Any,
+        invocation: Any,
+    ) -> None:
+        """Manejador de llamadas D-Bus con verificación de sender (en un hilo)."""
         # Verificar autenticación del sender
         uid = self._authorized_uid(connection, sender)
         if uid is None:
@@ -631,19 +700,34 @@ class PrivilegedService:
         try:
             if method_name == "CleanSystemPaths":
                 paths = parameters[0]
-                if not self._require_polkit(
-                    connection, sender, method_name, self.POLKIT_ACTION_CLEAN, invocation
-                ):
-                    return
-                if not _check_rate_limit(rate_key):
-                    _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
+                # Un solo prompt/operación por UID: sin esto, repetir la llamada
+                # apilaría diálogos de polkit y hilos.
+                if not _begin_inflight(uid):
+                    _audit_log("inflight_rejected", f"sender={sender} uid={uid} method={method_name}")
                     invocation.return_dbus_error(
                         "org.freedesktop.DBus.Error.LimitsExceeded",
-                        "Demasiadas operaciones seguidas, espera un minuto"
+                        "Ya hay una operación en curso, espera a que termine",
                     )
                     return
-                result = clean_system_paths(paths)
-                invocation.return_value(GLib.Variant("(s)", (result,)))
+                try:
+                    # La cuota va ANTES de polkit: cancelar o fallar el prompt
+                    # repetidamente también cuenta (evita el spam de diálogos).
+                    if not _check_rate_limit(rate_key):
+                        _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
+                        invocation.return_dbus_error(
+                            "org.freedesktop.DBus.Error.LimitsExceeded",
+                            "Demasiadas operaciones seguidas, espera un minuto"
+                        )
+                        return
+                    if not self._require_polkit(
+                        connection, sender, method_name, self.POLKIT_ACTION_CLEAN, invocation
+                    ):
+                        return
+                    with _OPERATION_LOCK:
+                        result = clean_system_paths(paths)
+                    invocation.return_value(GLib.Variant("(s)", (result,)))
+                finally:
+                    _end_inflight(uid)
             elif method_name == "Ping":
                 invocation.return_value(GLib.Variant("(b)", (True,)))
             else:
