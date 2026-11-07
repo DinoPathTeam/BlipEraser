@@ -2,8 +2,8 @@
 
 Decide cuándo avisar (versión nueva, mucho espacio recuperable), gestiona el
 autoarranque de sesión y construye los comandos para abrir la app principal.
-La limpieza destructiva NO vive aquí: la bandeja solo abre la app con
-`--cleanup` y allí se usa el mismo flujo de confirmación de siempre.
+La limpieza destructiva NO se decide aquí: el borrado usa el mismo flujo con
+confirmación y autorización de siempre (`run_destructive_action`).
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ from pathlib import Path
 JUNK_NOTIFY_BYTES = 5 * 1024**3
 JUNK_NOTIFY_INTERVAL = 24 * 60 * 60
 
-CLEANUP_FLAG = "--cleanup"
 AUTOSTART_FILENAME = "blip-eraser-tray.desktop"
 
 KIND_UPDATE = "update"
@@ -88,9 +87,9 @@ def decide_notices(
 # ---------------------------------------------------------------------------
 # Comandos y autoarranque
 # ---------------------------------------------------------------------------
-def app_command(extra_args: list[str] | None = None) -> list[str]:
+def app_command() -> list[str]:
     """Comando para abrir la app principal con el mismo intérprete."""
-    return [sys.executable, "-m", "blip_eraser", *(extra_args or [])]
+    return [sys.executable, "-m", "blip_eraser"]
 
 
 def tray_command() -> list[str]:
@@ -145,3 +144,32 @@ def set_autostart(enabled: bool, command: list[str] | None = None) -> bool:
 def shell_preview(command: list[str]) -> str:
     """Comando legible (para registros y mensajes de error)."""
     return shlex.join(command)
+
+
+# ---------------------------------------------------------------------------
+# Posición de la ventanita
+# ---------------------------------------------------------------------------
+POPUP_MARGIN = 8
+
+
+def popup_position(
+    anchor: tuple[int, int],
+    size: tuple[int, int],
+    screen: tuple[int, int, int, int],
+) -> tuple[int, int]:
+    """Esquina superior izquierda de la ventanita junto al icono de bandeja.
+
+    `anchor` es el centro del icono (o el cursor si el escritorio no da su
+    geometría), `size` el tamaño de la ventanita y `screen` el área disponible
+    `(x, y, ancho, alto)`. Se abre hacia arriba si el icono está en la mitad
+    inferior de la pantalla y hacia abajo si está en la superior, y se recorta
+    para que nunca quede fuera.
+    """
+    ax, ay = anchor
+    w, h = size
+    sx, sy, sw, sh = screen
+    x = ax - w // 2
+    y = ay - h - POPUP_MARGIN if ay > sy + sh // 2 else ay + POPUP_MARGIN
+    x = max(sx + POPUP_MARGIN, min(x, sx + sw - w - POPUP_MARGIN))
+    y = max(sy + POPUP_MARGIN, min(y, sy + sh - h - POPUP_MARGIN))
+    return x, y

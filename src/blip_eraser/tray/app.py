@@ -4,8 +4,10 @@ Consumo en reposo nulo: nada se calcula hasta que se abre el menú. Una única
 comprobación al iniciar (con la caché de 24 h de `check_for_updates`) decide si
 hay que avisar de una versión nueva o de mucho espacio recuperable.
 
-La bandeja nunca borra nada: "Limpieza rápida" abre la app principal con
-`--cleanup`, que reutiliza el flujo de confirmación de siempre.
+Clic izquierdo: ventanita con el tema de la app (estado, escanear, limpiar,
+abrir). Limpiar usa exactamente el mismo flujo que la app: lista lo que se va
+a borrar, pide confirmación y la autorización (contraseña) la pide el borrado
+con privilegios. Clic derecho: ajustes de la bandeja.
 """
 
 from __future__ import annotations
@@ -69,17 +71,45 @@ def startup_check() -> dict[str, Any]:
     }
 
 
+def apply_app_appearance() -> str:
+    """Tema y fuente elegidos en la app principal, aplicados a toda la bandeja.
+
+    Cubre también los diálogos de confirmación/progreso de la limpieza. Devuelve
+    la clave de tema aplicada.
+    """
+    from PyQt6.QtGui import QFont
+    from PyQt6.QtWidgets import QApplication
+
+    from blip_eraser.utils import theme as theme_mod
+
+    prefs = load_prefs()
+    key = prefs.get("theme")
+    if key not in theme_mod.THEMES:
+        key = "red"
+    app = QApplication.instance()
+    if app is not None:
+        app.setStyleSheet(theme_mod.build_qss(key))
+        family = theme_mod.font_family(prefs.get("font", "system"))
+        app.setFont(QFont(family) if family else QFont())
+    return key
+
+
 def build_controller(app: Any = None) -> Any:
     """Construye el controlador de la bandeja (importa PyQt6 de forma perezosa)."""
     from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal
-    from PyQt6.QtGui import QAction, QDesktopServices
-    from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
+    from PyQt6.QtGui import QAction, QCursor, QDesktopServices, QGuiApplication
+    from PyQt6.QtWidgets import QMenu, QMessageBox, QSystemTrayIcon
 
+    from blip_eraser.tray.popup import TrayPopup
+    from blip_eraser.utils.confirm import build_confirmation_plan, cleanup_confirm_items
+    from blip_eraser.utils import scan as scan_mod
+    from blip_eraser.widgets.confirm_dialog import run_destructive_action
     from blip_eraser.widgets.logo import app_icon
 
     class _Bridge(QObject):
         stats_ready = pyqtSignal(object)
         startup_ready = pyqtSignal(object)
+        items_ready = pyqtSignal(object)
 
     class TrayController(QObject):
         def __init__(self) -> None:
@@ -87,22 +117,22 @@ def build_controller(app: Any = None) -> Any:
             self._bridge = _Bridge()
             self._bridge.stats_ready.connect(self._on_stats)
             self._bridge.startup_ready.connect(self._on_startup)
+            self._bridge.items_ready.connect(self._on_cleanup_items)
             self._gathering = False
             self._last_open = 0.0
             self._notice_kind: str | None = None
 
             self.tray = QSystemTrayIcon(app_icon())
             self.tray.setToolTip(f"BlipEraser {__version__}")
-            self.menu = QMenu()
 
-            self.title_action = QAction(f"BlipEraser {__version__}", self.menu)
-            self.title_action.setEnabled(False)
-            self.status_action = QAction(self.menu)
-            self.status_action.setEnabled(False)
-            self.recoverable_action = QAction(self.menu)
-            self.recoverable_action.setEnabled(False)
+            self.popup = TrayPopup()
+            self.popup.scan_requested.connect(self.refresh_stats)
+            self.popup.clean_requested.connect(self.clean)
+            self.popup.open_requested.connect(self._open_from_popup)
+
+            # Clic derecho: ajustes de la bandeja. El clic izquierdo abre la ventanita.
+            self.menu = QMenu()
             self.open_action = QAction(tr("tray_open"), self.menu)
-            self.cleanup_action = QAction(tr("tray_cleanup"), self.menu)
             self.autostart_action = QAction(tr("tray_autostart"), self.menu)
             self.autostart_action.setCheckable(True)
             self.autostart_action.setChecked(logic.autostart_enabled())
@@ -112,12 +142,7 @@ def build_controller(app: Any = None) -> Any:
                 load_prefs().get("tray_notifications", True) is not False
             )
             self.quit_action = QAction(tr("tray_quit"), self.menu)
-
-            for item in (self.title_action, self.status_action, self.recoverable_action):
-                self.menu.addAction(item)
-            self.menu.addSeparator()
             self.menu.addAction(self.open_action)
-            self.menu.addAction(self.cleanup_action)
             self.menu.addSeparator()
             self.menu.addAction(self.autostart_action)
             self.menu.addAction(self.notify_action)
@@ -125,10 +150,7 @@ def build_controller(app: Any = None) -> Any:
             self.menu.addAction(self.quit_action)
             self.tray.setContextMenu(self.menu)
 
-            self._set_placeholders()
-            self.menu.aboutToShow.connect(self.refresh_stats)
             self.open_action.triggered.connect(lambda: self.open_app())
-            self.cleanup_action.triggered.connect(lambda: self.open_app([logic.CLEANUP_FLAG]))
             self.autostart_action.toggled.connect(self._toggle_autostart)
             self.notify_action.toggled.connect(
                 lambda on: save_prefs({"tray_notifications": bool(on)})
@@ -137,20 +159,40 @@ def build_controller(app: Any = None) -> Any:
             self.tray.activated.connect(self._on_activated)
             self.tray.messageClicked.connect(self._on_message_clicked)
 
-        # -- menú ---------------------------------------------------------
-        def _set_placeholders(self) -> None:
-            calc = tr("tray_calculating")
-            self.status_action.setText(calc)
-            self.recoverable_action.setText(
-                tr("tray_recoverable").format(size=calc)
-            )
+        # -- ventanita ------------------------------------------------------
+        def toggle_popup(self) -> None:
+            if self.popup.isVisible():
+                self.popup.hide()
+            elif not self.popup.recently_closed():
+                self.show_popup()
 
+        def show_popup(self) -> None:
+            geometry = self.tray.geometry()
+            anchor = geometry.center() if not geometry.isEmpty() else QCursor.pos()
+            screen = QGuiApplication.screenAt(anchor) or QGuiApplication.primaryScreen()
+            area = screen.availableGeometry()
+            apply_app_appearance()
+            self.popup.show_at(
+                anchor, (area.x(), area.y(), area.width(), area.height())
+            )
+            self.refresh_stats()
+
+        def _open_from_popup(self) -> None:
+            self.popup.hide()
+            self.open_app()
+
+        def _on_activated(self, reason: Any) -> None:
+            if reason == QSystemTrayIcon.ActivationReason.Trigger:
+                self.toggle_popup()
+
+        # -- datos --------------------------------------------------------
         def refresh_stats(self) -> None:
-            """Al abrir el menú: calcula en un hilo (sin bloquear el menú)."""
+            """Escanea CPU/RAM/disco y espacio recuperable en un hilo."""
             if self._gathering:
                 return
             self._gathering = True
-            self._set_placeholders()
+            self.popup.set_busy(True)
+            self.popup.set_calculating()
             bridge = self._bridge
 
             def worker() -> None:
@@ -168,20 +210,48 @@ def build_controller(app: Any = None) -> Any:
 
         def _on_stats(self, data: dict) -> None:
             self._gathering = False
-            na = tr("status_na")
-            cpu, ram, disk = logic.status_values(
-                data.get("cpu"), data.get("ram"), data.get("disk"), na
+            self.popup.set_stats(
+                data.get("cpu"), data.get("ram"), data.get("disk"), data.get("recoverable")
             )
-            self.status_action.setText(
-                tr("tray_status").format(cpu=cpu, ram=ram, disk=disk)
+            self.popup.set_busy(False)
+
+        # -- limpieza (mismo flujo y misma autorización que la app) -----------
+        def clean(self) -> None:
+            """Lista lo recuperable y pide confirmación; borrar pide contraseña."""
+            self.popup.hide()
+            bridge = self._bridge
+
+            def worker() -> None:
+                try:
+                    entries = scan_mod.scan_cleanup_items()
+                except Exception as exc:  # noqa: BLE001
+                    write_diagnostic(f"tray scan_cleanup_items failed: {exc}")
+                    entries = []
+                try:
+                    bridge.items_ready.emit(entries)
+                except RuntimeError:
+                    pass
+
+            threading.Thread(target=worker, daemon=True, name="tray-clean").start()
+
+        def _on_cleanup_items(self, entries: list) -> None:
+            apply_app_appearance()
+            if not entries:
+                QMessageBox.information(None, tr("done_title"), tr("tray_nothing_to_clean"))
+                return
+            items = cleanup_confirm_items(
+                entries,
+                lambda key: tr(scan_mod.CLEANUP_CATEGORY_LABEL_KEYS.get(key, "col_name")),
             )
-            rec = data.get("recoverable")
-            self.recoverable_action.setText(
-                tr("tray_recoverable").format(size=human_size(rec) if rec is not None else na)
+            run_destructive_action(
+                None,
+                build_confirmation_plan(items),
+                tr("cleanup_confirm_title"),
+                on_finished=lambda _ok: self.refresh_stats(),
             )
 
-        # -- abrir la app -------------------------------------------------
-        def open_app(self, extra_args: list[str] | None = None) -> bool:
+        # -- abrir la app -----------------------------------------------------
+        def open_app(self) -> bool:
             """Abre la ventana principal. Ignora clics repetidos en pocos segundos."""
             now = time.monotonic()
             if now - self._last_open < OPEN_DEBOUNCE_SECONDS:
@@ -189,15 +259,11 @@ def build_controller(app: Any = None) -> Any:
             self._last_open = now
             from PyQt6.QtCore import QProcess
 
-            cmd = logic.app_command(extra_args)
+            cmd = logic.app_command()
             ok = QProcess.startDetached(cmd[0], cmd[1:])
             if not ok:
                 write_diagnostic(f"tray: no se pudo lanzar {logic.shell_preview(cmd)}")
             return bool(ok)
-
-        def _on_activated(self, reason: Any) -> None:
-            if reason == QSystemTrayIcon.ActivationReason.Trigger:
-                self.open_app()
 
         def _toggle_autostart(self, enabled: bool) -> None:
             if not logic.set_autostart(enabled):
@@ -206,7 +272,7 @@ def build_controller(app: Any = None) -> Any:
                 self.autostart_action.setChecked(logic.autostart_enabled())
                 self.autostart_action.blockSignals(False)
 
-        # -- avisos -------------------------------------------------------
+        # -- avisos -----------------------------------------------------------
         def schedule_startup_check(self, delay_ms: int = STARTUP_CHECK_DELAY_MS) -> None:
             QTimer.singleShot(delay_ms, self._start_startup_check)
 
@@ -251,10 +317,11 @@ def build_controller(app: Any = None) -> Any:
             if self._notice_kind == logic.KIND_UPDATE:
                 QDesktopServices.openUrl(QUrl(RELEASES_URL))
             elif self._notice_kind == logic.KIND_JUNK:
-                self.open_app([logic.CLEANUP_FLAG])
+                self.show_popup()
             self._notice_kind = None
 
         def _quit(self) -> None:
+            self.popup.hide()
             self.tray.hide()
             from PyQt6.QtWidgets import QApplication
 
@@ -276,6 +343,7 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     set_language(load_saved_language() or detect_system_language())
+    apply_app_appearance()
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         print(tr("tray_unavailable"), file=sys.stderr)

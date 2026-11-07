@@ -106,5 +106,27 @@ class TestAutostart:
 
 def test_commands_use_current_interpreter():
     assert logic.app_command() == [sys.executable, "-m", "blip_eraser"]
-    assert logic.app_command([logic.CLEANUP_FLAG])[-1] == "--cleanup"
     assert logic.tray_command() == [sys.executable, "-m", "blip_eraser.tray"]
+
+
+class TestPopupPosition:
+    SCREEN = (0, 0, 1920, 1080)
+    SIZE = (300, 260)
+
+    def test_opens_upwards_when_icon_is_in_bottom_half(self):
+        x, y = logic.popup_position((1800, 1060), self.SIZE, self.SCREEN)
+        assert y == 1060 - 260 - logic.POPUP_MARGIN
+        assert x == 1920 - 300 - logic.POPUP_MARGIN  # recortado al borde derecho
+
+    def test_opens_downwards_when_icon_is_in_top_half(self):
+        _, y = logic.popup_position((900, 20), self.SIZE, self.SCREEN)
+        assert y == 20 + logic.POPUP_MARGIN
+
+    def test_always_stays_inside_the_screen(self):
+        for anchor in ((0, 0), (1919, 1079), (-50, 500), (5000, 5000)):
+            x, y = logic.popup_position(anchor, self.SIZE, self.SCREEN)
+            assert 0 <= x <= 1920 - 300 and 0 <= y <= 1080 - 260
+
+    def test_respects_screen_offset(self):
+        x, y = logic.popup_position((2000, 100), self.SIZE, (1920, 0, 1920, 1080))
+        assert x >= 1920 and y >= 0

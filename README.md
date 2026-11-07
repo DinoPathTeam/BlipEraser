@@ -121,7 +121,7 @@ The script is the reference; prefer it over copying these lines by hand.
 
 ### Tray icon (optional)
 
-`blip-eraser-tray` runs a separate, lightweight tray icon (it does not open the main window). Nothing is computed while it idles: opening its menu shows CPU/RAM/disk and the recoverable space, calculated on demand. "Quick cleanup…" opens BlipEraser straight into the usual cleanup confirmation; the tray itself never deletes anything. Once at start it uses the same 24-hour update cache to notify about a new version, and warns (at most once a day) when 5 GiB or more can be recovered. The menu has toggles to start with your session and to silence notifications (`"tray_notifications": false` in `prefs.json`). Native install only: the Flatpak does not ship it.
+`blip-eraser-tray` runs a separate, lightweight tray icon (it does not open the main window). Left-click opens a small window themed like the main app, with CPU/RAM/disk, the recoverable space and three buttons: **Scan**, **Clean** and **Open BlipEraser**. Nothing is computed while it idles. **Clean** uses the same flow as the app: it lists what will be removed, asks for confirmation and the privileged deletion asks for your password. Right-click gives the tray settings (start with your session, notifications, quit). Once at start it uses the 24-hour update cache to notify about a new version, and warns (at most once a day) when 5 GiB or more can be recovered (`"tray_notifications": false` in `prefs.json` silences it). Native install only: the Flatpak does not ship it.
 
 ### Flatpak
 

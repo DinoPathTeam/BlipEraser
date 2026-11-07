@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
 from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.apps import InstalledApp, health_score, kind_label_key, list_installed_apps
 from blip_eraser.utils.config import load_prefs
-from blip_eraser.utils.confirm import ConfirmItem, build_confirmation_plan
+from blip_eraser.utils.confirm import build_confirmation_plan, cleanup_confirm_items
 from blip_eraser.utils.file_utils import human_size
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
@@ -337,17 +337,10 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             QMessageBox.information(self, tr("done_title"), tr("cleanup_list_empty"))
             return
 
-        items = [
-            ConfirmItem(
-                label=str(path),
-                category_label=tr(
-                    CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")
-                ),
-                size_bytes=size,
-                paths=[path],
-            )
-            for cat_key, path, size in entries
-        ]
+        items = cleanup_confirm_items(
+            entries,
+            lambda cat_key: tr(CLEANUP_CATEGORY_LABEL_KEYS.get(cat_key, "col_name")),
+        )
         # Mismo flujo compartido que la sección "Limpieza recomendada".
         run_destructive_action(
             self,

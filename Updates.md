@@ -16,17 +16,27 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 - **Qué es**: proceso aparte (`blip-eraser-tray` o `python -m blip_eraser.tray`)
   con un icono de bandeja; no abre la ventana principal. Instancia única
   (`QLockFile`); sale con un mensaje si el escritorio no tiene bandeja.
-- **Consumo en reposo nulo**: al abrir el menú, un hilo calcula CPU/RAM/disco
-  (`system_stats`) y el espacio recuperable (`scan_cleanup`); el menú muestra
-  "Calculando…" hasta que llegan.
+  Aplica el tema/fuente de la app también a los diálogos de confirmación.
+- **Clic izquierdo = ventanita** (`tray/popup.py`) con el tema y la fuente de la
+  app principal (relee `prefs.json` cada vez que se abre): barras de CPU/RAM/
+  disco, espacio recuperable y tres acciones: **Escanear**, **Limpiar** y
+  **Abrir BlipEraser**. Es una ventana `Popup` (se cierra al pulsar fuera); se
+  coloca junto al icono (`logic.popup_position`, siempre dentro de la
+  pantalla) y un clic que acaba de cerrarla no la reabre.
+- **Clic derecho = ajustes**: abrir, iniciar con la sesión, avisos y salir.
+- **Consumo en reposo nulo**: CPU/RAM/disco y `scan_cleanup` se calculan en un
+  hilo solo al abrir la ventanita o pulsar Escanear.
+- **Limpiar usa el mismo flujo que la app** (`run_destructive_action`): lista lo
+  que se va a borrar (`cleanup_confirm_items`, compartido con la Vista
+  general), pide confirmación y el borrado con privilegios pide la
+  contraseña de polkit. Desde la bandeja no hay ningún camino que borre sin
+  confirmar. Si el listado falla o está vacío, no se borra nada.
 - **Avisos** (`tray/logic.py`, pura y testeada): UNA comprobación 10 s después
   de iniciar, con la caché de 24 h de `check_for_updates`. Versión nueva: una
   vez por versión (`tray_notified_version`). Espacio recuperable ≥ 5 GiB: como
   mucho cada 24 h (`tray_junk_notified_at`); una marca corrupta o futura no
-  silencia para siempre. `tray_notifications: false` lo apaga todo.
-- **La bandeja no borra nada**: "Limpieza rápida…" y el aviso de basura abren la
-  app con `--cleanup`, que dispara el flujo de limpieza de la Vista general con
-  su confirmación habitual (`main.py`). Clics repetidos en 8 s se ignoran.
+  silencia para siempre. `tray_notifications: false` lo apaga todo. Pulsar el
+  aviso de versión abre la página de releases; el de espacio abre la ventanita.
 - **Autoarranque opt-in** desde el propio menú: crea/borra
   `~/.config/autostart/blip-eraser-tray.desktop` (respeta `XDG_CONFIG_HOME`).
 - **Empaquetado**: script `blip-eraser-tray` en `pyproject.toml`,
