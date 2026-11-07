@@ -20,6 +20,7 @@ Security:
 
 from __future__ import annotations
 
+import errno
 import os
 import importlib
 import signal
@@ -198,6 +199,53 @@ def _get_euid() -> int:
 
 # ─── Operación atómica rm -rf usando fd ────────────────────────────────
 
+def _open_dir_nofollow(path: Path) -> int:
+    """Abre un directorio sin seguir symlinks en los tramos bajo la allowlist.
+
+    `O_NOFOLLOW` solo protege el último componente. Aquí el prefijo de la
+    allowlist (`/var/log`, `/var/cache/pacman/pkg`) se abre de una vez y cada
+    componente restante con `O_NOFOLLOW | O_DIRECTORY` relativo al descriptor
+    del anterior: un symlink intermedio (cambiado entre la validación y la
+    apertura) falla con ELOOP/ENOTDIR. Equivale a `openat2(RESOLVE_NO_SYMLINKS)`
+    pero en Python puro: sin ctypes ni syscalls nuevas (compatible con
+    MemoryDenyWriteExecute y con kernels < 5.6).
+
+    Los tramos por encima del prefijo (`/`, `/var`, ...) son de root y no se
+    recorren: el perfil de AppArmor solo permite abrir los propios prefijos, y
+    los directorios que pueden pertenecer a cuentas de servicio están por debajo.
+
+    Solo acepta rutas absolutas canónicas (sin `.`, `..` ni vacíos) dentro de un
+    prefijo. Devuelve un fd que el llamador debe cerrar; lanza OSError si falla.
+    """
+    raw = str(path)
+    parts = raw.split("/")
+    if not raw.startswith("/") or any(c in ("", ".", "..") for c in parts[1:]):
+        raise OSError(errno.EINVAL, f"Ruta no canónica: {raw!r}")
+    root = next(
+        (
+            prefix
+            for prefix in sorted(ALLOWED_SYSTEM_PREFIXES, key=len, reverse=True)
+            if raw == prefix or raw.startswith(f"{prefix}/")
+        ),
+        None,
+    )
+    if root is None:
+        raise OSError(errno.EACCES, f"Ruta fuera de la allowlist: {raw!r}")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open(root, flags)
+    try:
+        for comp in raw[len(root):].split("/"):
+            if not comp:
+                continue
+            next_fd = os.open(comp, flags, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
     """
     Borra un path de forma atómica usando file descriptors para evitar TOCTOU.
@@ -210,10 +258,10 @@ def _rm_rf_atomic(path: Path) -> tuple[bool, str]:
     if not _validate_path_str(str(parent)):
         return False, f"Parent path not in allowlist: {parent}"
 
-    # Abrir fd del padre con O_RDONLY | O_DIRECTORY | O_NOFOLLOW
+    # Abrir fd del padre sin seguir symlinks en ningún tramo
     # (O_PATH no sirve: scandir necesita un fd real).
     try:
-        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        parent_fd = _open_dir_nofollow(parent)
     except OSError as e:
         return False, f"Cannot open parent directory: {e}"
 
