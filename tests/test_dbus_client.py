@@ -343,3 +343,21 @@ class TestDaemonFailureFallback:
         reset_privileged_api()
 
 
+
+
+class TestCleanCallTimeout:
+    def test_clean_timeout_exceeds_polkit_prompt(self, monkeypatch):
+        """Con -1 GDBus corta a 25 s y el daemon borraba tras el error mostrado."""
+        from blip_eraser.utils import dbus_client
+
+        client = PrivilegedClient()
+        proxy = MagicMock()
+        proxy.call_sync.return_value = ("ok",)
+        monkeypatch.setattr(PrivilegedClient, "_get_proxy", lambda self: proxy)
+        # Sin PyGObject (CI, WSL) GLib/Gio son None: se simulan.
+        monkeypatch.setattr(dbus_client, "GLib", MagicMock(), raising=False)
+        monkeypatch.setattr(dbus_client, "Gio", MagicMock(), raising=False)
+        client.clean_system_paths(["/var/log/x"])
+        timeout_ms = proxy.call_sync.call_args[0][3]
+        assert timeout_ms == dbus_client.CLEAN_CALL_TIMEOUT_MS
+        assert timeout_ms > 180_000

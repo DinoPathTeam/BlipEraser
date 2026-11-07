@@ -22,6 +22,11 @@ from blip_eraser.utils.validation import (
     validate_path,
 )
 
+# Margen sobre el prompt de polkit del daemon (_POLKIT_TIMEOUT = 180 s). Con -1
+# GDBus corta a los 25 s: el cliente mostraba error y, si el usuario escribía
+# la contraseña después, el daemon borraba igualmente.
+CLEAN_CALL_TIMEOUT_MS = 200_000
+
 # Import GLib and Gio lazily to avoid hard dependency at import time
 try:
     import gi
@@ -147,7 +152,7 @@ class PrivilegedClient:
         result = proxy.call_sync(
             "CleanSystemPaths",
             GLib.Variant("(as)", (paths,)),
-            Gio.DBusCallFlags.NONE, -1, None
+            Gio.DBusCallFlags.NONE, CLEAN_CALL_TIMEOUT_MS, None
         )
         return result[0]
 
