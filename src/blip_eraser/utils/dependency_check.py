@@ -142,12 +142,9 @@ DAEMON_DEPENDENCIES: tuple[DaemonDependency, ...] = (
         install_cmd="pkexec pacman -S --noconfirm python-gobject",
         check_active_cmd="python3 -c 'import gi; gi.require_version(\"GLib\", \"2.0\"); from gi.repository import GLib'",
     ),
-    DaemonDependency(
-        name="GStreamer libav (gst-libav)",
-        check_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
-        install_cmd="pkexec pacman -S --noconfirm gst-libav",
-        check_active_cmd="gst-inspect-1.0 avdec_h264 2>/dev/null | head -1",
-    ),
+    # gst-libav NO es dependencia del daemon: solo sirve al vídeo del splash
+    # (optdepends del PKGBUILD). Si falta, el splash lo registra con su hint
+    # (`SPLASH_CODEC_HINT`) y cae al logo; no merece un modal de instalación.
     # NOTA: AppArmor (Fase 3) es OPCIONAL y no bloquea el arranque: el
     # perfil vive en packaging/apparmor/ para quien lo quiera activar.
     # Estuvo aquí y mostraba un modal en cada inicio aunque el daemon
@@ -184,8 +181,10 @@ def _check_daemon_deps_cached() -> list[DaemonDependency]:
                 missing.append(dep)
                 continue
 
-            # Verificar si está activo (para los que tienen check_active_cmd)
-            if dep.check_active_cmd:
+            # Verificar si está activo; si el comando es el mismo que el de
+            # "instalado" ya se ejecutó arriba: no se repite (antes se
+            # lanzaba dos veces, con 5 s de timeout cada una).
+            if dep.check_active_cmd and dep.check_active_cmd != dep.check_cmd:
                 active_result = subprocess.run(
                     host_shell(dep.check_active_cmd), shell=use_shell, capture_output=True, timeout=5
                 )

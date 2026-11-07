@@ -81,19 +81,34 @@ class TestSplashScreen:
 
 
 class TestStartupWorker:
-    def test_worker_is_interruptible_while_running(self, app):
+    def test_worker_is_interruptible_while_running(self, app, monkeypatch):
+        import threading
         import time
+
+        from blip_eraser.widgets import splash_screen as ss
+
+        # El worker hace comprobaciones reales (subprocesos): se simula una
+        # lenta y bloqueada para que "sigue corriendo" no dependa de la
+        # velocidad de la máquina.
+        gate = threading.Event()
+        monkeypatch.setattr(ss, "localized_missing_lines", lambda names: [])
+        monkeypatch.setattr(
+            ss, "check_daemon_dependencies", lambda: (gate.wait(5), [])[1]
+        )
 
         # requestInterruption() solo marca el flag mientras el thread corre;
         # isInterruptionRequested() devuelve False una vez finalizado.
         worker = StartupWorker()
         worker.start()
-        for _ in range(200):
-            if worker.isRunning():
-                break
-            app.processEvents()
-            time.sleep(0.01)
-        assert worker.isRunning()
-        worker.requestInterruption()
-        assert worker.isInterruptionRequested() is True
+        try:
+            for _ in range(200):
+                if worker.isRunning():
+                    break
+                app.processEvents()
+                time.sleep(0.01)
+            assert worker.isRunning()
+            worker.requestInterruption()
+            assert worker.isInterruptionRequested() is True
+        finally:
+            gate.set()
         assert worker.wait(5000) is True

@@ -9,13 +9,14 @@ Flujo:
      sistema. El resultado se guarda con set_language() ANTES de construir
      cualquier widget, para que todo se genere ya en el idioma correcto.
   3. Splash (widgets.splash_screen): logo + mensajes de progreso que
-     StartupWorker (QThread) va emitiendo mientras prepara el arranque
-     (actualizaciones, permisos, dependencias y un escaneo de referencia).
+     StartupWorker (QThread) emite mientras hace comprobaciones REALES:
+     binarios requeridos (pacman, pkexec) y dependencias del daemon.
+     Nada bloqueante corre antes del splash.
   4. Al terminar el worker se construye la ventana principal
-     (renderer.MainWindow), se muestra y se cierra el splash. El aviso de
-     binarios faltantes y el diálogo de permisos se muestran igual que
-     antes, con los resultados calculados durante el splash (sin duplicar
-     el trabajo).
+     (renderer.MainWindow), se muestra y se oculta el splash. Tras el primer
+     escaneo se muestran los avisos con los resultados ya calculados (binarios
+     faltantes y dependencias del daemon), sin repetir el trabajo. El diálogo
+     de permisos solo está en Configuración.
 """
 
 import sys
@@ -79,59 +80,58 @@ def _warn_missing_dependencies(window, lines: list[str]) -> None:
     )
 
 
-def _check_and_install_daemon_deps() -> tuple[bool, list[str]]:
-    """Verifica e instala dependencias del daemon privilegiado (Fase 2).
-    
+def _offer_daemon_deps(window, missing: list) -> tuple[bool, list[str]]:
+    """Ofrece instalar las dependencias del daemon que faltan (Fase 2).
+
+    `missing` lo calcula StartupWorker durante el splash: aquí no se ejecuta
+    ningún subproceso de comprobación, solo se pregunta e instala.
+
     Returns:
         (restart_required, installed_list)
     """
-    from PyQt6.QtWidgets import QMessageBox
-    from blip_eraser.utils.dependency_check import (
-        check_daemon_dependencies,
-    )
-    from blip_eraser.utils.phase2_installer import install_daemon_dependency
-    
-    missing = check_daemon_dependencies()
     if not missing:
         return False, []
-    
-    # Preguntar al usuario si quiere instalar
+
+    from PyQt6.QtWidgets import QMessageBox
+    from blip_eraser.utils.dependency_check import invalidate_daemon_deps_cache
+    from blip_eraser.utils.phase2_installer import install_daemon_dependency
+
     lines = []
     for dep in missing:
         status = "no instalada" if not dep.check_cmd else "no activa"
         lines.append(f"• {dep.name}: {status}")
-    
+
     msg = (
         f"El daemon privilegiado (Fase 2) requiere las siguientes dependencias:\n\n"
         f"{chr(10).join(lines)}\n\n"
         f"¿Desea instalarlas ahora? Se pedirá contraseña de administrador (pkexec)."
     )
-    
-    box = QMessageBox()
+
+    box = QMessageBox(window)
     box.setWindowTitle("Dependencias del daemon privilegiado")
     box.setText(msg)
     box.setIcon(QMessageBox.Icon.Question)
     yes_btn = box.addButton("Instalar", QMessageBox.ButtonRole.AcceptRole)
     box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
     box.exec()
-    
+
     if box.clickedButton() is not yes_btn:
         return False, []
-    
-    # Instalar dependencias faltantes
+
     installed = []
     restart_required = False
-    
+
     for dep in missing:
-        success, msg = install_daemon_dependency(dep)
+        success, detail = install_daemon_dependency(dep)
         if success:
             installed.append(dep.name)
             if dep.requires_restart:
                 restart_required = True
         else:
             # Mostrar error pero continuar
-            QMessageBox.warning(None, "Error", f"Error instalando {dep.name}: {msg}")
-    
+            QMessageBox.warning(window, "Error", f"Error instalando {dep.name}: {detail}")
+
+    invalidate_daemon_deps_cache()  # el estado cambió: la próxima lectura es real
     return restart_required, installed
 
 
@@ -150,16 +150,6 @@ def main() -> int:
 
     app.setWindowIcon(app_icon())
 
-    # Verificar e instalar dependencias del daemon privilegiado (Fase 2)
-    # ahora que QApplication existe (necesario para QMessageBox)
-    restart_required, installed = _check_and_install_daemon_deps()
-    if installed:
-        from PyQt6.QtWidgets import QMessageBox
-        msg = "Se instalaron las siguientes dependencias:\n" + "\n".join(f"• {d}" for d in installed)
-        if restart_required:
-            msg += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
-        QMessageBox.information(None, "Dependencias instaladas", msg)
-
     saved = load_saved_language()
     if should_ask_for_language(saved):
         set_language(resolve_initial_language(_prompt_initial_language()))
@@ -167,7 +157,6 @@ def main() -> int:
         set_language(saved)
 
     from blip_eraser.renderer import MainWindow
-    from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
     from blip_eraser.widgets.splash_screen import SplashScreen, StartupWorker
 
     splash = SplashScreen()
@@ -208,9 +197,20 @@ def main() -> int:
             if worker.missing_lines:
                 _warn_missing_dependencies(window, worker.missing_lines)
 
-            # Aviso único de "Permisos de BlipEraser": solo la primera ejecución.
-            if worker.show_permissions_notice:
-                show_permissions_dialog(window)
+            # Dependencias del daemon (calculadas durante el splash): se
+            # pregunta aquí, con la ventana ya visible, nunca antes del splash.
+            restart_required, installed = _offer_daemon_deps(
+                window, worker.missing_daemon_deps
+            )
+            if installed:
+                from PyQt6.QtWidgets import QMessageBox
+
+                text = "Se instalaron las siguientes dependencias:\n" + "\n".join(
+                    f"• {d}" for d in installed
+                )
+                if restart_required:
+                    text += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
+                QMessageBox.information(window, "Dependencias instaladas", text)
 
         # Disparar escaneo PRIMERO, encadenar refresh_appearance() al final
         window._overview.start_initial_scan(on_finished=_post_scan)
