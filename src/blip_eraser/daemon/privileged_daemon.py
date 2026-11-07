@@ -180,6 +180,7 @@ from blip_eraser.utils.validation import (
     validate_path_resolved as _validate_path_resolved,
     ALLOWED_SYSTEM_PREFIXES as _VALIDATION_ALLOWED_SYSTEM_PREFIXES,
     AUDIT_EXCLUDE_PREFIXES as _AUDIT_EXCLUDE_PREFIXES,
+    is_audit_protected as _is_audit_protected,
 )
 
 validate_path_str = _validate_path_str
@@ -330,10 +331,7 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
             continue
         # Check 3b (S4): ni journal ni bitácora propia, aunque vivan en /var/log
         resolved_str = str(path.resolve(strict=False)).replace("\\", "/")
-        if any(
-            resolved_str == excl or resolved_str.startswith(f"{excl}/")
-            for excl in _AUDIT_EXCLUDE_PREFIXES
-        ):
+        if _is_audit_protected(resolved_str):
             rejected.append(p)
             _audit_log("clean_rejected", f"path={p}#h{_hash_path(p)} reason=audit_path_protected")
             continue

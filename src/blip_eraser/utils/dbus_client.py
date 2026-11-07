@@ -17,7 +17,7 @@ from blip_eraser.utils.log import write_diagnostic
 from blip_eraser.utils.host_cmd import host_cmd
 from blip_eraser.utils.validation import (
     ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; fuente única en validation.py)
-    AUDIT_EXCLUDE_PREFIXES,
+    is_audit_protected,
     reject_symlinks,
     validate_path,
 )
@@ -290,10 +290,7 @@ class PrivilegedAPI:
                 resolved = str(Path(p).resolve(strict=False)).replace("\\", "/")
             except OSError:
                 resolved = ""
-            if any(
-                resolved == excl or resolved.startswith(f"{excl}/")
-                for excl in AUDIT_EXCLUDE_PREFIXES
-            ):
+            if is_audit_protected(resolved):
                 write_diagnostic(f"AUDIT action=clean_rejected path={p} reason=audit_path_protected via=pkexec")
                 return OperationResult(success=False, error=ValidationFailed(f"Ruta de auditoría protegida: {p}"))
             validated.append(p)
