@@ -22,7 +22,8 @@ class HealthGauge(QWidget):
         self._accent = "#E53935"
         self._text_color = "#ececef"
         self._track_color = QColor(64, 64, 68)
-        self.setMinimumSize(240, 210)
+        self._status_color = QColor(60, 220, 120)
+        self.setMinimumSize(200, 190)
 
     def set_value(self, value: int) -> None:
         self._value = max(0, min(100, int(value)))
@@ -35,6 +36,11 @@ class HealthGauge(QWidget):
     def set_track_color(self, color: str) -> None:
         """Color de la pista del anillo (derivado del tema activo)."""
         self._track_color = QColor(color)
+        self.update()
+
+    def set_status_color(self, color: str) -> None:
+        """Color del estado (GOOD/FAIR/POOR): más oscuro en temas claros."""
+        self._status_color = QColor(color)
         self.update()
 
     def set_text_color(self, color: str) -> None:
@@ -56,6 +62,7 @@ class HealthGauge(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         side = min(self.width(), self.height()) - 40
+        scale = max(side, 60) / 170  # 170 px = tamaño de referencia original
         rect = QRectF(
             (self.width() - side) / 2,
             (self.height() - side) / 2 - 10,
@@ -86,24 +93,24 @@ class HealthGauge(QWidget):
         # Porcentaje central (ligeramente por encima del centro)
         painter.setPen(QColor(self._text_color))
         percent_font = QFont(self.font())
-        percent_font.setPointSize(28)
+        percent_font.setPointSizeF(28 * scale)
         percent_font.setBold(True)
         painter.setFont(percent_font)
         painter.drawText(
-            rect.adjusted(0, -20, 0, 0),
+            rect.adjusted(0, -20 * scale, 0, 0),
             Qt.AlignmentFlag.AlignCenter,
             f"{self._value}%",
         )
 
         # Estado debajo del porcentaje (separación mínima de ~10px)
         if self._status:
-            painter.setPen(QColor(60, 220, 120))
+            painter.setPen(self._status_color)
             status_font = QFont(self.font())
-            status_font.setPointSize(12)
+            status_font.setPointSizeF(max(9.0, 12 * scale))
             status_font.setBold(True)
             painter.setFont(status_font)
             painter.drawText(
-                rect.adjusted(0, 38, 0, 0),
+                rect.adjusted(0, 38 * scale, 0, 0),
                 Qt.AlignmentFlag.AlignCenter,
                 self._status,
             )

@@ -188,6 +188,16 @@ QListWidget#Sidebar::item:hover:!selected {{ background-color: {p['hover']}; col
 QListWidget#Sidebar::item:selected:hover {{ background: {fill}; color: {on}; }}
 QLabel#AppTitle {{ color: {atext}; font-weight: bold; font-size: 16px; }}
 QLabel#PageTitle {{ color: {p['text']}; font-weight: bold; font-size: 15px; }}
+QScrollArea {{ background: transparent; border: none; }}
+QWidget#AppsContainer {{ background: transparent; }}
+QLabel#HeaderTitle {{ color: {p['text']}; font-weight: bold; font-size: 17px; }}
+QLabel#StatValue {{ color: {atext}; font-weight: bold; font-size: 22px; }}
+QLabel#CardValue {{ color: {atext}; font-weight: bold; font-size: 18px; }}
+QLabel#CardValueNeutral {{ color: {p['text']}; font-weight: bold; font-size: 20px; }}
+QLabel#CardRowName {{ color: {p['text']}; font-weight: 600; }}
+QWidget#AppRow {{ background: transparent; border-top: 1px solid {p['border']}; }}
+QProgressBar#InfoBar {{ background: {p['hover']}; border: none; border-radius: 4px; }}
+QProgressBar#InfoBar::chunk {{ background: {fill}; border-radius: 4px; }}
 QWidget#PanelCard {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 10px; }}
 QLabel#AppsBadge {{ background: {fill}; color: {on}; border-radius: 9px; padding: 2px 10px; font-weight: bold; }}
 QPushButton#DangerButton {{ background-color: transparent; color: {atext}; border: 1px solid {atext}; border-radius: 6px; padding: 4px 10px; }}

@@ -1,9 +1,11 @@
 """Renderer: ventana principal de BlipEraser.
 
 Composición del shell UI:
-- Encabezado (HeaderBar): logo de la app, barra de búsqueda global,
+- Barra lateral: logo de la app arriba, navegación (Sidebar) y actividad
+  reciente abajo.
+- Encabezado (HeaderBar): título de la página, barra de búsqueda global,
   botón de registro.
-- Barra lateral (Sidebar) + QStackedWidget con 5 secciones: Overview,
+- QStackedWidget con 5 secciones: Overview,
   Uninstaller, System Cleaner, Performance Tweaks y Tools (en ese orden).
 - Barra de estado (SystemStatusBar) con CPU/RAM/disco.
 - Panel de registro colapsable (LogPanel) suscrito a utils.log.
@@ -12,11 +14,12 @@ Composición del shell UI:
 Toda la lógica vive en utils/*; aquí solo hay composición y presentación.
 """
 
-from PyQt6.QtCore import QCoreApplication, QEvent
+from PyQt6.QtCore import QCoreApplication, QEvent, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -44,6 +47,7 @@ from blip_eraser.utils.i18n import (
 )
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SidebarActivity, SystemStatusBar
+from blip_eraser.widgets.card import Card
 from blip_eraser.widgets.logo import AppLogo, app_icon
 
 _SECTION_ORDER = [
@@ -87,6 +91,7 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._apply_appearance()
         self.retranslate()
+        self._update_page_title("overview")
         self._update_header_tools("overview")
 
         log_buffer.add(tr("log_started"))
@@ -107,11 +112,14 @@ class MainWindow(QMainWindow):
         header_layout.setContentsMargins(16, 10, 16, 10)
         header_layout.setSpacing(10)
 
-        self.app_logo = AppLogo()
-        header_layout.addWidget(self.app_logo)
+        self.page_title = QLabel()
+        self.page_title.setObjectName("HeaderTitle")
+        header_layout.addWidget(self.page_title)
+        header_layout.addStretch(1)
 
         self.search = SearchBar()
-        header_layout.addWidget(self.search, 1)
+        self.search.setMaximumWidth(320)
+        header_layout.addWidget(self.search)
 
         self.log_toggle_btn = QPushButton()
         self.log_toggle_btn.setCheckable(True)
@@ -126,8 +134,13 @@ class MainWindow(QMainWindow):
 
         sidebar_wrap = QWidget()
         sidebar_wrap.setObjectName("SidebarWrap")
+        sidebar_wrap.setFixedWidth(214)
         sidebar_layout = QVBoxLayout(sidebar_wrap)
-        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setContentsMargins(6, 14, 6, 10)
+        sidebar_layout.setSpacing(6)
+        self.app_logo = AppLogo(max_width=190)
+        sidebar_layout.addWidget(self.app_logo, 0, Qt.AlignmentFlag.AlignHCenter)
+        sidebar_layout.addSpacing(8)
         self.sidebar = Sidebar()
         sidebar_layout.addWidget(self.sidebar)
         self.sidebar_activity = SidebarActivity()
@@ -145,6 +158,11 @@ class MainWindow(QMainWindow):
         self.log_panel = LogPanel()
         self.log_panel.setVisible(False)
         outer.addWidget(self.log_panel)
+
+        # El título lo muestra el encabezado: se ocultan los de cada página.
+        for page in self._pages.values():
+            for label in page.findChildren(QLabel, "PageTitle"):
+                label.hide()
 
         self.setCentralWidget(root)
 
@@ -200,8 +218,13 @@ class MainWindow(QMainWindow):
         if 0 <= row < len(_SECTION_ORDER):
             section = _SECTION_ORDER[row]
             self.stack.setCurrentWidget(self._pages[section])
+            self._update_page_title(section)
             self._update_header_tools(section)
             self._apply_search_to(section)
+
+    def _update_page_title(self, section: str) -> None:
+        keys = {key: label for _row, (key, label, _icon) in enumerate(Sidebar.SECTIONS)}
+        self.page_title.setText(tr(keys.get(section, "nav_overview")))
 
     def _update_header_tools(self, section: str):
         """Búsqueda y acceso al Registro solo en Desinstalador y Limpiador."""
@@ -285,6 +308,15 @@ class MainWindow(QMainWindow):
         self.sidebar.set_icon_color(palette.get("icon", "#ffffff"))
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
+        for card in self.findChildren(Card):
+            card.set_theme(
+                palette["panel"],
+                palette["border"],
+                bool(theme["is_dark"]),
+                hover=palette["hover"],
+                accent_top=theme["fill_top"],
+                accent_bot=theme["fill_bot"],
+            )
         self._overview.set_accent(accent, theme)
         self._overview.set_text_color(palette.get("text", "#ececef"))
         self._tools.settings.set_accent(accent, theme["on_accent"])
@@ -358,6 +390,7 @@ class MainWindow(QMainWindow):
     def retranslate(self):
         self.setWindowTitle(_app_title())
         self.search.retranslate()
+        self._update_page_title(self._current_section() or "overview")
         self.log_toggle_btn.setText(tr("log_toggle"))
         self.language_menu.setTitle(tr("menu_label"))
         for code, action in self.language_actions.items():

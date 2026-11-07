@@ -39,9 +39,12 @@ def app_icon() -> QIcon:
 
 
 class AppLogo(QWidget):
-    def __init__(self, accent: str = "#E53935", parent=None):
+    def __init__(self, accent: str = "#E53935", parent=None, max_width: int = 0):
         super().__init__(parent)
         self._accent = QColor(accent)
+        # Ancho máximo del logotipo (0 = sin límite): en la barra lateral
+        # el asset se ajusta al ancho disponible conservando la proporción.
+        self._max_width = max_width
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -60,8 +63,11 @@ class AppLogo(QWidget):
         if ASSET_LOGO_PATH.exists():
             pixmap = QPixmap(str(ASSET_LOGO_PATH))
             if not pixmap.isNull():
-                scaled = pixmap.scaledToHeight(
-                    LOGO_HEIGHT, Qt.TransformationMode.SmoothTransformation
+                scaled = pixmap.scaled(
+                    self._max_width or 100_000,
+                    LOGO_HEIGHT,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
                 self._mark.setPixmap(scaled)
                 self._wordmark.hide()

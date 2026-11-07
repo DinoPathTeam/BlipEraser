@@ -383,14 +383,22 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_usage_title": "Uso",
         "help_usage_body": (
-            "1. Gestor de paquetes: lista los paquetes explícitos (pacman -Qe) "
-            "para desinstalarlos.\n"
-            "2. Limpiador del sistema: encuentra AppImages y carpetas sueltas "
-            "en tus rutas de escaneo.\n"
-            "3. Personalización: ajusta las rutas que se escanean.\n"
-            "4. Ajustes: tema de color, fuente e idioma.\n"
-            "La barra de búsqueda filtra los paquetes y los resultados de "
-            "limpieza."
+            "1. Vista general: estado del equipo, aplicaciones instaladas y "
+            "limpieza recomendada con un clic (Escanear ahora / Limpiar "
+            "ahora).\n"
+            "2. Desinstalador: lista paquetes de pacman, dependencias y "
+            "carpetas sueltas; filtra por tipo, peso y fecha y desinstala "
+            "varios a la vez.\n"
+            "3. Limpiador del sistema: elimina basura, caché de pacman y "
+            "registros, o revisa a mano AppImages y carpetas sueltas.\n"
+            "4. Ajustes de rendimiento: optimizaciones seguras y reversibles "
+            "(fstrim, zram, zswap, espejos de pacman).\n"
+            "5. Configuración: rutas de escaneo, tema de color, fuente, "
+            "posición de la bandeja y esta ayuda. El idioma se cambia desde "
+            "el menú Idioma.\n"
+            "La búsqueda filtra el Desinstalador y el Limpiador; la "
+            "actividad reciente aparece en la barra lateral y el botón "
+            "Actividad de la app abre el registro completo."
         ),
         "help_install_title": "Instalación de dependencias",
         "help_install_body": (
@@ -828,13 +836,20 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "help_usage_title": "Usage",
         "help_usage_body": (
-            "1. Package Manager: lists explicit packages (pacman -Qe) so you "
-            "can uninstall them.\n"
-            "2. System Cleaner: finds AppImages and loose folders in your "
-            "scan paths.\n"
-            "3. Personalization: adjust which paths are scanned.\n"
-            "4. Settings: color theme, font and language.\n"
-            "The search bar filters packages and cleanup results."
+            "1. Overview: system health, installed apps and one-click "
+            "recommended cleanup (Scan now / Clean now).\n"
+            "2. Uninstaller: lists pacman packages, dependencies and loose "
+            "folders; filter by type, size and date and uninstall several at "
+            "once.\n"
+            "3. System Cleaner: removes junk, pacman cache and logs, or lets "
+            "you review AppImages and loose folders by hand.\n"
+            "4. Performance Tweaks: safe, reversible optimizations (fstrim, "
+            "zram, zswap, pacman mirrors).\n"
+            "5. Settings: scan paths, color theme, font, tray position and "
+            "this help. Language is changed from the Language menu.\n"
+            "Search filters the Uninstaller and the Cleaner; recent activity "
+            "shows in the sidebar and the App activity button opens the full "
+            "log."
         ),
         "help_install_title": "Installing dependencies",
         "help_install_body": (

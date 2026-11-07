@@ -1,12 +1,11 @@
-"""Botón pastilla 'SCAN NOW' con resplandor rojo e icono de lupa.
+"""Botón principal 'SCAN NOW': rectángulo redondeado con degradado y lupa.
 
-Widget autocontenido: dibuja una cápsula con el acento del tema, texto
-principal (SCAN NOW) + subtítulo centrados, y una badge circular con
-icono de lupa DEBAJO del texto (no a la derecha).
-Emite `clicked` (QPushButton).
+Widget autocontenido: dibuja el degradado del tema con un resplandor suave,
+icono de lupa a la izquierda y título + subtítulo. Mismo lenguaje visual que
+la píldora activa de la barra lateral. Emite `clicked` (QPushButton).
 """
 
-from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QPushButton
 
@@ -24,7 +23,7 @@ class ScanNowButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Altura con margen real: título + subtítulo arriba, badge abajo
         # sin solape (el subtítulo ES largo invadía el círculo).
-        self.setMinimumSize(240, 112)
+        self.setMinimumSize(250, 68)
 
     def set_texts(self, title: str, subtitle: str):
         self._title = title
@@ -47,23 +46,20 @@ class ScanNowButton(QPushButton):
     def paintEvent(self, _event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(self.rect()).adjusted(2, 2, -2, -2)
-
+        # Margen para el resplandor, que se pinta fuera del botón.
+        rect = QRectF(self.rect()).adjusted(8, 8, -8, -8)
         disabled = not self.isEnabled()
 
-        # Resplandor: varios trazos con alpha decreciente (usa el acento
-        # del tema activo, nunca un color fijo).
+        # Resplandor suave (acento del tema activo, nunca un color fijo).
         if not disabled:
-            for i, alpha in enumerate((40, 70, 110)):
-                glow_color = QColor(self._accent)
-                glow_color.setAlpha(alpha)
-                glow_pen = QPen(glow_color)
-                glow_pen.setWidth(6 + i * 3)
-                painter.setPen(glow_pen)
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawRoundedRect(rect.adjusted(-i - 2, -i - 2, i + 2, i + 2), 34, 34)
+            for i, alpha in enumerate((18, 30, 46)):
+                glow = QColor(self._accent)
+                glow.setAlpha(alpha)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(glow)
+                grow = 6 - i * 2
+                painter.drawRoundedRect(rect.adjusted(-grow, -grow, grow, grow), 12 + grow, 12 + grow)
 
-        # Relleno de la cápsula
         if self._fill_top is not None and self._fill_bot is not None:
             top, bot = QColor(self._fill_top), QColor(self._fill_bot)
         else:
@@ -76,56 +72,37 @@ class ScanNowButton(QPushButton):
         gradient.setColorAt(1.0, bot)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(gradient)
-        painter.drawRoundedRect(rect, 34, 34)
+        painter.drawRoundedRect(rect, 12, 12)
+        # Reflejo superior fino, como en la píldora de la barra lateral.
+        painter.setPen(QPen(QColor(255, 255, 255, 50), 1))
+        painter.drawLine(
+            QPointF(rect.left() + 10, rect.top() + 0.5), QPointF(rect.right() - 10, rect.top() + 0.5)
+        )
 
-        # Texto centrado en la parte superior (título + subtítulo)
         text_color = QColor(self._on_accent)
         if disabled:
             text_color.setAlpha(160)
         painter.setPen(text_color)
 
-        # Título
+        # Icono de lupa a la izquierda; título y subtítulo centrados en el resto.
+        text_left = rect.left()
+        if not self._icon.isNull():
+            painter.drawPixmap(int(rect.left() + 14), int(rect.center().y() - 10), self._icon.pixmap(20, 20))
+            text_left = rect.left() + 38
+
         title_font = QFont(self.font())
-        title_font.setPointSize(13)
+        title_font.setPointSize(11)
         title_font.setBold(True)
         painter.setFont(title_font)
-        # Área superior para título + subtítulo (aprox. 60% de la altura)
-        text_top_rect = QRectF(rect.left(), rect.top() + 8, rect.width(), rect.height() * 0.55)
-        title_rect = QRectF(text_top_rect.left(), text_top_rect.top(), text_top_rect.width(), 26)
+        title_rect = QRectF(text_left, rect.top() + 9, rect.right() - text_left - 8, 22)
         painter.drawText(
-            title_rect,
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            self._title,
+            title_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, self._title
         )
 
-        # Subtítulo
         sub_font = QFont(self.font())
         sub_font.setPointSize(8)
         painter.setFont(sub_font)
-        sub_rect = QRectF(text_top_rect.left(), title_rect.bottom() + 2, text_top_rect.width(), 20)
+        sub_rect = QRectF(text_left, title_rect.bottom() + 1, rect.right() - text_left - 8, 18)
         painter.drawText(
-            sub_rect,
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            self._subtitle,
+            sub_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter, self._subtitle
         )
-
-        # Badge con icono DEBAJO del texto (centrado horizontalmente).
-        # Círculo de 32px con centro a 26px del borde inferior: deja ~14px
-        # de aire bajo el subtítulo. Sin relleno (transparencia total),
-        # solo el icono de lupa.
-        badge_d = 32
-        badge_center_x = rect.center().x()
-        badge_center_y = rect.bottom() - 8 - badge_d / 2
-
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        if not self._icon.isNull():
-            pixmap = self._icon.pixmap(20, 20)
-            painter.drawPixmap(
-                int(badge_center_x - 10),
-                int(badge_center_y - 10),
-                pixmap,
-            )
-
-        painter.end()

@@ -1,11 +1,12 @@
 """Página 'Vista general' (Overview): escaneo real + panel de tres columnas.
 
-- Panel izquierdo: gauge radial "SYSTEM HEALTH" (con estado GOOD/FAIR/POOR),
-  métricas (basura, huérfanos, entradas sueltas) y botón pastilla
-  "SCAN NOW".
-- Panel central: "SYSTEM INFORMATION" (CPU/GPU/RAM/DISK) + actividad reciente.
-- Panel derecho: "INSTALLED APPLICATIONS" (icono, nombre, versión/fuente,
-  botón UNINSTALL, contador) + "SYSTEM CLEANUP RECOMMENDED".
+Distribución en tarjetas con sombra (widgets.card.Card):
+- Fila superior: gauge radial "SYSTEM HEALTH" (GOOD/FAIR/POOR) y tres
+  métricas (basura, huérfanos, entradas sueltas).
+- Fila media: "INSTALLED APPLICATIONS" (icono, nombre, tipo, botón UNINSTALL,
+  contador) e "SYSTEM INFORMATION" (CPU/GPU/RAM/DISK con barras).
+- Fila inferior: "SYSTEM CLEANUP RECOMMENDED" con SCAN NOW y limpiar ahora.
+La actividad reciente vive en la barra lateral (SidebarActivity).
 
 SCAN NOW ejecuta un escaneo real (utils.scan + utils.apps) en segundo plano
 y actualiza el gauge, las métricas, la lista de apps y el resumen de
@@ -23,9 +24,11 @@ from typing import Any, TypedDict, cast
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -56,6 +59,7 @@ from blip_eraser.utils.system_stats import (
     ram_total_bytes,
     read_cpu_sample,
 )
+from blip_eraser.widgets.card import Card, StatTile
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.health_gauge import HealthGauge
 from blip_eraser.widgets.scan_button import ScanNowButton
@@ -107,7 +111,6 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         cast(Any, self._timer.timeout).connect(self.refresh)
         self._timer.start(2000)
         self.refresh()
-        log_buffer.subscribe(self._on_log)
         # NO llamar a _scan() aquí: se dispara explícitamente tras
         # refresh_appearance() para evitar carrera con StartupWorker
         # (que también ejecuta list_installed_apps()) y con el
@@ -140,94 +143,52 @@ class OverviewPage(QWidget, BackgroundScanMixin):
     # UI
     # ------------------------------------------------------------------
     def _build_ui(self):
+        # Rejilla de tarjetas con sombra (Card). El espacio entre tarjetas es
+        # corto porque cada Card ya reserva el margen de su sombra.
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 12, 16, 16)
-        outer.setSpacing(12)
+        outer.setContentsMargins(10, 4, 10, 6)
+        outer.setSpacing(0)
 
-        # Header "Overview"
+        # Cabecera interna de la página: la oculta el encabezado de la ventana
+        # (que muestra el título); se conserva el atributo por compatibilidad.
         self.section_header = QLabel(tr("nav_overview"))
         self.section_header.setObjectName("PageTitle")
-        outer.addWidget(self.section_header)
+        self.section_header.hide()
 
-        layout = QHBoxLayout()
-        layout.setSpacing(16)
+        # --- Fila superior: salud + tres métricas ---
+        top = QHBoxLayout()
+        top.setSpacing(0)
 
-        # --- Panel izquierdo: salud + métricas + SCAN NOW ---
-        left = QWidget()
-        left.setObjectName("PanelCard")
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(20, 20, 20, 20)
-        left_layout.setSpacing(8)
-
+        health_card = Card()
+        health_card.setFixedWidth(270)
+        health_layout = QVBoxLayout(health_card)
+        health_layout.setContentsMargins(0, 0, 0, 0)
+        health_layout.setSpacing(4)
         self.health_title = QLabel(tr("overview_health_title"))
         self.health_title.setObjectName("PanelTitle")
         self.health_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(self.health_title)
-
+        health_layout.addWidget(self.health_title)
         self.gauge = HealthGauge()
+        self.gauge.setMinimumSize(200, 190)
         self.gauge.set_accent(self._accent)
-        left_layout.addWidget(self.gauge)
+        health_layout.addWidget(self.gauge, 1)
+        top.addWidget(health_card)
 
-        # Métricas dentro del gauge (estilo imagen)
-        self.metric_junk = QLabel()
-        self.metric_orphans = QLabel()
-        self.metric_loose = QLabel()
+        self.metric_junk = StatTile()
+        self.metric_orphans = StatTile()
+        self.metric_loose = StatTile()
         for metric in (self.metric_junk, self.metric_orphans, self.metric_loose):
-            metric.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            metric.setStyleSheet("color: #ff5555; font-weight: bold;")
-            left_layout.addWidget(metric)
+            top.addWidget(metric, 1)
+        outer.addLayout(top)
 
-        left_layout.addSpacing(8)
+        # --- Fila media: aplicaciones instaladas + información del sistema ---
+        middle = QHBoxLayout()
+        middle.setSpacing(0)
 
-        # Botón SCAN NOW (pastilla con glow e icono)
-        _theme = theme_mod.THEMES[str(load_prefs().get("theme", "red"))]
-        self.scan_btn = ScanNowButton(tr("overview_erase_button"), tr("overview_erase_subtitle"))
-        self.scan_btn.set_accent(
-            str(_theme["accent"]), _theme["on_accent"], _theme["fill_top"], _theme["fill_bot"]
-        )
-        cast(Any, self.scan_btn.clicked).connect(self._scan)
-        left_layout.addWidget(self.scan_btn)
-
-        left_layout.addStretch(1)
-
-        # --- Panel central: información del sistema ---
-        center = QWidget()
-        center.setObjectName("PanelCard")
-        center_layout = QVBoxLayout(center)
-        center_layout.setContentsMargins(20, 20, 20, 20)
-        center_layout.setSpacing(6)
-
-        self.info_title = QLabel(tr("system_info_title"))
-        self.info_title.setObjectName("PanelTitle")
-        center_layout.addWidget(self.info_title)
-
-        self.cpu_row = QLabel()
-        self.gpu_row = QLabel()
-        self.ram_row = QLabel()
-        self.disk_row = QLabel()
-        for row in (self.cpu_row, self.gpu_row, self.ram_row, self.disk_row):
-            row.setWordWrap(True)
-            center_layout.addWidget(row)
-
-        center_layout.addSpacing(12)
-        self.activity_title = QLabel(tr("recent_activity_title"))
-        self.activity_title.setObjectName("PanelTitle")
-        center_layout.addWidget(self.activity_title)
-
-        self.activity_list = QLabel(tr("list_empty_subtext"))
-        self.activity_list.setWordWrap(True)
-        self.activity_list.setObjectName("SubText")
-        center_layout.addWidget(self.activity_list)
-
-        center_layout.addStretch(1)
-
-        # --- Panel derecho: apps instaladas + limpieza recomendada ---
-        right = QWidget()
-        right.setObjectName("PanelCard")
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(20, 20, 20, 20)
-        right_layout.setSpacing(8)
-
+        apps_card = Card()
+        right_layout = QVBoxLayout(apps_card)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(6)
         apps_header = QHBoxLayout()
         self.apps_title = QLabel(tr("installed_apps_title"))
         self.apps_title.setObjectName("PanelTitle")
@@ -239,12 +200,15 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         right_layout.addLayout(apps_header)
 
         self._apps_widget = QWidget()
+        self._apps_widget.setObjectName("AppsContainer")
         self._apps_layout = QVBoxLayout(self._apps_widget)
         self._apps_layout.setContentsMargins(0, 0, 0, 0)
-        self._apps_layout.setSpacing(4)
+        self._apps_layout.setSpacing(0)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.viewport().setAutoFillBackground(False)
         scroll.setWidget(self._apps_widget)
         right_layout.addWidget(scroll, 1)
         self._apps_scroll = scroll
@@ -253,30 +217,80 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         bar = scroll.verticalScrollBar()
         cast(Any, bar.valueChanged).connect(self._maybe_load_more_apps)
         cast(Any, bar.rangeChanged).connect(self._maybe_load_more_apps)
+        middle.addWidget(apps_card, 17)
 
-        right_layout.addSpacing(8)
+        info_card = Card()
+        center_layout = QVBoxLayout(info_card)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(6)
+        self.info_title = QLabel(tr("system_info_title"))
+        self.info_title.setObjectName("PanelTitle")
+        center_layout.addWidget(self.info_title)
+
+        self.cpu_row = QLabel()
+        self.gpu_row = QLabel()
+        self.ram_row = QLabel()
+        self.disk_row = QLabel()
+        self.cpu_bar = self._make_info_bar()
+        self.ram_bar = self._make_info_bar()
+        self.disk_bar = self._make_info_bar()
+        for row, info_bar in (
+            (self.cpu_row, self.cpu_bar),
+            (self.gpu_row, None),
+            (self.ram_row, self.ram_bar),
+            (self.disk_row, self.disk_bar),
+        ):
+            row.setWordWrap(True)
+            center_layout.addWidget(row)
+            if info_bar is not None:
+                center_layout.addWidget(info_bar)
+        center_layout.addStretch(1)
+        middle.addWidget(info_card, 10)
+        outer.addLayout(middle, 1)
+
+        # --- Fila inferior: limpieza recomendada ---
+        cleanup_card = Card()
+        cleanup_outer = QVBoxLayout(cleanup_card)
+        cleanup_outer.setContentsMargins(0, 0, 0, 0)
+        cleanup_outer.setSpacing(6)
         self.cleanup_title = QLabel(tr("cleanup_recommended_title"))
         self.cleanup_title.setObjectName("PanelTitle")
-        right_layout.addWidget(self.cleanup_title)
-        self.cleanup_junk_label = QLabel()
-        self.cleanup_cache_label = QLabel()
-        self.cleanup_logs_label = QLabel()
+        cleanup_outer.addWidget(self.cleanup_title)
+
+        cleanup_row = QHBoxLayout()
+        cleanup_row.setSpacing(12)
+        self.cleanup_junk_label = StatTile(flat=True)
+        self.cleanup_cache_label = StatTile(flat=True)
+        self.cleanup_logs_label = StatTile(flat=True)
         for label in (self.cleanup_junk_label, self.cleanup_cache_label, self.cleanup_logs_label):
-            label.setStyleSheet("color: #ff5555; font-weight: bold;")
-            right_layout.addWidget(label)
+            label.setMinimumWidth(150)
+            cleanup_row.addWidget(label)
+        cleanup_row.addStretch(1)
+
+        _theme = theme_mod.THEMES[str(load_prefs().get("theme", "red"))]
+        self.scan_btn = ScanNowButton(tr("overview_erase_button"), tr("overview_erase_subtitle"))
+        self.scan_btn.set_accent(
+            str(_theme["accent"]), _theme["on_accent"], _theme["fill_top"], _theme["fill_bot"]
+        )
+        cast(Any, self.scan_btn.clicked).connect(self._scan)
+        cleanup_row.addWidget(self.scan_btn)
 
         # Acción real conectada al resumen: limpia basura + caché + registros
         # con el mismo flujo (confirmación y borrado) que el Limpiador.
         self.cleanup_btn = QPushButton(tr("cleanup_run_button"))
         cast(Any, self.cleanup_btn.clicked).connect(self._cleanup_now)
-        right_layout.addWidget(self.cleanup_btn)
-        right_layout.addStretch(0)
+        cleanup_row.addWidget(self.cleanup_btn)
+        cleanup_outer.addLayout(cleanup_row)
+        outer.addWidget(cleanup_card)
 
-        layout.addWidget(left, 3)
-        layout.addWidget(center, 4)
-        layout.addWidget(right, 4)
-
-        outer.addLayout(layout, 1)
+    @staticmethod
+    def _make_info_bar() -> QProgressBar:
+        bar = QProgressBar()
+        bar.setObjectName("InfoBar")
+        bar.setRange(0, 100)
+        bar.setTextVisible(False)
+        bar.setFixedHeight(8)
+        return bar
 
     # ------------------------------------------------------------------
     # Escaneo (SCAN NOW) — en segundo plano (BackgroundScanMixin)
@@ -452,8 +466,9 @@ class OverviewPage(QWidget, BackgroundScanMixin):
 
     def _make_app_row(self, app: InstalledApp, fallback_icon: QIcon) -> QWidget:
         row = QWidget()
+        row.setObjectName("AppRow")
         row_layout = QHBoxLayout(row)
-        row_layout.setContentsMargins(4, 2, 4, 2)
+        row_layout.setContentsMargins(4, 6, 4, 6)
         row_layout.setSpacing(8)
 
         # Icono de la app (por nombre, con respaldo genérico)
@@ -653,6 +668,9 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             ram_total = human_size(ram_total_bytes_value) if ram_total_bytes_value is not None else na
             disk_total = human_size(disk_total_bytes_value) if disk_total_bytes_value is not None else na
 
+            self.cpu_bar.setValue(cpu or 0)
+            self.ram_bar.setValue(ram or 0)
+            self.disk_bar.setValue(disk or 0)
             self.cpu_row.setText(f"{tr('status_cpu')}: {cpu_model_text}  ({cpu}%)" if cpu is not None else f"{tr('status_cpu')}: {cpu_model_text}  ({na})")
             self.gpu_row.setText(f"{tr('gpu_label')}: {gpu_model_text}")
             self.ram_row.setText(f"{tr('status_ram')}: {ram_total}  ({ram}%)" if ram is not None else f"{tr('status_ram')}: {ram_total}  ({na})")
@@ -674,16 +692,6 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                 disk_row=self.disk_row,
             )
 
-    def _on_log(self, entries: list[tuple[str, str]]):
-        if not self._widget_is_alive():
-            return  # la página ya no existe en C++: descartar (log_buffer global)
-        recent = entries[-6:]
-        if not recent:
-            self.activity_list.setText(tr("list_empty_subtext"))
-            return
-        lines = [f"• {msg}" for _ts, msg in recent]
-        self.activity_list.setText("\n".join(lines))
-
     def retranslate(self):
         self.section_header.setText(tr("nav_overview"))
         self.health_title.setText(tr("overview_health_title"))
@@ -692,7 +700,6 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             tr("overview_erase_subtitle"),
         )
         self.info_title.setText(tr("system_info_title"))
-        self.activity_title.setText(tr("recent_activity_title"))
         self.apps_title.setText(tr("installed_apps_title"))
         self.cleanup_title.setText(tr("cleanup_recommended_title"))
         if self._apps:
@@ -710,6 +717,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             color, theme["on_accent"], theme["fill_top"], theme["fill_bot"]
         )
         self.gauge.set_track_color(theme["palette"]["hover"])
+        self.gauge.set_status_color("#3CDC78" if theme["is_dark"] else "#1B7F45")
 
     def set_text_color(self, color: str):
         self.gauge.set_text_color(color)
