@@ -189,6 +189,8 @@ def main() -> int:
 
         window = MainWindow()
         window.show()
+        # Aviso de versión nueva: hilo aparte + caché de 24 h; nunca bloquea.
+        window.start_update_check()
         # Ocultar (no cerrar) el splash: hide() no dispara closeEvent, así
         # que `closed` solo se emite cuando el USUARIO lo cierra a mitad, no
         # en el cierre programático del camino de éxito.

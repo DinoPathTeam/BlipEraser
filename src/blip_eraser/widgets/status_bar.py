@@ -4,7 +4,9 @@ Las métricas vienen de utils.system_stats (lógica pura y testable);
 aquí solo se muestran y se localizan con tr().
 """
 
-from PyQt6.QtCore import QTimer
+import html
+
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QLabel, QStatusBar
 
 from blip_eraser.utils.i18n import tr
@@ -16,10 +18,15 @@ from blip_eraser.utils.system_stats import (
 )
 
 
+RELEASES_URL = "https://github.com/DinoPathTeam/BlipEraser/releases/latest"
+
+
 class SystemStatusBar(QStatusBar):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._prev_cpu: tuple[int, int] | None = None
+        self._update_version: str | None = None
+        self._update_label: QLabel | None = None
 
         self._cpu_parts = {"label": tr("status_cpu"), "value": QLabel()}
         self._ram_parts = {"label": tr("status_ram"), "value": QLabel()}
@@ -35,7 +42,27 @@ class SystemStatusBar(QStatusBar):
 
         self.refresh()
 
+    def show_update_available(self, version: str) -> None:
+        """Aviso discreto (sin diálogo) de que hay una versión nueva."""
+        self._update_version = version
+        if self._update_label is None:
+            label = QLabel()
+            label.setObjectName("UpdateNotice")
+            label.setTextFormat(Qt.TextFormat.RichText)
+            label.setOpenExternalLinks(True)
+            self.addWidget(label)
+            self._update_label = label
+        self._render_update_notice()
+
+    def _render_update_notice(self) -> None:
+        if self._update_label is None or self._update_version is None:
+            return
+        text = tr("update_available").format(version=html.escape(self._update_version))
+        link = f'<a href="{RELEASES_URL}">{html.escape(tr("update_view"))}</a>'
+        self._update_label.setText(f"{text} · {link}")
+
     def retranslate(self) -> None:
+        self._render_update_notice()
         self._cpu_parts["label"] = tr("status_cpu")
         self._ram_parts["label"] = tr("status_ram")
         self._disk_parts["label"] = tr("status_disk")
