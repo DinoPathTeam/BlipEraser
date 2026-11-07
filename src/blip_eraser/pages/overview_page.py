@@ -13,6 +13,7 @@ limpieza con datos reales. Toda la lógica es pura y testeable.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6 import sip
 from collections.abc import Callable
@@ -284,16 +285,25 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._start_background_scan(self._scan_worker, self._on_scan_done)
 
     def _scan_worker(self) -> ScanResult:
+        # Apps y resumen de limpieza son independientes: en paralelo, el escaneo
+        # tarda lo que la más lenta y no la suma de ambas.
         t0 = time.perf_counter()
-        apps = list_installed_apps()
-        t1 = time.perf_counter()
-        cleanup = scan_cleanup()
-        t2 = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="scan") as pool:
+            cleanup_f = pool.submit(self._timed, scan_cleanup)
+            apps_f = pool.submit(self._timed, list_installed_apps)
+            apps, apps_s = apps_f.result()
+            cleanup, cleanup_s = cleanup_f.result()
         write_diagnostic(
             f"PERF overview_scan_worker apps={len(apps)} "
-            f"list_apps_ms={(t1 - t0) * 1000:.0f} cleanup_ms={(t2 - t1) * 1000:.0f}"
+            f"list_apps_ms={apps_s * 1000:.0f} cleanup_ms={cleanup_s * 1000:.0f} "
+            f"total_ms={(time.perf_counter() - t0) * 1000:.0f}"
         )
         return ScanResult(apps=apps, cleanup=cast(CleanupSummary, cleanup))
+
+    @staticmethod
+    def _timed(fn: Callable[[], Any]) -> tuple[Any, float]:
+        start = time.perf_counter()
+        return fn(), time.perf_counter() - start
 
     def _cleanup_now(self):
         """Botón del resumen: limpia basura + caché + registros (fondo, no bloquea)."""

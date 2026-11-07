@@ -68,15 +68,14 @@ def human_size(num_bytes: int) -> str:
 # Cada cuántas entradas el hilo de escaneo cede el GIL al hilo de la interfaz.
 # Un recorrido largo en Python puro mantiene el GIL casi todo el tiempo y la
 # ventana se siente colgada aunque el escaneo corra en otro hilo.
-_YIELD_EVERY = 256
+_YIELD_EVERY = 1024
 
 
-def get_dir_size(path: Path) -> int:
-    """Suma el tamaño de todos los archivos bajo `path` (no sigue symlinks).
+def _walk_dir_size(path: Path) -> int:
+    """Recorrido iterativo con `os.scandir` (sin crear un `Path` por entrada).
 
-    Recorrido iterativo con `os.scandir` (sin crear un `Path` por entrada) que
-    cede el GIL periódicamente para no ahogar la interfaz cuando se ejecuta en
-    un hilo de fondo.
+    Cede el GIL periódicamente para no ahogar la interfaz cuando se ejecuta
+    en un hilo de fondo.
     """
     total = 0
     seen = 0
@@ -101,6 +100,11 @@ def get_dir_size(path: Path) -> int:
         except OSError:
             continue
     return total
+
+
+def get_dir_size(path: Path) -> int:
+    """Suma el tamaño de todos los archivos bajo `path` (no sigue symlinks)."""
+    return _walk_dir_size(path)
 
 
 def path_size_for_display(path: Path) -> int:

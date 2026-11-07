@@ -22,6 +22,14 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 - **Cambio**: recorrido iterativo con `os.scandir` (sin crear `Path` por entrada,
   ~5× más rápido en `/usr/lib`: 0,43 s → 0,09 s, mismo resultado) y cesión del
   GIL cada 256 entradas. Mismas reglas: no sigue ni cuenta symlinks.
+- **Segunda medición en host** (1668 apps): `list_apps_ms` 7–9 s y
+  `cleanup_ms` 0,6 s, ya con `os.scandir`: el cuello es `list_installed_apps`.
+  Sus consultas a pacman (`-Qe`, `-Qd`, `-Qi`) y el tamaño de cada carpeta
+  manual se hacían en fila; ahora corren a la vez (`ThreadPoolExecutor`), y
+  `scan_cleanup` mide sus 4 partes también a la vez, igual que apps y limpieza
+  entre sí. El escaneo tarda ahora lo de la parte más lenta, no la suma.
+- `scripts/profile_scan.py`: mide cada fase sin GUI
+  (`PYTHONPATH=src python scripts/profile_scan.py`).
 - Lotes de la lista de 100 a 40 filas (≈0,15 s por lote en tu equipo).
 - Nueva línea `PERF overview_scan_worker apps=… list_apps_ms=… cleanup_ms=…`
   para ver cuánto tarda cada fase del escaneo.

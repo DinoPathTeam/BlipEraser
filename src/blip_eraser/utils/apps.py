@@ -9,6 +9,7 @@ mockeando las utilidades.
 from __future__ import annotations
 
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from blip_eraser.utils.config import get_scan_ignore, get_scan_paths
@@ -63,73 +64,71 @@ def list_installed_apps(include_sizes: bool = True) -> list[InstalledApp]:
     apps: list[InstalledApp] = []
     seen: set[str] = set()
 
-    pacman_info = pacman_installed_info() if include_sizes else {}
+    # Las consultas a pacman y el cálculo de tamaños de carpetas manuales son
+    # independientes y casi todo su tiempo es esperar (subprocesos / E/S): se
+    # lanzan a la vez en lugar de una detrás de otra.
+    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="apps-scan") as pool:
+        info_f = pool.submit(pacman_installed_info) if include_sizes else None
+        explicit_f = pool.submit(list_explicit_packages)
+        deps_f = pool.submit(list_dependency_packages)
 
-    def _size(name: str) -> int:
-        return pacman_info.get(name, {}).get("size", 0) or 0
-
-    def _date(name: str) -> str:
-        return pacman_info.get(name, {}).get("date", "") or ""
-
-    try:
-        for name, version in list_explicit_packages():
-            low = name.lower()
-            if low in seen:
-                continue
-            apps.append(
-                InstalledApp(
-                    name=name,
-                    source="pacman",
-                    detail=version,
-                    size_bytes=_size(name),
-                    kind=KIND_APP,
-                    install_date=_date(name),
-                )
+        manual_paths: list = []
+        try:
+            manual_paths = scan_manual_entries(
+                tuple(get_scan_paths()), set(get_scan_ignore())
             )
-            seen.add(low)
-    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
-        pass  # pacman ausente o falló: solo contribuye el escaneo manual
+        except (OSError, PermissionError):
+            pass
+        sizes_f = [(path, pool.submit(path_size_for_display, path)) for path in manual_paths]
 
-    try:
-        for name, version in list_dependency_packages():
-            low = name.lower()
-            if low in seen:
-                continue
-            apps.append(
-                InstalledApp(
-                    name=name,
-                    source="pacman",
-                    detail=version,
-                    size_bytes=_size(name),
-                    kind=KIND_DEPENDENCY,
-                    install_date=_date(name),
-                )
-            )
-            seen.add(low)
-    except (FileNotFoundError, OSError, subprocess.CalledProcessError):
-        pass  # pacman -Qd no disponible: igual se muestran explícitas + manuales
+        pacman_info = info_f.result() if info_f is not None else {}
 
-    try:
-        for path in scan_manual_entries(
-            tuple(get_scan_paths()), set(get_scan_ignore())
-        ):
+        def _size(name: str) -> int:
+            return pacman_info.get(name, {}).get("size", 0) or 0
+
+        def _date(name: str) -> str:
+            return pacman_info.get(name, {}).get("date", "") or ""
+
+        for fut, kind in ((explicit_f, KIND_APP), (deps_f, KIND_DEPENDENCY)):
+            try:
+                for name, version in fut.result():
+                    low = name.lower()
+                    if low in seen:
+                        continue
+                    apps.append(
+                        InstalledApp(
+                            name=name,
+                            source="pacman",
+                            detail=version,
+                            size_bytes=_size(name),
+                            kind=kind,
+                            install_date=_date(name),
+                        )
+                    )
+                    seen.add(low)
+            except (FileNotFoundError, OSError, subprocess.CalledProcessError):
+                pass  # pacman ausente o falló: se muestran el resto de orígenes
+
+        for path, size_fut in sizes_f:
             low = path.name.lower()
             if low in seen:
                 continue
-
+            try:
+                size = size_fut.result()
+                mod_date = path_mod_date(path)
+            except (OSError, PermissionError):
+                continue
             apps.append(
                 InstalledApp(
                     name=path.name,
                     source="manual",
                     detail=str(path),
-                    size_bytes=path_size_for_display(path),
+                    size_bytes=size,
                     kind=KIND_FOLDER,
-                    install_date=path_mod_date(path),
+                    install_date=mod_date,
                 )
             )
             seen.add(low)
-    except (OSError, PermissionError):
-        pass
 
     return apps
 
