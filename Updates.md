@@ -11,6 +11,26 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### ⚡ Tweaks: una sola autorización por ajuste
+
+- **Antes**: activar zram encadenaba hasta 6 `pkexec` (instalar paquete,
+  comprobar archivo, respaldar, escribir, `daemon-reload`, `enable`), y cada uno
+  podía pedir contraseña; reflector y zswap igual.
+- **Ahora**: los pasos privilegiados de cada tweak se agrupan en un único
+  `pkexec sh -c` con `set -e` (el primer fallo aborta el resto). Todo valor
+  interpolado pasa por `shlex.quote`; el contenido de los archivos se escribe
+  con `printf %s`.
+- Se conserva la copia `.blip-bak` (solo la primera vez) y su restauración al
+  desactivar. Si `systemd-tmpfiles` falla al activar zswap, el propio script
+  deshace la configuración.
+- También corrige que la escritura de archivos root no pasaba por
+  `host_cmd` (fallaba en Flatpak).
+- Se eliminan `_write_root_file`, `_backup_root_file`, `_remove_root_file` e
+  `_install_pkg_via_pkexec` (sustituidos por `_sh_*` + `_run_privileged`).
+- Tests: un solo `pkexec` por tweak y sentido, orden de los pasos, sintaxis
+  `sh -n` y ejecución real de los fragmentos (respaldo, restauración,
+  rollback, rutas con espacios y comillas).
+
 ### 🔒 Daemon: apertura de rutas sin seguir symlinks en ningún tramo
 
 - **Hueco**: `_rm_rf_atomic` abría el directorio padre con `O_NOFOLLOW`, que solo
