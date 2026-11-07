@@ -6,3 +6,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    groups:
+      # Un solo PR con todas las subidas menores y parches. Antes, cada acción
+      # abría el suyo y al fusionar uno los demás entraban en conflicto (los
+      # pines viven en las mismas líneas de ci.yml). Las subidas MAYORES siguen
+      # llegando por separado: son las que conviene revisar.
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
