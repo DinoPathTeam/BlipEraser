@@ -42,7 +42,7 @@ def page(app, monkeypatch):
     ]
     monkeypatch.setattr(
         "blip_eraser.pages.uninstaller_page.list_installed_apps",
-        lambda: mock_apps,
+        lambda **_kw: mock_apps,
     )
     p = UninstallerPage()
     # Cargar apps directamente en lugar de esperar al background scan
@@ -202,7 +202,7 @@ class TestUninstallerFilters:
         ]
         monkeypatch.setattr(
             "blip_eraser.pages.uninstaller_page.list_installed_apps",
-            lambda: mock_apps,
+            lambda **_kw: mock_apps,
         )
         page = UninstallerPage()
         page._on_apps_loaded(mock_apps)
@@ -249,7 +249,7 @@ class TestUninstallerFilters:
         ]
         monkeypatch.setattr(
             "blip_eraser.pages.uninstaller_page.list_installed_apps",
-            lambda: mock_apps,
+            lambda **_kw: mock_apps,
         )
         page = UninstallerPage()
         page._on_apps_loaded(mock_apps)

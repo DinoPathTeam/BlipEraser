@@ -451,7 +451,9 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
     # Datos
     # ------------------------------------------------------------------
     def load_apps(self):
-        self._start_background_scan(list_installed_apps, self._on_apps_loaded)
+        self._start_background_scan(
+            lambda: list_installed_apps(manual_sizes=False), self._on_apps_loaded
+        )
 
     def _on_apps_loaded(self, apps: list[InstalledApp]):
         # Defensa dura de TODA la cadena del resultado: la tabla (o cualquier
@@ -461,12 +463,34 @@ class UninstallerPage(BasePage, BackgroundScanMixin):
             self._apps = apps
             self._render()
             mark_scanned(SECTION_UNINSTALLER)
+            # Pesos de carpetas sueltas: se rellenan aparte (la tabla ya es usable).
+            self._start_size_fill(apps, self._on_sizes_filled)
         except RuntimeError as exc:
             self._render_failure(
                 "uninstaller_page._on_apps_loaded",
                 exc,
                 table=self.table,
                 extra={"apps_total": len(self._apps)},
+            )
+
+    def _on_sizes_filled(self, apps: list[InstalledApp]) -> None:
+        """Pesos listos: re-renderiza si no hay selección; si la hay, solo la columna."""
+        if apps is not self._apps:
+            return
+        try:
+            if not self.table.checked_rows():
+                self._render()  # respeta filtros/orden por peso
+                return
+            self.table.blockSignals(True)
+            try:
+                for row, app in enumerate(self._visible):
+                    if app.source == "manual" and app.size_bytes:
+                        self.table.setItem(row, 4, QTableWidgetItem(human_size(app.size_bytes)))
+            finally:
+                self.table.blockSignals(False)
+        except RuntimeError as exc:
+            self._render_failure(
+                "uninstaller_page._on_sizes_filled", exc, table=self.table
             )
 
     def _render(self):

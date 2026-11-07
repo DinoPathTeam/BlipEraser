@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -216,13 +217,22 @@ def _file_size(path: Path) -> int:
 
 
 def scan_cleanup() -> dict[str, int]:
-    """Espacio recuperable por categoría (junk/cache/logs) + huérfanos."""
-    return {
-        "junk_bytes": best_effort_dir_size(_cache_dir()),
-        "pacman_cache_bytes": best_effort_dir_size(_PACMAN_CACHE),
-        "logs_bytes": _cleanable_logs_bytes(_LOG_DIR),
-        "orphan_count": len(orphan_packages()),
-    }
+    """Espacio recuperable por categoría (junk/cache/logs) + huérfanos.
+
+    Las cuatro mediciones son independientes (E/S y un subproceso): se hacen
+    a la vez en vez de una tras otra.
+    """
+    with ThreadPoolExecutor(max_workers=4, thread_name_prefix="cleanup-scan") as pool:
+        junk = pool.submit(best_effort_dir_size, _cache_dir())
+        pkg_cache = pool.submit(best_effort_dir_size, _PACMAN_CACHE)
+        logs = pool.submit(_cleanable_logs_bytes, _LOG_DIR)
+        orphans = pool.submit(orphan_packages)
+        return {
+            "junk_bytes": junk.result(),
+            "pacman_cache_bytes": pkg_cache.result(),
+            "logs_bytes": logs.result(),
+            "orphan_count": len(orphans.result()),
+        }
 
 
 def scan_cleanup_items(

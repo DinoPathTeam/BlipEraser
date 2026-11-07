@@ -32,6 +32,7 @@ class _ScanBridge(QObject):
 
     result_ready = pyqtSignal(object)  # (token, resultado)
     failed = pyqtSignal(str)
+    sizes_ready = pyqtSignal(object)  # (token, apps)
 
 
 class BackgroundScanMixin:
@@ -69,6 +70,9 @@ class BackgroundScanMixin:
         self._scan_bridge = _ScanBridge()
         self._scan_bridge.result_ready.connect(self._on_scan_result_ready)
         self._scan_bridge.failed.connect(self._on_scan_failed)
+        self._scan_bridge.sizes_ready.connect(self._on_sizes_ready)
+        self._sizes_token = 0
+        self._sizes_on_done: Callable[[Any], None] | None = None
         # Flag para doble protección: si se desconectan las señales
         # explícitamente (p. ej. en closeEvent), los handlers salen
         # inmediatamente sin procesar nada.
@@ -172,6 +176,40 @@ class BackgroundScanMixin:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _start_size_fill(self, apps: list[Any], on_done: Callable[[Any], None]) -> None:
+        """Rellena en un hilo los pesos de carpetas sueltas SIN bloquear nada.
+
+        No deshabilita botones ni cuenta como escaneo: la lista ya está en
+        pantalla; solo llega `on_done(apps)` (hilo principal) cuando los pesos
+        están calculados. Un relleno más nuevo descarta al anterior.
+        """
+        from blip_eraser.utils.apps import fill_manual_sizes
+
+        self._sizes_token += 1
+        token = self._sizes_token
+        self._sizes_on_done = on_done
+        bridge = self._scan_bridge
+
+        def worker() -> None:
+            try:
+                fill_manual_sizes(apps)
+            except Exception as exc:  # noqa: BLE001 - el relleno nunca debe romper la app
+                write_diagnostic(f"fill_manual_sizes failed: {exc}")
+            try:
+                bridge.sizes_ready.emit((token, apps))
+            except RuntimeError:
+                pass  # el puente ya se destruyó (cierre de la app)
+
+        threading.Thread(target=worker, daemon=True, name="size-fill").start()
+
+    def _on_sizes_ready(self, payload: tuple) -> None:
+        if self._closing or not self._widget_is_alive():
+            return
+        token, apps = payload
+        if token != self._sizes_token or self._sizes_on_done is None:
+            return
+        self._sizes_on_done(apps)
+
     def disconnect_scan_signals(self) -> None:
         """Desconecta explícitamente las señales del bridge de escaneo.
 
@@ -190,6 +228,11 @@ class BackgroundScanMixin:
             self._scan_bridge.failed.disconnect(self._on_scan_failed)
         except (TypeError, RuntimeError):
             pass
+        try:
+            self._scan_bridge.sizes_ready.disconnect(self._on_sizes_ready)
+        except (TypeError, RuntimeError):
+            pass
+        self._sizes_on_done = None
         # Limpiar callback para que no se invoque aunque la señal llegue.
         self._scan_on_result = None
 

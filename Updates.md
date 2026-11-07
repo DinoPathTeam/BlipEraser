@@ -11,6 +11,60 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧊 Escaneo: tamaños de carpetas sin acaparar el GIL
+
+- **Medición en host** (1668 apps): pintar 100 filas cuesta 0,3–0,5 s, así que
+  el cuelgue de ~15 s no venía de la lista sino del escaneo en segundo plano.
+- **Causa probable**: `get_dir_size` recorría `~/.cache`, la caché de pacman y
+  `/var/log` con `Path.rglob` + `is_file`/`is_symlink`/`stat` por entrada, todo
+  en Python puro: el hilo de fondo retiene el GIL y la interfaz deja de
+  responder aunque no esté "bloqueada" a propósito.
+- **Cambio**: recorrido iterativo con `os.scandir` (sin crear `Path` por entrada,
+  ~5× más rápido en `/usr/lib`: 0,43 s → 0,09 s, mismo resultado) y cesión del
+  GIL cada 256 entradas. Mismas reglas: no sigue ni cuenta symlinks.
+- **Segunda medición en host** (1668 apps): `list_apps_ms` 7–9 s y
+  `cleanup_ms` 0,6 s, ya con `os.scandir`: el cuello es `list_installed_apps`.
+  Sus consultas a pacman (`-Qe`, `-Qd`, `-Qi`) y el tamaño de cada carpeta
+  manual se hacían en fila; ahora corren a la vez (`ThreadPoolExecutor`), y
+  `scan_cleanup` mide sus 4 partes también a la vez, igual que apps y limpieza
+  entre sí. El escaneo tarda ahora lo de la parte más lenta, no la suma.
+- **Perfil en host** (`scripts/profile_scan.py`): pacman entero cuesta <0,6 s;
+  dimensionar las 163 carpetas sueltas (`~/.local`, Steam, `.gradle`…) sumaba
+  ~6,3 s y era lo que mantenía la lista vacía. Ahora `list_installed_apps(
+  manual_sizes=False)` devuelve la lista al instante y `fill_manual_sizes`
+  calcula los pesos en un hilo aparte (3 carpetas a la vez) mientras la
+  interfaz ya es usable; al terminar se actualizan las filas (Vista general) o
+  se re-renderiza la tabla si no hay selección (Desinstalador). Los pesos se
+  cachean 10 min: reescanear o abrir el Desinstalador no vuelve a recorrer.
+- `sys.setswitchinterval(0.001)` al arrancar: los hilos de escaneo en Python
+  puro ya no retienen el GIL hasta 5 ms cada vez que la interfaz lo pide.
+- `scripts/profile_scan.py`: mide cada fase sin GUI
+  (`PYTHONPATH=src python scripts/profile_scan.py`).
+- Lotes de la lista de 100 a 40 filas (≈0,15 s por lote en tu equipo).
+- Nueva línea `PERF overview_scan_worker apps=… list_apps_ms=… cleanup_ms=…`
+  para ver cuánto tarda cada fase del escaneo.
+
+### 🧊 Vista general: la lista de apps ya no congela la ventana tras escanear
+
+- **Síntoma** (reportado en CachyOS): tras pulsar "Escanear" y en el
+  autoescaneo, la app quedaba colgada ~15 s sin dejar hacer nada.
+- **Causa medida** (benchmark sintético, ventana completa con QSS, offscreen):
+  `_rebuild_apps` creaba una fila de ~8 widgets por CADA app instalada, de golpe
+  y en el hilo de la interfaz. Con 500 apps ≈ 0,4 s; 1500 ≈ 2,1 s; 3000 ≈ 8,3 s:
+  el coste crece más que linealmente (estilo QSS + layout con word-wrap). Además
+  se escribían 2 líneas de diagnóstico por fila.
+- **Cambio**: la lista se renderiza por tandas de `APPS_BATCH = 100` filas; al
+  acercarse al final del scroll (o si el contenido no llena la ventana) se crea
+  la siguiente. Un escaneo nuevo reinicia la ventana; cambiar de idioma conserva
+  lo ya cargado. El contador sigue mostrando el total real. Con 3000 apps el
+  bloqueo medido baja de 8,3 s a 0,12 s, y es independiente del número de apps.
+- Se quitan los 2 diagnósticos por fila y el `QIcon.fromTheme` de respaldo que se
+  evaluaba en cada fila; quedan una línea `PERF overview_rebuild …` por
+  reconstrucción y `PERF overview_load_more …` por tanda (ver
+  `~/.cache/blip-eraser/diagnostics.log`) para medir en el host.
+- **Pendiente de medir en host**: el tiempo del escaneo en segundo plano
+  (`list_installed_apps` + `scan_cleanup`) y la tabla del desinstalador.
+
 ### 🚦 Arranque: comprobaciones reales, fuera del hilo de la interfaz
 
 - **Hallazgo**: `main()` ejecutaba `_check_and_install_daemon_deps()` de forma
