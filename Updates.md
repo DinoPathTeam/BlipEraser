@@ -11,6 +11,27 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧊 Vista general: la lista de apps ya no congela la ventana tras escanear
+
+- **Síntoma** (reportado en CachyOS): tras pulsar "Escanear" y en el
+  autoescaneo, la app quedaba colgada ~15 s sin dejar hacer nada.
+- **Causa medida** (benchmark sintético, ventana completa con QSS, offscreen):
+  `_rebuild_apps` creaba una fila de ~8 widgets por CADA app instalada, de golpe
+  y en el hilo de la interfaz. Con 500 apps ≈ 0,4 s; 1500 ≈ 2,1 s; 3000 ≈ 8,3 s:
+  el coste crece más que linealmente (estilo QSS + layout con word-wrap). Además
+  se escribían 2 líneas de diagnóstico por fila.
+- **Cambio**: la lista se renderiza por tandas de `APPS_BATCH = 100` filas; al
+  acercarse al final del scroll (o si el contenido no llena la ventana) se crea
+  la siguiente. Un escaneo nuevo reinicia la ventana; cambiar de idioma conserva
+  lo ya cargado. El contador sigue mostrando el total real. Con 3000 apps el
+  bloqueo medido baja de 8,3 s a 0,12 s, y es independiente del número de apps.
+- Se quitan los 2 diagnósticos por fila y el `QIcon.fromTheme` de respaldo que se
+  evaluaba en cada fila; quedan una línea `PERF overview_rebuild …` por
+  reconstrucción y `PERF overview_load_more …` por tanda (ver
+  `~/.cache/blip-eraser/diagnostics.log`) para medir en el host.
+- **Pendiente de medir en host**: el tiempo del escaneo en segundo plano
+  (`list_installed_apps` + `scan_cleanup`) y la tabla del desinstalador.
+
 ### 🚦 Arranque: comprobaciones reales, fuera del hilo de la interfaz
 
 - **Hallazgo**: `main()` ejecutaba `_check_and_install_daemon_deps()` de forma

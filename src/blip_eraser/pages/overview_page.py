@@ -12,6 +12,8 @@ y actualiza el gauge, las métricas, la lista de apps y el resumen de
 limpieza con datos reales. Toda la lógica es pura y testeable.
 """
 
+import time
+
 from PyQt6 import sip
 from collections.abc import Callable
 from pathlib import Path
@@ -60,6 +62,13 @@ from blip_eraser.widgets.scan_worker import BackgroundScanMixin
 
 _ICON_FALLBACK = "application-x-executable"
 
+# Filas de apps que existen a la vez en la Vista general. Cada fila son ~8
+# widgets con estilo QSS y word-wrap: crear miles de golpe bloqueaba la
+# interfaz varios segundos tras cada escaneo (coste más que lineal). El resto
+# se crea al acercarse al final del scroll.
+APPS_BATCH = 100
+_APPS_LOAD_MARGIN_PX = 400
+
 
 class CleanupSummary(TypedDict):
     junk_bytes: int
@@ -86,6 +95,8 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._hw_resolved = False
         self._accent = str(theme_mod.THEMES[str(load_prefs().get("theme", "red"))]["accent"])
         self._apps: list[InstalledApp] = []
+        self._apps_limit = APPS_BATCH  # filas que deben existir (ventana de render)
+        self._apps_rendered = 0  # filas realmente creadas
         self._initial_scan_callback: Callable[[], None] | None = None
         self._build_ui()
         self._init_scan_buttons([self.scan_btn, self.cleanup_btn])
@@ -232,6 +243,12 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._apps_widget)
         right_layout.addWidget(scroll, 1)
+        self._apps_scroll = scroll
+        # valueChanged: el usuario se acerca al final; rangeChanged: el
+        # contenido creció y quizá aún no llena la ventana (listas cortas).
+        bar = scroll.verticalScrollBar()
+        cast(Any, bar.valueChanged).connect(self._maybe_load_more_apps)
+        cast(Any, bar.rangeChanged).connect(self._maybe_load_more_apps)
 
         right_layout.addSpacing(8)
         self.cleanup_title = QLabel(tr("cleanup_recommended_title"))
@@ -321,6 +338,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             self.scan_btn.set_texts(tr("overview_erase_button"), tr("overview_erase_subtitle"))
 
             self._apps = result["apps"]
+            self._reset_apps_window()
             self._rebuild_apps()
 
             cleanup = result["cleanup"]
@@ -397,6 +415,104 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             return False
         return not sip.isdeleted(self._apps_layout)
 
+    def _reset_apps_window(self) -> None:
+        """Vuelve a la primera tanda (lista nueva tras un escaneo)."""
+        self._apps_limit = APPS_BATCH
+
+    def _make_app_row(self, app: InstalledApp, fallback_icon: QIcon) -> QWidget:
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(4, 2, 4, 2)
+        row_layout.setSpacing(8)
+
+        # Icono de la app (por nombre, con respaldo genérico)
+        icon = QIcon.fromTheme(app.name.lower())
+        if icon.isNull():
+            icon = fallback_icon
+        icon_label = QLabel()
+        icon_label.setPixmap(icon.pixmap(20, 20))
+        row_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
+
+        meta = QVBoxLayout()
+        meta.setSpacing(0)
+
+        name_row = QHBoxLayout()
+        name_row.setSpacing(6)
+        name_label = QLabel(app.name)
+        name_row.addWidget(name_label)
+
+        # Etiqueta del tipo: aplicación / dependencia / carpeta suelta
+        kind_key = kind_label_key(app.kind)
+        kind_obj = {
+            "app": "KindTagApp",
+            "dependency": "KindTagDep",
+            "folder": "KindTagFolder",
+        }.get(app.kind, "KindTagFolder")
+        kind_tag = QLabel(tr(kind_key))
+        kind_tag.setObjectName(kind_obj)
+        name_row.addWidget(kind_tag)
+        name_row.addStretch(1)
+        meta.addLayout(name_row)
+
+        sub_label = QLabel(
+            f"{app.detail}  |  {human_size(app.size_bytes)}"
+            if app.size_bytes
+            else app.detail
+        )
+        sub_label.setObjectName("SubText")
+        sub_label.setWordWrap(True)
+        meta.addWidget(sub_label)
+        row_layout.addLayout(meta, 1)
+
+        uninstall_btn = QPushButton(tr("uninstall_short"))
+        uninstall_btn.setObjectName("DangerButton")
+        cast(Any, uninstall_btn.clicked).connect(
+            lambda _=False, n=app.name, s=app.source, d=app.detail: self.uninstall_requested.emit(n, s, d)
+        )
+        row_layout.addWidget(uninstall_btn)
+        return row
+
+    def _add_app_rows(self, upto: int) -> None:
+        """Crea las filas [self._apps_rendered, upto) y las añade al layout."""
+        fallback_icon = QIcon.fromTheme(_ICON_FALLBACK)
+        for i in range(self._apps_rendered, min(upto, len(self._apps))):
+            self._adding_index = i  # para el diagnóstico si el layout muere
+            self._apps_layout.addWidget(self._make_app_row(self._apps[i], fallback_icon))
+            self._apps_rendered = i + 1
+
+    def _maybe_load_more_apps(self, *_args) -> None:
+        """Carga la siguiente tanda si el usuario está cerca del final."""
+        if self._apps_rendered >= len(self._apps):
+            return
+        if sip.isdeleted(self) or sip.isdeleted(self._apps_layout):
+            return
+        bar = self._apps_scroll.verticalScrollBar()
+        if bar.value() >= bar.maximum() - _APPS_LOAD_MARGIN_PX:
+            self._load_more_apps()
+
+    def _load_more_apps(self) -> None:
+        start = time.perf_counter()
+        before = self._apps_rendered
+        self._apps_limit = self._apps_rendered + APPS_BATCH
+        try:
+            self._add_app_rows(self._apps_limit)
+        except RuntimeError as exc:
+            self._render_failure(
+                "overview_page._load_more_apps",
+                exc,
+                user_message=tr("overview_rebuild_failed"),
+                apps_layout=self._apps_layout,
+                apps_widget=self._apps_widget,
+                extra={"adding_index": getattr(self, "_adding_index", None),
+                       "apps_total": len(self._apps)},
+            )
+            return
+        write_diagnostic(
+            f"PERF overview_load_more added={self._apps_rendered - before} "
+            f"rendered={self._apps_rendered} total={len(self._apps)} "
+            f"ms={(time.perf_counter() - start) * 1000:.0f}"
+        )
+
     def _rebuild_apps(self):
         if sip.isdeleted(self._apps_layout):
             # Defensa extra (también se llega desde retranslate()): no tocar
@@ -410,8 +526,12 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             )
             return
 
+        start = time.perf_counter()
         cleared_rows = 0
-        adding_index: int | None = None
+        self._adding_index: int | None = None
+        # Lo ya cargado por scroll se conserva al reconstruir (p. ej. cambio
+        # de idioma); un escaneo nuevo lo reinicia con _reset_apps_window().
+        target = max(self._apps_limit, APPS_BATCH)
         try:
             write_diagnostic(
                 self._forensic_debug(
@@ -426,9 +546,9 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                     continue
                 widget = item.widget()
                 if widget:
-                    write_diagnostic(f"_rebuild_apps deleteLater widget_id={id(widget)}")
                     widget.deleteLater()
                 cleared_rows += 1
+            self._apps_rendered = 0
 
             if not self._apps:
                 empty = QLabel(tr("apps_empty"))
@@ -439,64 +559,12 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                 return
 
             self.apps_count.setText(tr("apps_count_label").format(count=len(self._apps)))
-            for i, app in enumerate(self._apps):
-                adding_index = i
-                write_diagnostic(
-                    self._forensic_debug(
-                        f"_rebuild_apps addWidget[{i}]",
-                        apps_layout=self._apps_layout,
-                        apps_widget=self._apps_widget,
-                    )
-                )
-                row = QWidget()
-                row_layout = QHBoxLayout(row)
-                row_layout.setContentsMargins(4, 2, 4, 2)
-                row_layout.setSpacing(8)
-
-                # Icono de la app (por nombre, con respaldo genérico)
-                icon = QIcon.fromTheme(app.name.lower(), QIcon.fromTheme(_ICON_FALLBACK))
-                icon_label = QLabel()
-                icon_label.setPixmap(icon.pixmap(20, 20))
-                row_layout.addWidget(icon_label, 0, Qt.AlignmentFlag.AlignTop)
-
-                meta = QVBoxLayout()
-                meta.setSpacing(0)
-
-                name_row = QHBoxLayout()
-                name_row.setSpacing(6)
-                name_label = QLabel(app.name)
-                name_row.addWidget(name_label)
-
-                # Etiqueta del tipo: aplicación / dependencia / carpeta suelta
-                kind_key = kind_label_key(app.kind)
-                kind_obj = {
-                    "app": "KindTagApp",
-                    "dependency": "KindTagDep",
-                    "folder": "KindTagFolder",
-                }.get(app.kind, "KindTagFolder")
-                kind_tag = QLabel(tr(kind_key))
-                kind_tag.setObjectName(kind_obj)
-                name_row.addWidget(kind_tag)
-                name_row.addStretch(1)
-                meta.addLayout(name_row)
-
-                sub_label = QLabel(
-                    f"{app.detail}  |  {human_size(app.size_bytes)}"
-                    if app.size_bytes
-                    else app.detail
-                )
-                sub_label.setObjectName("SubText")
-                sub_label.setWordWrap(True)
-                meta.addWidget(sub_label)
-                row_layout.addLayout(meta, 1)
-
-                uninstall_btn = QPushButton(tr("uninstall_short"))
-                uninstall_btn.setObjectName("DangerButton")
-                cast(Any, uninstall_btn.clicked).connect(
-                    lambda _=False, n=app.name, s=app.source, d=app.detail: self.uninstall_requested.emit(n, s, d)
-                )
-                row_layout.addWidget(uninstall_btn)
-                self._apps_layout.addWidget(row)
+            self._add_app_rows(target)
+            write_diagnostic(
+                f"PERF overview_rebuild total={len(self._apps)} "
+                f"rendered={self._apps_rendered} cleared={cleared_rows} "
+                f"ms={(time.perf_counter() - start) * 1000:.0f}"
+            )
         except RuntimeError as exc:
             # Defensa dura: aunque el layout muera a MITAD de la reconstrucción
             # (después del guard inicial), la app sigue viva. Dejamos la
@@ -510,7 +578,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                 apps_widget=self._apps_widget,
                 extra={
                     "rows_cleared": cleared_rows,
-                    "adding_index": adding_index,
+                    "adding_index": self._adding_index,
                     "apps_total": len(self._apps),
                 },
             )
