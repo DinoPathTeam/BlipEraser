@@ -174,36 +174,37 @@ Deberías ver archivos como "pyproject.toml" y "src". Si ves esa "src",
 PASO 6: INSTALA EL PROGRAMA (MODO EDITABLE)
 --------------------------------------------------------------------------------
 
-Ahora sí, dentro de la carpeta, instala el programa. Copia y pega esta
-línea y pulsa Enter:
-
-    pip install -e . --break-system-packages
-
-EXPLICACIÓN DE QUÉ HACE:
-
-- "pip install": ordena a pip que instale algo.
-- "-e .": instala el programa "desde esta carpeta" en modo editable
-  (significa que el programa se ejecuta directamente desde el código que
-  acabas de descargar).
-- "--break-system-packages": como tu sistema es de Arch, Python suele
-  avisar de que no instale paquetes fuera de los del sistema. Esta
-  opción le dice a pip que sí puede hacerlo. Es seguro en este caso.
-
-Verás un montón de texto bajando; es normal. Al final debe aparecer algo
-similar a:
-
-    Successfully installed blip-eraser-0.1.0
-
-Si prefieres mantener las librerías del sistema aisladas de las del
-programa (un poco más avanzado), puedes usar un entorno virtual:
+Ahora sí, dentro de la carpeta, crea un entorno virtual que reutilice las
+librerías que ya instalaste con pacman (PyQt6, PyGObject) e instala el
+programa dentro. Copia y pega estas líneas, una por una, pulsando Enter
+tras cada una:
 
     python -m venv --system-site-packages .venv
     source .venv/bin/activate
     pip install -e .
 
-Esto reutiliza el PyQt6 que ya instalamos con pacman en lugar de
-descargarlo otra vez. No es obligatorio; el primer método (con
---break-system-packages) es suficiente.
+SI TU TERMINAL ES FISH (CachyOS la trae por defecto en algunas ediciones),
+la segunda línea cambia a:
+
+    source .venv/bin/activate.fish
+
+EXPLICACIÓN DE QUÉ HACE:
+
+- "python -m venv --system-site-packages .venv": crea una carpeta ".venv"
+  con un entorno de Python propio del programa, pero que puede usar las
+  librerías del sistema (así no descarga PyQt6 otra vez).
+- "source .venv/bin/activate": entra en ese entorno. Verás "(.venv)" al
+  principio de la línea de la terminal.
+- "pip install -e .": instala el programa "desde esta carpeta" en modo
+  editable (se ejecuta directamente desde el código descargado).
+
+No hace falta tocar los paquetes del sistema ni usar opciones peligrosas
+como "--break-system-packages".
+
+Verás un montón de texto bajando; es normal. Al final debe aparecer algo
+similar a:
+
+    Successfully installed blip-eraser-<versión>
 
 --------------------------------------------------------------------------------
 PASO 7: EJECUTA BLIPERASER
@@ -224,11 +225,20 @@ CONSEJOS si algo sale mal:
       python -m blip_eraser
 
 - Puede que necesites cerrar la terminal y abrir una nueva para que se
-  reconozca el comando. Si has usado un entorno virtual (PASO 6,
-  segunda opción), recuerda que cada vez que quieras ejecutarlo debes
-  activar antes el entorno con:
+  reconozca el comando. Recuerda que cada vez que abras una terminal
+  nueva debes activar antes el entorno del PASO 6 (desde la carpeta del
+  programa):
 
-      source .venv/bin/activate
+      source .venv/bin/activate        (en fish: activate.fish)
+
+OPCIONAL (recomendado): para que la limpieza de /var/cache y /var/log pase por
+el servicio privilegiado y confinado (sin él se usa pkexec directamente),
+desde la carpeta del programa ejecuta:
+
+    ./scripts/install-daemon.sh
+
+(Pide tu contraseña de administrador. Es idempotente: puedes repetirlo tras
+cada actualización.)
 
 --------------------------------------------------------------------------------
 PASO 8 (OPCIONAL): CÓMO ACTUALIZAR EL PROGRAMA
@@ -244,9 +254,11 @@ Cuando quieras actualizar BlipEraser a una nueva versión:
    (Si descargaste el ZIP del navegador, descarga de nuevo el ZIP y
    vuelve a hacer los pasos 5 y 6).
 
-3. Reinstala para asegurarte de que todo queda al día:
+3. Activa el entorno (PASO 6) y reinstala para asegurarte de que todo
+   queda al día:
 
-       pip install -e . --break-system-packages
+       source .venv/bin/activate        (en fish: activate.fish)
+       pip install -e .
 
 --------------------------------------------------------------------------------
 PASO 9 (OPCIONAL): DESINSTALAR EL PROGRAMA
@@ -289,8 +301,9 @@ PROBLEMA: El comando "pip" no existe
       sudo pacman -S python-pip
 
 PROBLEMA: "externally-managed-environment" o un aviso rojo al hacer pip
-  Este aviso es el motivo del "--break-system-packages" del PASO 6.
-  Añade esa opción al final del comando.
+  Significa que estás instalando fuera del entorno virtual. Activa el
+  entorno del PASO 6 ("source .venv/bin/activate") y repite el comando.
+  No uses "--break-system-packages".
 
 PROBLEMA: La ventana dice que falta PyQt6
   Instálalo con pacman (nunca con pip):

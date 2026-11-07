@@ -765,3 +765,9 @@ systemctl status blip-eraser-privileged.service
 - El CI ahora tiene dos jobs: **lint** (`compileall`, `ruff check` con reglas F/E9 y `shellcheck` de `scripts/*.sh`) y **test** (Python 3.11 y 3.14, con PyQt6 en modo offscreen, de modo que los tests de GUI se ejecutan en vez de omitirse).
 - Dependabot propone actualizar los SHA pineados de las acciones de GitHub (semanal).
 - Se limpiaron imports/variables sin usar en tests y variables muertas de `scripts/aa-tune-gui.sh`.
+
+## Puesta al día
+- El instalador automático de la app (`phase2_installer`) ahora copia también `49-blip-eraser.rules` (solo miembros de `wheel` pueden autorizar) y lo comprueba al detectar la instalación; antes solo copiaba la política.
+- Test que impide que `.policy` y `.rules` se desincronicen y que las anotaciones de `pacman-remove` sigan coincidiendo con el comando real de desinstalación (pkexec elige la acción por `exec.path`/`argv`).
+- Guías de instalación (ES/EN): entorno virtual con `--system-site-packages` como método principal (sin `--break-system-packages`), variante para fish y paso opcional para instalar el daemon.
+- Comentarios de las acciones de GitHub con el formato `# vX.Y.Z` que Dependabot mantiene.

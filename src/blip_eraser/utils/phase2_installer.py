@@ -37,6 +37,7 @@ SYSTEMD_SERVICE_DEST = Path("/usr/lib/systemd/system/blip-eraser-privileged.serv
 DBUS_CONF_DEST = Path("/usr/share/dbus-1/system.d/blip-eraser-privileged.conf")
 DBUS_INTERFACE_DEST = Path("/usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml")
 POLKIT_POLICY_DEST = Path("/usr/share/polkit-1/actions/com.dinopath.blip-eraser.policy")
+POLKIT_RULES_DEST = Path("/etc/polkit-1/rules.d/49-blip-eraser.rules")
 APPARMOR_PROFILE_DEST = Path("/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged")
 SCRIPT_DEST = Path("/usr/lib/blip-eraser/blip-eraser-privileged")
 SCRIPT_DIR = Path("/usr/lib/blip-eraser")
@@ -50,6 +51,7 @@ SYSTEMD_SERVICE_SRC = PACKAGING_DIR / "systemd" / "blip-eraser-privileged.servic
 DBUS_CONF_SRC = PACKAGING_DIR / "dbus" / "blip-eraser-privileged.conf"
 DBUS_INTERFACE_SRC = PACKAGING_DIR / "dbus" / "com.dinopath.BlipEraser.Privileged.xml"
 POLKIT_POLICY_SRC = PACKAGING_DIR / "polkit" / "com.dinopath.blip-eraser.policy"
+POLKIT_RULES_SRC = PACKAGING_DIR / "polkit" / "49-blip-eraser.rules"
 APPARMOR_PROFILE_SRC = PACKAGING_DIR / "apparmor" / "usr.lib.blip-eraser.blip-eraser-privileged"
 SCRIPT_SRC = PACKAGING_DIR / "scripts" / "blip-eraser-privileged"
 DAEMON_PACKAGE_SRC = Path(__file__).resolve().parent.parent
@@ -101,16 +103,22 @@ def install_dbus_config() -> Tuple[bool, str]:
 
 
 def install_polkit_policy() -> Tuple[bool, str]:
-    """Instala política Polkit."""
+    """Instala la política Polkit y las reglas (solo miembros de `wheel`)."""
+    pairs = (
+        (POLKIT_POLICY_SRC, POLKIT_POLICY_DEST),
+        (POLKIT_RULES_SRC, POLKIT_RULES_DEST),
+    )
     try:
         if check_root():
-            POLKIT_POLICY_DEST.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(POLKIT_POLICY_SRC, POLKIT_POLICY_DEST)
+            for src, dest in pairs:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
         else:
-            subprocess.run(["pkexec", "mkdir", "-p", "/usr/share/polkit-1/actions"], check=True, timeout=10)
-            subprocess.run(["pkexec", "cp", str(POLKIT_POLICY_SRC), str(POLKIT_POLICY_DEST)], check=True, timeout=10)
-        
-        return True, "Política Polkit instalada"
+            for src, dest in pairs:
+                subprocess.run(["pkexec", "mkdir", "-p", str(dest.parent)], check=True, timeout=10)
+                subprocess.run(["pkexec", "cp", str(src), str(dest)], check=True, timeout=10)
+
+        return True, "Política y reglas Polkit instaladas"
     except Exception as e:
         return False, f"Error instalando política Polkit: {e}"
 
@@ -281,6 +289,7 @@ def check_daemon_installed() -> Tuple[bool, List[str]]:
         (DBUS_CONF_DEST, "Config D-Bus"),
         (DBUS_INTERFACE_DEST, "Interfaz D-Bus"),
         (POLKIT_POLICY_DEST, "Política Polkit"),
+        (POLKIT_RULES_DEST, "Reglas Polkit"),
         (APPARMOR_PROFILE_DEST, "Perfil AppArmor"),
         (SCRIPT_DEST, "Script wrapper"),
         (DAEMON_PACKAGE_DEST / "__init__.py", "Paquete Python del daemon"),
