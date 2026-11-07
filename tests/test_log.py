@@ -92,7 +92,6 @@ class TestWriteDiagnostic:
     """Bitácora forense (archivo aparte, no visible en la UI)."""
 
     def test_writes_timestamped_line_with_thread(self, tmp_path, monkeypatch):
-        import threading
 
         path = tmp_path / "diagnostics.log"
         monkeypatch.setattr(log_mod, "DIAG_LOG_PATH", path)

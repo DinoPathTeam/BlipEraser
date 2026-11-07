@@ -31,7 +31,6 @@ class TestSidebarIcons:
         """El sidebar se construye con 5 secciones en orden fijo."""
         sidebar = Sidebar()
         assert sidebar.count() == 5
-        sections = [sidebar.item(i).data(QtCore.Qt.ItemDataRole.ToolTipRole) or "" for i in range(5)]
         # Verificar que las secciones existen (el texto viene de i18n)
         assert sidebar.count() == 5
 
@@ -95,7 +94,7 @@ class TestSidebarIcons:
         try:
             sidebar.refresh_icons()
             item = sidebar.item(0)  # overview es row 0
-            icon = item.icon()
+            item.icon()
             # En entorno con tema de íconos: icono válido con tinte
             # En WSL sin tema: icono puede ser nulo, pero no debe crashear
             # Verificamos que refresh_icons() completó sin excepción
@@ -142,7 +141,6 @@ class TestSidebarIcons:
     def test_sidebar_retranslate_updates_text(self, app):
         """retranslate() actualiza los textos sin romper iconos."""
         sidebar = Sidebar()
-        original_texts = [sidebar.item(i).text() for i in range(5)]
         sidebar.retranslate()
         new_texts = [sidebar.item(i).text() for i in range(5)]
         # Los textos pueden ser iguales si el idioma no cambió, pero no debe fallar

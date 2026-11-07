@@ -21,7 +21,7 @@ QtGui = pytest.importorskip("PyQt6.QtGui")
 
 from blip_eraser.utils.theme import THEMES
 from blip_eraser.widgets.health_gauge import HealthGauge
-from blip_eraser.widgets.sidebar import Sidebar, tint_icon, _SIDEBAR_ASSETS
+from blip_eraser.widgets.sidebar import Sidebar, tint_icon
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +85,7 @@ class TestSidebarIconTint:
 
     def test_tint_icon_applies_palette_icon_color(self, app):
         """`tint_icon` recubre el asset con el color pedido (función unitaria)."""
-        from PyQt6.QtGui import QColor, QIcon, QPixmap
+        from PyQt6.QtGui import QIcon, QPixmap
 
         src = QPixmap(26, 26)
         src.fill(QtCore.Qt.GlobalColor.white)

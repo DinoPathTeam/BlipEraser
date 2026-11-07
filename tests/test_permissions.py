@@ -4,7 +4,7 @@ Reaprovecha el redireccionamiento de i18n.SETTINGS_FILE a tmp_path para no
 tocar la configuración real del usuario.
 """
 
-from blip_eraser.utils import i18n, permissions
+from blip_eraser.utils import i18n
 from blip_eraser.utils.i18n import set_language
 from blip_eraser.utils.permissions import (
     mark_permissions_notice_shown,

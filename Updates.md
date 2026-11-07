@@ -760,3 +760,8 @@ systemctl status blip-eraser-privileged.service
 - **Elevación**: rutas desnudas como `/var`, `/usr` o `/mnt` ahora se tratan como de sistema (antes se saltaban la validación). Un archivo propio en `/mnt`, `/media`, `/srv` u `/opt` se borra sin elevar; nunca se borra un punto de montaje.
 - **Descargas**: la carpeta de escaneo por defecto se lee de `user-dirs.dirs` (XDG) en vez de asumir `~/Descargas`.
 - Importante: tras actualizar, re-ejecuta `./scripts/install-daemon.sh` para que el daemon instalado use la nueva validación.
+
+## CI y calidad
+- El CI ahora tiene dos jobs: **lint** (`compileall`, `ruff check` con reglas F/E9 y `shellcheck` de `scripts/*.sh`) y **test** (Python 3.11 y 3.14, con PyQt6 en modo offscreen, de modo que los tests de GUI se ejecutan en vez de omitirse).
+- Dependabot propone actualizar los SHA pineados de las acciones de GitHub (semanal).
+- Se limpiaron imports/variables sin usar en tests y variables muertas de `scripts/aa-tune-gui.sh`.

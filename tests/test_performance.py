@@ -1,9 +1,6 @@
 """Tests para utils/performance.py — lógica de tweaks de rendimiento."""
 
-import os
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,10 +13,7 @@ from blip_eraser.utils.performance import (
     get_tweak_info,
     _pkg_installed,
     _systemctl_is_enabled,
-    _systemctl_is_active,
     _install_pkg_via_pkexec,
-    _write_root_file,
-    _remove_root_file,
     tweak_trim_check_state,
     tweak_trim_apply,
     tweak_zram_check_state,

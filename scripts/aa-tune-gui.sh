@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # Ajuste guiado del perfil AppArmor de la GUI de BlipEraser.
 # Uso: ./scripts/aa-tune-gui.sh   (pide sudo solo)
-# Requiere instalación NATIVA (/usr/bin/blip-eraser existe: AUR o pip).
+# Requiere instalación NATIVA (/usr/bin/blip-eraser existe: paquete makepkg o pip).
 # Con Flatpak no aplica: la GUI corre en el sandbox, no bajo este perfil.
 set -euo pipefail
 
 GUI_BIN="/usr/bin/blip-eraser"
-PROFILE_SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged"
-PROFILE_DEST="/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
 
 if [[ ! -x "$GUI_BIN" ]]; then
     echo "[STOP] No existe $GUI_BIN."
-    echo "  Instala nativo primero (AUR: makepkg -si con packaging/aur/)"
+    echo "  Instala nativo primero (makepkg -si en packaging/aur/)"
     echo "  y vuelve a ejecutar este script. Con Flatpak no aplica."
     exit 1
 fi

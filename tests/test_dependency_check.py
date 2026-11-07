@@ -6,7 +6,6 @@ mockea subprocess.run: no se necesita PyQt6 ni Arch/Linux reales.
 
 import shutil
 
-import pytest
 
 from blip_eraser.utils.dependency_check import (
     BINARY_DEPENDENCIES,

@@ -18,7 +18,6 @@ sys.modules["gi.repository.Gio"] = MagicMock()
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from blip_eraser.daemon.privileged_daemon import (
-    ALLOWED_SYSTEM_PREFIXES,
     validate_path_str as _validate_path_str,
     reject_symlinks_atomic as _reject_symlinks_atomic,
     validate_path_resolved as _validate_path_resolved,
@@ -277,7 +276,6 @@ class TestActiveGraphicalSession:
     """_check_active_graphical_session camina sesiones (show-user no da Type)."""
 
     def _fake(self, monkeypatch, user_out, sess_out):
-        import subprocess as sp
 
         def fake_run(cmd, **kwargs):
             mock = MagicMock()

@@ -28,7 +28,6 @@ from PyQt6 import sip
 
 import blip_eraser.pages.overview_page as overview_mod
 import blip_eraser.pages.uninstaller_page as uninstaller_mod
-import blip_eraser.pages.cleaner_page as cleaner_mod
 import blip_eraser.utils.log as log_mod
 from blip_eraser.utils.i18n import tr
 
