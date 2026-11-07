@@ -321,6 +321,7 @@ class MainWindow(QMainWindow):
             )
         self._overview.set_accent(accent, theme)
         self._overview.set_text_color(palette.get("text", "#ececef"))
+        self._pages["performance"].set_accent(accent, theme)
         self._tools.settings.set_accent(accent, theme["on_accent"])
 
         family = theme_mod.font_family(prefs.get("font", "system"))

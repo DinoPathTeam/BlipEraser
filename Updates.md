@@ -86,6 +86,16 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
   `sidebar_activity_empty`.
 
+### Sin versionar: rediseño (lote 3) — Ajustes de rendimiento
+
+- Cada ajuste va en su tarjeta: interruptor con perilla (QSS no puede dibujarla:
+  imágenes SVG por tema generadas en el directorio temporal), título, descripción,
+  vista previa del recurso y «?» de ayuda. El motivo de bloqueo se muestra como
+  nota en la propia tarjeta (antes solo en el tooltip).
+- Avisos (reinicio, estado, error, «Reaplicar») con el estilo del tema.
+- Las vistas previas ahora siguen el tema al cambiarlo (antes quedaban con el
+  color del arranque).
+
 ### Sin versionar: rediseño (lote 2) — Desinstalador y Limpiador
 
 - **Tablas**: sin rejilla, con separador fino por fila, encabezados en

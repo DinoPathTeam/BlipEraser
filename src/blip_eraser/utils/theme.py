@@ -183,6 +183,59 @@ def check_icon_path(color: str) -> str:
     return target.as_posix()
 
 
+def switch_icon_paths(theme: dict) -> dict[str, str]:
+    """SVG del interruptor (apagado/encendido, normal/deshabilitado) del tema.
+
+    QSS no puede dibujar la perilla de un interruptor, así que el indicador del
+    QCheckBox#TweakSwitch usa estas imágenes (generadas en el directorio
+    temporal, una vez por combinación de colores).
+    """
+    import hashlib
+    import tempfile
+    from pathlib import Path
+
+    p = theme["palette"]
+    off_track, off_knob = p["hover"], p["subtext"]
+    top, bot, knob_on = theme["fill_top"], theme["fill_bot"], theme["on_accent"]
+    folder = Path(tempfile.gettempdir()) / "bliperaser-qss"
+    folder.mkdir(parents=True, exist_ok=True)
+    key = hashlib.md5(f"{off_track}{off_knob}{top}{bot}{knob_on}".encode()).hexdigest()[:10]
+
+    def svg(on: bool, disabled: bool) -> str:
+        opacity = "0.45" if disabled else "1"
+        if on:
+            track = (
+                f'<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">'
+                f'<stop offset="0" stop-color="{top}"/><stop offset="1" stop-color="{bot}"/>'
+                f"</linearGradient></defs>"
+                f'<rect width="40" height="22" rx="11" fill="url(#g)"/>'
+            )
+            knob = f'<circle cx="29" cy="11" r="8" fill="{knob_on}"/>'
+        else:
+            track = (
+                f'<rect x="0.5" y="0.5" width="39" height="21" rx="10.5" fill="{off_track}" '
+                f'stroke="{p["border"]}"/>'
+            )
+            knob = f'<circle cx="11" cy="11" r="8" fill="{off_knob}"/>'
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="22" viewBox="0 0 40 22">'
+            f'<g opacity="{opacity}">{track}{knob}</g></svg>'
+        )
+
+    paths: dict[str, str] = {}
+    for name, on, disabled in (
+        ("off", False, False),
+        ("on", True, False),
+        ("off_disabled", False, True),
+        ("on_disabled", True, True),
+    ):
+        target = folder / f"switch-{key}-{name}.svg"
+        if not target.exists():
+            target.write_text(svg(on, disabled), encoding="utf-8")
+        paths[name] = target.as_posix()
+    return paths
+
+
 def build_qss(theme_key: str) -> str:
     """Hoja de estilos Qt completa para un tema dado (por clave)."""
     theme = THEMES.get(theme_key, THEMES["red"])
@@ -195,11 +248,12 @@ def build_qss(theme_key: str) -> str:
     bot = theme["fill_bot"]
     tags = theme["tags"]
     check = check_icon_path(on)
+    sw = switch_icon_paths(theme)
     return f"""
 QWidget {{ background-color: {p['bg']}; color: {p['text']}; }}
 QMainWindow {{ background-color: {p['bg']}; }}
 QLabel {{ background: transparent; }}
-QToolButton#HelpIcon {{ background: transparent; color: {p['subtext']}; border: 1px solid {p['subtext']}; border-radius: 8px; min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px; font-weight: bold; }}
+QToolButton#HelpIcon {{ padding: 0; background: transparent; color: {p['subtext']}; border: 1px solid {p['subtext']}; border-radius: 8px; min-width: 16px; max-width: 16px; min-height: 16px; max-height: 16px; font-weight: bold; }}
 QToolButton#HelpIcon:hover {{ color: {atext}; border-color: {atext}; }}
 QToolButton#HelpIcon:focus {{ outline: none; }}
 QWidget#HeaderBar {{ background-color: {p['panel']}; border-bottom: 1px solid {p['border']}; }}
@@ -245,6 +299,16 @@ QTableView::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 
 QTableView::indicator:hover {{ border-color: {accent}; }}
 QTableView::indicator:checked {{ background-color: {accent}; border-color: {accent}; image: url({check}); }}
 QTableView::indicator:indeterminate {{ background-color: {accent}; border-color: {accent}; }}
+QCheckBox#TweakSwitch {{ background: transparent; spacing: 12px; font-weight: 600; }}
+QCheckBox#TweakSwitch::indicator {{ width: 40px; height: 22px; border: none; background: transparent; image: url({sw['off']}); }}
+QCheckBox#TweakSwitch::indicator:checked {{ image: url({sw['on']}); }}
+QCheckBox#TweakSwitch::indicator:disabled {{ image: url({sw['off_disabled']}); }}
+QCheckBox#TweakSwitch::indicator:checked:disabled {{ image: url({sw['on_disabled']}); }}
+QCheckBox#TweakSwitch:disabled {{ color: {p['subtext']}; }}
+QLabel#RebootBanner {{ background: {p['hover']}; color: {p['text']}; border: 1px solid {p['border']}; border-left: 3px solid {accent}; border-radius: 10px; padding: 10px 14px; }}
+QLabel#StatusBanner {{ background: {p['hover']}; color: {p['text']}; border: 1px solid {p['border']}; border-left: 3px solid {tags['app']}; border-radius: 10px; padding: 10px 14px; }}
+QLabel#ErrorBanner {{ background: {p['hover']}; color: {p['text']}; border: 1px solid {p['border']}; border-left: 3px solid {atext}; border-radius: 10px; padding: 10px 14px; }}
+QLabel#BlockNote {{ color: {p['subtext']}; font-style: italic; font-size: 11px; }}
 QTabWidget::pane {{ border: none; top: 6px; }}
 QTabWidget::tab-bar {{ left: 0px; }}
 QTabBar {{ background: transparent; }}

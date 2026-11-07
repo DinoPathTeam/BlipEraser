@@ -26,6 +26,7 @@ from blip_eraser.pages.base import BasePage
 from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
+from blip_eraser.widgets.card import Card
 from blip_eraser.utils.performance import (
     check_tweak_state,
     apply_tweak,
@@ -79,6 +80,9 @@ class _EffectPreview(QWidget):
         self._label = label
         self._level = max(0.0, min(1.0, level))
         self._accent = QColor(accent)
+        self._fill_top: QColor | None = None
+        self._fill_bot: QColor | None = None
+        self._label_color = QColor(154, 154, 162)
         self._phase = 0.0
         self.setFixedHeight(28)
         self.setMinimumWidth(150)
@@ -87,8 +91,17 @@ class _EffectPreview(QWidget):
         self._label = label
         self.update()
 
-    def set_accent(self, accent: str) -> None:
+    def set_accent(
+        self,
+        accent: str,
+        fill: tuple[str, str] | None = None,
+        label_color: str | None = None,
+    ) -> None:
         self._accent = QColor(accent)
+        if fill:
+            self._fill_top, self._fill_bot = QColor(fill[0]), QColor(fill[1])
+        if label_color:
+            self._label_color = QColor(label_color)
         self.update()
 
     def tick(self) -> None:
@@ -106,7 +119,7 @@ class _EffectPreview(QWidget):
         label_font = QFont(self.font())
         label_font.setPointSize(8)
         painter.setFont(label_font)
-        painter.setPen(QColor(154, 154, 162))
+        painter.setPen(self._label_color)
         painter.drawText(
             QRectF(0, 0, 58, height),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -126,7 +139,13 @@ class _EffectPreview(QWidget):
 
         # Relleno (impacto estimado)
         painter.setOpacity(0.95)
-        painter.setBrush(self._accent)
+        if self._fill_top is not None and self._fill_bot is not None:
+            bar = QLinearGradient(0, track_y, 0, track_y + 8)
+            bar.setColorAt(0.0, self._fill_top)
+            bar.setColorAt(1.0, self._fill_bot)
+            painter.setBrush(bar)
+        else:
+            painter.setBrush(self._accent)
         painter.drawRoundedRect(QRectF(track_x, track_y, fill_w, 8), 4, 4)
 
         # Brillo sutil que recorre el relleno (animación decorativa)
@@ -176,10 +195,14 @@ class PerformancePage(BasePage):
 
     def _build_ui(self, accent: str):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 8)
+        layout.setSpacing(6)
 
+        # El título lo muestra el encabezado de la ventana; se conserva el
+        # QLabel (oculto) por compatibilidad.
         title = QLabel(tr("performance_title"))
         title.setObjectName("PageTitle")
-        layout.addWidget(title)
+        title.hide()
 
         hint = QLabel(tr("performance_hint"))
         hint.setObjectName("SubText")
@@ -202,30 +225,46 @@ class PerformancePage(BasePage):
         self._drift_label.setWordWrap(True)
         drift_row.addWidget(self._drift_label, 1)
         self._drift_btn = QPushButton(tr("perf_drift_reapply"))
+        self._drift_btn.setObjectName("PrimaryButton")
         self._drift_btn.clicked.connect(self._reapply_drifted)
         drift_row.addWidget(self._drift_btn, 0)
         self._drift_bar.setVisible(False)
         self._drifted: list[str] = []
         layout.addWidget(self._drift_bar)
 
-        layout.addSpacing(16)
-
         for opt in _PERF_OPTIONS:
-            block = QVBoxLayout()
-            block.setSpacing(4)
+            card = Card(padding=6)
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(0, 0, 0, 0)
+            card_layout.setSpacing(14)
 
-            header_row = QHBoxLayout()
-            header_row.setSpacing(10)
+            text_col = QVBoxLayout()
+            text_col.setSpacing(3)
 
             box = QCheckBox(tr(opt["key"]))
+            box.setObjectName("TweakSwitch")
             box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
             # Conectar cambio de estado real (usuario hace clic)
             box.toggled.connect(lambda checked, k=opt["key"]: self._on_tweak_toggled(k, checked))
-            header_row.addWidget(box, 1)
+            text_col.addWidget(box)
+
+            desc = QLabel(tr(opt["desc"]))
+            desc.setObjectName("SubText")
+            desc.setWordWrap(True)
+            desc.setContentsMargins(52, 0, 0, 0)  # alineada con el título (tras el interruptor)
+            text_col.addWidget(desc)
+
+            block_note = QLabel()
+            block_note.setObjectName("BlockNote")
+            block_note.setWordWrap(True)
+            block_note.setContentsMargins(52, 0, 0, 0)
+            block_note.setVisible(False)
+            text_col.addWidget(block_note)
+            card_layout.addLayout(text_col, 1)
 
             preview = _EffectPreview(tr(opt["effect"]), opt["level"], accent)
             self._previews.append(preview)
-            header_row.addWidget(preview, 0, Qt.AlignmentFlag.AlignVCenter)
+            card_layout.addWidget(preview, 0, Qt.AlignmentFlag.AlignVCenter)
 
             help_btn = QToolButton()
             help_btn.setObjectName("HelpIcon")
@@ -237,21 +276,14 @@ class PerformancePage(BasePage):
             help_btn.clicked.connect(
                 lambda _checked=False, b=help_btn, k=tip_key: self._show_tip(b, tr(k))
             )
-            header_row.addWidget(help_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+            card_layout.addWidget(help_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
-            block.addLayout(header_row)
-
-            desc = QLabel(tr(opt["desc"]))
-            desc.setObjectName("SubText")
-            desc.setWordWrap(True)
-            desc.setContentsMargins(2, 0, 0, 0)
-            block.addWidget(desc)
-
-            layout.addLayout(block)
+            layout.addWidget(card)
             self._rows.append({
                 "key": opt["key"],
                 "checkbox": box,
                 "desc": desc,
+                "block_note": block_note,
                 "help_btn": help_btn,
                 "tip_key": tip_key,
                 "desc_key": desc_key,
@@ -263,6 +295,13 @@ class PerformancePage(BasePage):
 
         self._anim = QTimer(self)
         self._anim.timeout.connect(self._animate_previews)
+
+    def set_accent(self, accent: str, theme: dict | None = None) -> None:
+        """Recolorea las vistas previas con el tema activo."""
+        fill = (theme["fill_top"], theme["fill_bot"]) if theme else None
+        subtext = theme["palette"]["subtext"] if theme else None
+        for preview in self._previews:
+            preview.set_accent(accent, fill, subtext)
 
     def _sync_initial_state(self) -> None:
         """Refleja el estado real sin pisar la elección guardada del usuario."""
@@ -287,7 +326,10 @@ class PerformancePage(BasePage):
                 checkbox.blockSignals(False)
                 checkbox.setEnabled(False)
                 text = tr(f"perf_block_{block.code}")
-                checkbox.setToolTip(block.message if text.startswith("[") else text)
+                note = block.message if text.startswith("[") else text
+                checkbox.setToolTip(note)
+                row["block_note"].setText(note)
+                row["block_note"].setVisible(True)
                 continue
 
             checkbox.blockSignals(True)
