@@ -57,7 +57,7 @@ un issue con el resultado (bueno o malo) se agradece mucho.
 
 ## Instalación
 
-### Desde los archivos del paquete AUR
+### Compilar el paquete en local (PKGBUILD)
 
 `packaging/aur/` contiene el `PKGBUILD` que compila el tarball de la versión e
 instala todo (app, daemon privilegiado, política y reglas de polkit, D-Bus,
