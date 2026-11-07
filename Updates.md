@@ -695,3 +695,62 @@ systemctl status blip-eraser-privileged.service
 ## Tweaks: reconciliación al arrancar
 - Tu elección guardada ya no se sobrescribe con el estado del sistema. Si dejaste un ajuste activado y el sistema lo perdió, la página de Rendimiento lo avisa y ofrece "Reaplicar".
 - Tests de GUI reales para la página de Rendimiento.
+
+---
+
+## Historial de hitos (v0.1 – v1.3)
+
+> Reconstruido desde cero: dónde estaría cada pieza si se hubiera
+> planificado por versiones, dónde estamos (~70% funcional) y qué falta
+> para producción. **Flathub en pausa** (≥1 mes, a decisión del creador).
+
+- [x] **v0.1 — Fundación**: scaffold `src/blip_eraser/`, lógica pura en
+  `utils/` sin Qt, lectura pacman (`-Qe/-Qd/-Qi`), ventana y navegación base.
+- [x] **v0.2 — Desinstalador unificado**: tabla pacman + entradas manuales
+  (AppImages, `~/Games`), selección manual sin "seleccionar todo",
+  filtros por tipo/peso/fecha.
+- [x] **v0.3 — Limpieza y sistema**: Limpiador (recomendada + manual),
+  Overview con gauge de salud, ajustes de rendimiento (fstrim/zram/mirrors),
+  temas, ES/EN en caliente, caché de escaneo (5 min).
+- [x] **v0.4 — Seguridad Fase 1**: allowlist de paths, rechazo de symlinks,
+  validación de paquetes, confirmación obligatoria, aviso ≥5 GiB,
+  auditoría forense (`diagnostics.log`).
+- [x] **v0.5 — Privilegios Fase 2 + arranque**: daemon D-Bus systemd
+  (`CleanSystemPaths`/`Ping`) con fallback pkexec; la desinstalación de paquetes va por `pkexec pacman -Rns`,
+  splash con vídeo, escaneos en segundo plano con token, icono propio.
+- [x] **v1.0 — Estabilización CachyOS**: defensa dura `sip.isdeleted`,
+  `BackgroundScanMixin` en las 3 páginas, instrumentación forense.
+  **Estado actual**: código `1.0.0`, funcional en Arch/CachyOS.
+- [x] **v1.1 — Orden y calidad (hecho)**:
+  - Suite verde (591 passed, 3 skipped) + CI mínimo
+    (`pytest` + `compileall`) en cada push/PR a `main`.
+  - Borrado en segundo plano con diálogo de progreso ("Eliminando… n/N",
+    se cierra solo): adiós al "No responde"; modal sin cancelar (un
+    borrado a medias no se puede interrumpir).
+  - Allowlist/denylist única en `utils/validation.py` (daemon, cliente
+    pkexec y GUI la comparten; `dbus_client` solo re-exporta).
+  - Sincronizar versión `pyproject.toml` → `1.0.0`.
+  - Limpieza de raíz (sin artefactos `Z:/`, sin logs sueltos).
+  - Extras del release: `check_for_updates` real (GitHub Releases,
+    fail-closed), rate-limit D-Bus (10 ops destructivas/min por sender),
+    tag + release `v1.0.0` en GitHub con Flatpak descargable
+    (`io.github.DinoPathTeam.BlipEraser`).
+- [x] **v1.2 — Empaquetado AUR (empaquetado, subida ⏸️)**: `.desktop`
+  con `Icon=`, PKGBUILD 1.0.1 + `.SRCINFO` validados con `makepkg`
+  (`packaging/aur/`), instalador que cubre polkit + AppArmor, guía sin
+  `--break-system-packages` (venv `--system-site-packages`).
+  > Nota: la subida a AUR está en pausa — los 3 archivos de
+  > `packaging/aur/` están listos para pushear cuando se reactive.
+- [x] **v1.3 — Producción (hecho)**: AppArmor en enforce verificado en
+  host real (`AppArmorProfile=` en systemd, perfil endurecido con
+  evidencia, 0 DENIED), `check_for_updates` real (GitHub Releases),
+  auditoría del `rm -rf` fd-atómico, rate-limit D-Bus, tags `v1.0.0`/`v1.0.1`.
+- [ ] **Futuro**: migrar i18n a gettext, tests E2E, PyGObject en el bundle
+  Flatpak (hoy fallback pkexec-host), **Flathub ⏸️**.
+
+> Movido desde el README para mantenerlo corto; el estado actual está en el README y los cambios recientes arriba.
+
+## README
+- README reescrito y dividido: `README.md` (EN) y `README.es.md` (ES). Corrige versión, funciones reales (TRIM/zram/zswap/espejos), modelo de seguridad actual (daemon solo limpia; desinstalar va por pkexec), distros (solo CachyOS probado), instalación (PKGBUILD, fuente, Flatpak sin sandbox real) y quita contadores que caducan.
+- El roadmap detallado se movió a "Historial de hitos" de este archivo.
+- `vendor_url` de la política polkit apunta al repositorio real.

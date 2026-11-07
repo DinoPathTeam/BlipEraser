@@ -3,7 +3,7 @@
 "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 <policyconfig>
   <vendor>BlipEraser</vendor>
-  <vendor_url>https://github.com/blip-eraser/blip-eraser</vendor_url>
+  <vendor_url>https://github.com/DinoPathTeam/BlipEraser</vendor_url>
   <icon_name>blip-eraser</icon_name>
 
   <!-- allow_active=auth_admin: sin el .rules (p. ej. instalación parcial) pkexec
