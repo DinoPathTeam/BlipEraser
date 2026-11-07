@@ -135,6 +135,17 @@ def _offer_daemon_deps(window, missing: list) -> tuple[bool, list[str]]:
     return restart_required, installed
 
 
+def retain_main_window(app, window) -> None:
+    """Ancla la ventana principal a la QApplication durante toda la sesión.
+
+    `window` nace como variable local de un slot y solo la sostiene un ciclo
+    (ventana → página → callback → ventana). Sin un dueño externo, el
+    recolector cíclico de Python puede destruirla en cualquier momento (p. ej.
+    al cargar miles de paquetes en el Desinstalador) y la app se cierra sola.
+    """
+    app._blip_main_window = window
+
+
 def main() -> int:
     """Entry point. Devuelve el código de salida de la app."""
     if not check_pyqt6_available():
@@ -182,6 +193,7 @@ def main() -> int:
             return
 
         window = MainWindow()
+        retain_main_window(app, window)
         window.show()
         # Aviso de versión nueva: hilo aparte + caché de 24 h; nunca bloquea.
         window.start_update_check()
