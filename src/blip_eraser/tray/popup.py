@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 
-from PyQt6.QtCore import QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QPoint, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -56,13 +56,19 @@ class TrayPopup(QWidget):
     open_requested = pyqtSignal()
 
     def __init__(self) -> None:
+        # NO es Qt.Popup: en Wayland un popup con "grab" exige una ventana padre
+        # que haya recibido input, y la bandeja no la tiene ("Failed to create
+        # grabbing popup"). Ventana normal sin marco; se cierra al perder el foco.
         super().__init__(
             None,
-            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint,
         )
         self.setObjectName("TrayPopup")
         self.setFixedWidth(POPUP_WIDTH)
         self._closed_at = 0.0
+        self._was_active = False
         self._busy = False
         self._recoverable: int | None = None
         self._theme_key = ""
@@ -186,7 +192,23 @@ class TrayPopup(QWidget):
 
     def hideEvent(self, event) -> None:  # noqa: N802 - API de Qt
         self._closed_at = time.monotonic()
+        self._was_active = False
         super().hideEvent(event)
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        if event.type() == QEvent.Type.ActivationChange and self.isVisible():
+            if self.isActiveWindow():
+                self._was_active = True
+            elif self._was_active:
+                # Perdió el foco (clic fuera, otra ventana): se cierra.
+                QTimer.singleShot(0, self.hide)
+        super().changeEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            return
+        super().keyPressEvent(event)
 
     def show_at(self, anchor: QPoint, screen_rect: tuple[int, int, int, int]) -> None:
         self.apply_theme()

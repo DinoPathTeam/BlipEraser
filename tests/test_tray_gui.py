@@ -283,3 +283,44 @@ def test_startup_check_combines_update_and_cleanup(monkeypatch):
         lambda: {"junk_bytes": 1, "pacman_cache_bytes": 2, "logs_bytes": 3, "orphan_count": 0},
     )
     assert tray_app.startup_check() == {"update_version": "3.0.0", "recoverable": 6}
+
+
+# --- Wayland: nada de popups con grab ----------------------------------------------
+def test_popup_is_not_a_grabbing_popup(ctl):
+    from PyQt6.QtCore import Qt
+
+    assert ctl.popup.windowType() == Qt.WindowType.Tool  # no Qt.Popup
+    assert ctl.popup.windowFlags() & Qt.WindowType.FramelessWindowHint
+
+
+def test_popup_closes_when_it_loses_focus_after_being_active(qapp, ctl, monkeypatch):
+    from PyQt6.QtCore import QEvent
+
+    ctl.popup.show()
+    event = QEvent(QEvent.Type.ActivationChange)
+    monkeypatch.setattr(ctl.popup, "isActiveWindow", lambda: True)
+    ctl.popup.changeEvent(event)
+    assert ctl.popup._was_active
+    monkeypatch.setattr(ctl.popup, "isActiveWindow", lambda: False)
+    ctl.popup.changeEvent(event)
+    assert _pump(qapp, lambda: not ctl.popup.isVisible())
+
+
+def test_popup_does_not_close_before_it_was_ever_active(qapp, ctl, monkeypatch):
+    from PyQt6.QtCore import QEvent
+
+    ctl.popup.show()
+    ctl.popup._was_active = False
+    monkeypatch.setattr(ctl.popup, "isActiveWindow", lambda: False)
+    ctl.popup.changeEvent(QEvent(QEvent.Type.ActivationChange))
+    _pump(qapp, lambda: False, timeout=0.2)
+    assert ctl.popup.isVisible()
+
+
+def test_escape_closes_the_popup(qapp, ctl):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+
+    ctl.popup.show()
+    QTest.keyClick(ctl.popup, Qt.Key.Key_Escape)
+    assert not ctl.popup.isVisible()

@@ -20,9 +20,11 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 - **Clic izquierdo = ventanita** (`tray/popup.py`) con el tema y la fuente de la
   app principal (relee `prefs.json` cada vez que se abre): barras de CPU/RAM/
   disco, espacio recuperable y tres acciones: **Escanear**, **Limpiar** y
-  **Abrir BlipEraser**. Es una ventana `Popup` (se cierra al pulsar fuera); se
-  coloca junto al icono (`logic.popup_position`, siempre dentro de la
-  pantalla) y un clic que acaba de cerrarla no la reabre.
+  **Abrir BlipEraser**. Es una ventana `Tool` sin marco (no `Qt.Popup`: en Wayland un
+  popup con grab exige una ventana padre con input y falla con "Failed to create
+  grabbing popup"); se cierra al perder el foco o con Esc. Se coloca junto al icono (`logic.popup_position`, siempre dentro de la
+  pantalla; en Wayland el compositor decide la posición de las ventanas, así que
+  allí puede aparecer en otro sitio) y un clic que acaba de cerrarla no la reabre.
 - **Clic derecho = ajustes**: abrir, iniciar con la sesión, avisos y salir.
 - **Consumo en reposo nulo**: CPU/RAM/disco y `scan_cleanup` se calculan en un
   hilo solo al abrir la ventanita o pulsar Escanear.
