@@ -24,7 +24,7 @@ class ScanNowButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Altura con margen real: título + subtítulo arriba, badge abajo
         # sin solape (el subtítulo ES largo invadía el círculo).
-        self.setMinimumSize(240, 112)
+        self.setMinimumSize(264, 136)
 
     def set_texts(self, title: str, subtitle: str):
         self._title = title
@@ -47,7 +47,9 @@ class ScanNowButton(QPushButton):
     def paintEvent(self, _event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(self.rect()).adjusted(2, 2, -2, -2)
+        # Margen de 12 px: el resplandor se pinta fuera de la cápsula y, sin
+        # él, el widget lo recortaba en una caja cuadrada.
+        rect = QRectF(self.rect()).adjusted(12, 12, -12, -12)
 
         disabled = not self.isEnabled()
 

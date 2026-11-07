@@ -86,6 +86,24 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
   `sidebar_activity_empty`.
 
+### Sin versionar: rediseño (lote 1) — estructura y Vista general
+
+- **Estructura**: logo y nombre arriba de la barra lateral, navegación solo de
+  texto con píldora de degradado y actividad reciente debajo. El encabezado
+  muestra el título de la página (los títulos internos de cada página se
+  ocultan); búsqueda y «Actividad de la app» siguen solo en Desinstalador y
+  Limpiador.
+- **Sombras**: nuevo widget `Card` (`widgets/card.py`) que pinta fondo, borde y
+  sombra con `QPainter` (QSS no admite `box-shadow`).
+- **Vista general**: salud + tres métricas arriba; aplicaciones instaladas e
+  información del sistema (con barras de CPU/RAM/disco) en medio; limpieza
+  recomendada con «Escanear ahora» / «Limpiar ahora» abajo. Se quita
+  «Actividad reciente» de esta página (ya está en la barra lateral). El estado
+  del anillo es más oscuro en los temas claros.
+- **Ayuda**: la sección «Uso» describe ahora las 5 secciones reales (ES/EN).
+- El resto de pestañas se rediseñan en los siguientes lotes
+  (`docs/superpowers/specs/2026-11-07-redesign-shell-design.md`).
+
 ### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
 
 - **Fluidez**: el escaneo (botón y autoescaneo) ya no deja la app colgada. La

@@ -97,4 +97,4 @@ def test_sidebar_list_fits_content(app):
 
     sidebar = Sidebar()
     assert sidebar.minimumHeight() == sidebar.maximumHeight()
-    assert sidebar.height() >= 0 and sidebar.maximumHeight() > 5 * 76
+    assert sidebar.height() >= 0 and sidebar.maximumHeight() > 5 * 44

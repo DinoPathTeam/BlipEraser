@@ -22,6 +22,7 @@ class HealthGauge(QWidget):
         self._accent = "#E53935"
         self._text_color = "#ececef"
         self._track_color = QColor(64, 64, 68)
+        self._status_color = QColor(60, 220, 120)
         self.setMinimumSize(240, 210)
 
     def set_value(self, value: int) -> None:
@@ -35,6 +36,11 @@ class HealthGauge(QWidget):
     def set_track_color(self, color: str) -> None:
         """Color de la pista del anillo (derivado del tema activo)."""
         self._track_color = QColor(color)
+        self.update()
+
+    def set_status_color(self, color: str) -> None:
+        """Color del estado (GOOD/FAIR/POOR): más oscuro en temas claros."""
+        self._status_color = QColor(color)
         self.update()
 
     def set_text_color(self, color: str) -> None:
@@ -97,7 +103,7 @@ class HealthGauge(QWidget):
 
         # Estado debajo del porcentaje (separación mínima de ~10px)
         if self._status:
-            painter.setPen(QColor(60, 220, 120))
+            painter.setPen(self._status_color)
             status_font = QFont(self.font())
             status_font.setPointSize(12)
             status_font.setBold(True)

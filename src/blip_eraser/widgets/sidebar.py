@@ -1,20 +1,21 @@
-"""Barra lateral de navegación: icono encima de texto con barra indicadora.
+"""Barra lateral de navegación: entradas de texto con píldora de degradado.
 
-Usa un delegate que dibuja el icono del tema del sistema por encima de la
-etiqueta (estilo de la imagen de referencia) y una barra de acento a la
-izquierda en el elemento activo. Todos los colores se toman del tema.
+Un delegate dibuja cada entrada (texto a la izquierda) y, en la activa, una
+píldora con el degradado del tema. Los iconos se siguen cargando (API
+estable) pero ya no se dibujan. Todos los colores se toman del tema.
 """
 
 from pathlib import Path
 
-from PyQt6.QtCore import QRect, QRectF, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPixmap
+from PyQt6.QtCore import QPointF, QRectF, QSize, Qt
+from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QSizePolicy, QStyle, QStyledItemDelegate
 
 from blip_eraser.utils.i18n import tr
 
 _ICON_FALLBACK = "applications-other"
 _ICON_SIZE = QSize(28, 28)
+_ROW_HEIGHT = 44
 
 # Assets propios para sidebar (opcionales, fallback silencioso si faltan)
 _ASSETS_DIR = Path(__file__).parent.parent / "assets"
@@ -50,7 +51,7 @@ def tint_icon(icon: QIcon, color: str, size: QSize = _ICON_SIZE) -> QIcon:
 
 
 class _SidebarDelegate(QStyledItemDelegate):
-    """Dibuja icono arriba, texto abajo, y resalta el elemento activo."""
+    """Dibuja el texto de cada entrada y resalta la activa con un degradado."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -87,54 +88,41 @@ class _SidebarDelegate(QStyledItemDelegate):
         is_selected = bool(option.state & QStyle.StateFlag.State_Selected)
         is_hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         rect = QRectF(option.rect)
+        body = rect.adjusted(4, 1, -4, -1)
 
         if is_selected:
             painter.setPen(Qt.PenStyle.NoPen)
-            body = rect.adjusted(4, 2, -4, -2)
             gradient = QLinearGradient(body.topLeft(), body.bottomLeft())
             gradient.setColorAt(0.0, self._fill_top)
             gradient.setColorAt(1.0, self._fill_bot)
             painter.setBrush(gradient)
             painter.drawRoundedRect(body, 8, 8)
-            # Barra indicadora: con el texto sobre el acento, para que se vea
-            # también sobre un relleno del mismo color.
-            bar = QColor(self._on_accent)
-            bar.setAlpha(200)
-            painter.setBrush(bar)
-            painter.drawRoundedRect(QRectF(rect.left() + 6, rect.top() + 12, 4, rect.height() - 24), 2, 2)
+            # Reflejo superior fino: da volumen al degradado.
+            sheen = QColor(255, 255, 255, 40)
+            painter.setPen(QPen(sheen, 1))
+            painter.drawLine(
+                QPointF(body.left() + 8, body.top() + 0.5), QPointF(body.right() - 8, body.top() + 0.5)
+            )
         elif is_hovered:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(self._hover)
-            painter.drawRoundedRect(rect.adjusted(4, 2, -4, -2), 8, 8)
+            painter.drawRoundedRect(body, 8, 8)
 
-        text_color = self._on_accent if is_selected else self._text
-
-        base_x = option.rect.left() + option.rect.width() / 2
-        icon_rect = QRect(
-            int(base_x - _ICON_SIZE.width() / 2),
-            option.rect.top() + 8,
-            _ICON_SIZE.width(),
-            _ICON_SIZE.height(),
-        )
-        icon = index.data(Qt.ItemDataRole.DecorationRole)
-        if isinstance(icon, QIcon) and not icon.isNull():
-            icon.paint(painter, icon_rect)
-
-        text_rect = QRect(
-            option.rect.left(),
-            option.rect.top() + _ICON_SIZE.height() + 10,
-            option.rect.width(),
-            option.rect.height() - _ICON_SIZE.height() - 14,
-        )
         font = QFont(option.font)
+        font.setBold(is_selected)
         painter.setFont(font)
-        painter.setPen(text_color)
-        painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop, index.data(Qt.ItemDataRole.DisplayRole))
+        painter.setPen(self._on_accent if is_selected else self._text)
+        text_rect = body.adjusted(14, 0, -8, 0)
+        painter.drawText(
+            text_rect,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            index.data(Qt.ItemDataRole.DisplayRole),
+        )
 
         painter.restore()
 
     def sizeHint(self, option, index) -> QSize:
-        return QSize(option.rect.width() if option.rect.width() else 96, 76)
+        return QSize(option.rect.width() if option.rect.width() else 190, _ROW_HEIGHT)
 
 
 class Sidebar(QListWidget):
