@@ -754,3 +754,9 @@ systemctl status blip-eraser-privileged.service
 - README reescrito y dividido: `README.md` (EN) y `README.es.md` (ES). Corrige versión, funciones reales (TRIM/zram/zswap/espejos), modelo de seguridad actual (daemon solo limpia; desinstalar va por pkexec), distros (solo CachyOS probado), instalación (PKGBUILD, fuente, Flatpak sin sandbox real) y quita contadores que caducan.
 - El roadmap detallado se movió a "Historial de hitos" de este archivo.
 - `vendor_url` de la política polkit apunta al repositorio real.
+
+## Endurecimiento: registros de auditoría, elevación y Descargas
+- **Registros protegidos**: además de `journal` y la bitácora propia, ya no se pueden borrar ni cuentan como "recuperables" `audit/`, `wtmp`, `btmp`, `lastlog`, `faillog`, `auth.log`, `secure` y `pacman.log` (con sus rotaciones `.1`, `-fecha`). Un único helper `is_audit_protected()` lo aplica en el daemon, el fallback pkexec y la capa de privilegios; el listado del Limpiador los oculta y el total de logs ya no incluye el journal.
+- **Elevación**: rutas desnudas como `/var`, `/usr` o `/mnt` ahora se tratan como de sistema (antes se saltaban la validación). Un archivo propio en `/mnt`, `/media`, `/srv` u `/opt` se borra sin elevar; nunca se borra un punto de montaje.
+- **Descargas**: la carpeta de escaneo por defecto se lee de `user-dirs.dirs` (XDG) en vez de asumir `~/Descargas`.
+- Importante: tras actualizar, re-ejecuta `./scripts/install-daemon.sh` para que el daemon instalado use la nueva validación.
