@@ -20,13 +20,27 @@ if [[ -z "$DEST" && "$(id -u)" -ne 0 ]]; then
 fi
 
 echo "[1/8] Código del daemon -> $LIBDIR/blip_eraser"
-mkdir -p "$LIBDIR"
+# Este código lo ejecuta root: nada de symlinks en el origen (apuntarían a
+# rutas que el usuario puede cambiar) ni dependencia del umask del invocador.
+if [[ -n "$(find "$REPO/src/blip_eraser" -type l -print -quit)" ]]; then
+    echo "[ERROR] Hay symlinks en src/blip_eraser; se rechaza el despliegue:" >&2
+    find "$REPO/src/blip_eraser" -type l >&2
+    exit 1
+fi
+install -d -m 755 "$LIBDIR"
 rm -rf "$LIBDIR/blip_eraser"
 cp -r "$REPO/src/blip_eraser" "$LIBDIR/blip_eraser"
 find "$LIBDIR/blip_eraser" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
 # Sin assets GUI (30 MB de vídeo/logo que el daemon jamás usa).
 rm -rf "$LIBDIR/blip_eraser/assets"
 install -m 755 "$REPO/packaging/scripts/blip-eraser-privileged" "$LIBDIR/blip-eraser-privileged"
+# Permisos normalizados: root, directorios 755, ficheros 644 (sin escritura de
+# grupo/otros aunque el árbol de origen la tuviera).
+find "$LIBDIR/blip_eraser" -type d -exec chmod 755 {} +
+find "$LIBDIR/blip_eraser" -type f -exec chmod 644 {} +
+if [[ -z "$DEST" ]]; then
+    chown -R root:root "$LIBDIR"
+fi
 
 echo "[2/8] Unidad systemd + D-Bus"
 install -Dm 644 "$REPO/packaging/systemd/blip-eraser-privileged.service" "$SYSTEMD_UNIT"

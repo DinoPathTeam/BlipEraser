@@ -11,6 +11,17 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔒 Instalador: código de root con permisos normalizados
+
+- **Riesgo**: `install-daemon.sh` copiaba `src/blip_eraser` a `/usr/lib/blip-eraser`
+  con `cp -r`, heredando permisos del árbol de origen y el umask del invocador,
+  y aceptando symlinks. Ese código lo ejecuta root.
+- **Ahora**: el script rechaza symlinks en el origen, normaliza directorios a
+  755 y ficheros a 644, y fija `root:root` en la instalación real. El
+  `PKGBUILD` hace la misma normalización.
+- Test que ejecuta el script real en modo `DESTDIR` contra un árbol con permisos
+  laxos (umask 0) y con un symlink.
+
 ### 🔒 Daemon: filtro de syscalls mínimo
 
 - **Antes**: `SystemCallFilter` sumaba `@clock @cpu-emulation @debug @module
