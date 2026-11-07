@@ -11,6 +11,28 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔔 Aviso de versión nueva (con caché de 24 h)
+
+- **Hallazgo**: `check_for_updates()` existía (con tests) pero nada la llamaba, y
+  los mensajes del splash ("comprobando actualizaciones/permisos/dependencias")
+  son decorativos. El aviso de permisos y el de binarios faltantes tampoco se
+  calculan (`StartupWorker` los deja vacíos); se revisarán en un PR aparte.
+- **Ahora**: `MainWindow.start_update_check()` (llamado desde `main.py` tras
+  mostrar la ventana, nunca desde `__init__`) lanza un hilo daemon
+  (`widgets/update_notice.UpdateNotifier`). Si hay versión nueva aparece un
+  aviso discreto con enlace a la release en la barra de estado: sin diálogo y
+  sin descarga automática.
+- **Caché**: como máximo 1 consulta a GitHub cada 24 h (`update_latest` y
+  `update_checked_at` en `prefs.json`). El tag cacheado se compara siempre con la
+  versión actual (tras actualizar deja de avisar). Un fallo de red no se
+  cachea. Reloj que retrocede o valores corruptos invalidan la caché.
+- **Desactivar**: `"check_updates": false` en `~/.config/blip-eraser/prefs.json`.
+- **Flatpak**: el manifiesto no tiene `--share=network`, así que allí nunca
+  comprueba (no se amplían permisos solo para esto).
+- Tests: caché (hit, caducidad, versión actual, fallo, reloj, opt-out, valores
+  corruptos), aviso en la barra (versión, enlace, idioma) y notificador (emite,
+  silencioso, tolera excepciones); construir la ventana no abre red.
+
 ### ⚡ Tweaks: una sola autorización por ajuste
 
 - **Antes**: activar zram encadenaba hasta 6 `pkexec` (instalar paquete,

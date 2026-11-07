@@ -321,6 +321,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_ram": "RAM",
         "status_disk": "Disco",
         "status_na": "N/D",
+        "update_available": "Nueva versión {version} disponible",
+        "update_view": "Ver",
         # Ajustes de apariencia
         "settings_theme_title": "Tema de color",
         "settings_mode_title": "Modo de apariencia",
@@ -738,6 +740,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status_ram": "RAM",
         "status_disk": "Disk",
         "status_na": "N/D",
+        "update_available": "New version {version} available",
+        "update_view": "View",
         # Appearance settings
         "settings_theme_title": "Color theme",
         "settings_mode_title": "Appearance mode",

@@ -149,6 +149,18 @@ class MainWindow(QMainWindow):
         # Barra de estado
         self.setStatusBar(SystemStatusBar())
 
+    def start_update_check(self) -> None:
+        """Comprueba (en segundo plano, con caché de 24 h) si hay versión nueva.
+
+        Se llama desde main.py tras mostrar la ventana, no desde __init__:
+        así construir un MainWindow en tests nunca abre un hilo de red.
+        """
+        from blip_eraser.widgets.update_notice import UpdateNotifier
+
+        self._update_notifier = UpdateNotifier(self)
+        self._update_notifier.update_found.connect(self.statusBar().show_update_available)
+        self._update_notifier.start()
+
     def _build_language_menu(self):
         self.language_group = QActionGroup(self)
         self.language_group.setExclusive(True)
