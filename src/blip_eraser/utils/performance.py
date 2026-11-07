@@ -29,6 +29,8 @@ class TweakBlock:
     """Motivo por el que un tweak no debe aplicarse en este sistema."""
     code: str
     message: str
+    # True: solo impide ACTIVAR; el usuario aún puede desactivar lo que activó.
+    enable_only: bool = False
 
 
 # ─── Utilidades ────────────────────────────────────────────────────────────
@@ -232,6 +234,91 @@ def tweak_zram_apply(enable: bool) -> TweakResult:
             return TweakResult(success=False, message=f"Error desactivando zram: {e.stderr.strip()}", installed_deps=installed_deps)
 
 
+# ─── Tweak: zswap (caché de compresión del kernel) ────────────────────────
+
+ZSWAP_PARAM_DIR = Path("/sys/module/zswap/parameters")
+ZSWAP_CONFIG_PATH = Path("/etc/tmpfiles.d/blip-eraser-zswap.conf")
+ZSWAP_CONFIG_CONTENT = """# BlipEraser: activa zswap en cada arranque (sin tocar el bootloader)
+w /sys/module/zswap/parameters/enabled - - - - 1
+"""
+_PROC_SWAPS = Path("/proc/swaps")
+
+
+def _zswap_supported() -> bool:
+    return ZSWAP_PARAM_DIR.is_dir()
+
+
+def _zswap_enabled() -> bool:
+    try:
+        return (ZSWAP_PARAM_DIR / "enabled").read_text().strip() in ("Y", "1")
+    except OSError:
+        return False
+
+
+def _blip_zswap_config_exists() -> bool:
+    return ZSWAP_CONFIG_PATH.exists()
+
+
+def _swap_devices() -> list[str]:
+    """Dispositivos/archivos de swap activos (/proc/swaps)."""
+    try:
+        lines = _PROC_SWAPS.read_text().splitlines()[1:]
+    except OSError:
+        return []
+    return [ln.split()[0] for ln in lines if ln.strip()]
+
+
+def _zswap_block() -> TweakBlock | None:
+    if not _zswap_supported():
+        return TweakBlock("zswap_unsupported", "Tu kernel no incluye zswap.")
+    if _zswap_enabled() and not _blip_zswap_config_exists():
+        return TweakBlock(
+            "system_zswap",
+            "zswap ya está activado por tu sistema (parámetro del kernel). "
+            "BlipEraser no lo gestiona.",
+        )
+    devices = _swap_devices()
+    if any(d.startswith("/dev/zram") for d in devices):
+        return TweakBlock(
+            "zram_swap",
+            "Tu swap es zram: zswap sería redundante (comprimiría dos veces).",
+            enable_only=True,
+        )
+    if not devices:
+        return TweakBlock(
+            "no_swap",
+            "zswap necesita una partición o archivo de swap en disco.",
+            enable_only=True,
+        )
+    return None
+
+
+def tweak_zswap_check_state() -> bool:
+    """True solo si zswap está activo y lo configuró BlipEraser."""
+    return _blip_zswap_config_exists() and _zswap_enabled()
+
+
+def tweak_zswap_apply(enable: bool) -> TweakResult:
+    """Activa/desactiva zswap de forma persistente (tmpfiles.d) y al instante."""
+    if enable:
+        if not _write_root_file(ZSWAP_CONFIG_PATH, ZSWAP_CONFIG_CONTENT):
+            return TweakResult(success=False, message="No se pudo escribir la configuración de zswap")
+        try:
+            _run_cmd(["pkexec", "systemd-tmpfiles", "--create", str(ZSWAP_CONFIG_PATH)], check=True)
+        except subprocess.CalledProcessError as e:
+            _remove_root_file(ZSWAP_CONFIG_PATH)  # revertir: no dejar config a medias
+            return TweakResult(success=False, message=f"Error activando zswap: {(e.stderr or '').strip()}")
+        write_diagnostic("AUDIT action=tweak_zswap enable result=success")
+        return TweakResult(success=True, message="zswap activado")
+    try:
+        _remove_root_file(ZSWAP_CONFIG_PATH)
+        _run_cmd(["pkexec", "sh", "-c", "echo 0 > /sys/module/zswap/parameters/enabled"], check=True)
+    except subprocess.CalledProcessError as e:
+        return TweakResult(success=False, message=f"Error desactivando zswap: {(e.stderr or '').strip()}")
+    write_diagnostic("AUDIT action=tweak_zswap disable result=success")
+    return TweakResult(success=True, message="zswap desactivado")
+
+
 # ─── Tweak: Ordenar espejos (reflector) ────────────────────────────────────
 
 REFLECTOR_UNIT = "reflector.timer"
@@ -329,6 +416,12 @@ TWEAKS = {
         "deps": ["zram-generator"],
         "friendly_name": "Compresión de RAM (zram)",
     },
+    "perf_zswap": {
+        "check": tweak_zswap_check_state,
+        "apply": tweak_zswap_apply,
+        "deps": [],
+        "friendly_name": "zswap (caché de compresión en RAM)",
+    },
     "perf_mirror_sort": {
         "check": tweak_reflector_check_state,
         "apply": tweak_reflector_apply,
@@ -356,6 +449,7 @@ def check_tweak_state(key: str) -> bool:
 
 _BLOCKS = {
     "perf_compress_ram": _zram_block,
+    "perf_zswap": _zswap_block,
     "perf_mirror_sort": _mirrors_block,
 }
 
@@ -372,7 +466,7 @@ def apply_tweak(key: str, enable: bool) -> TweakResult:
     if not info:
         return TweakResult(success=False, message=f"Tweak desconocido: {key}")
     block = get_tweak_block_reason(key)
-    if block is not None:
+    if block is not None and (enable or not block.enable_only):
         write_diagnostic(f"AUDIT action=tweak_blocked key={key} reason={block.code}")
         return TweakResult(success=False, message=block.message)
     return info["apply"](enable)

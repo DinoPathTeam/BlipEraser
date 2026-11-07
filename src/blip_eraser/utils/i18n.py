@@ -184,15 +184,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "se aplica al instante y se puede revertir."
         ),
         "perf_trim_mounts": "Activar récorte automático de SSD (fstrim)",
-        "perf_compress_ram": "Comprimir memoria en uso (zswap)",
+        "perf_compress_ram": "Comprimir RAM con zram (swap comprimido)",
+        "perf_zswap": "Comprimir páginas antes del swap en disco (zswap)",
+        "perf_zswap_help": (
+            "Activa zswap, la caché de compresión del kernel que intercepta las páginas antes de escribirlas al swap en disco. Es excluyente con zram: se bloquea si tu swap ya es zram."
+        ),
+        "perf_zswap_tip": (
+            "<b>Mecanismo:</b> zswap es una caché de compresión en RAM del kernel: cuando la memoria escasea, comprime las páginas y las guarda en un pool en RAM (por defecto hasta ~20 % de la RAM). Solo cuando ese pool se llena pasan al swap real en disco."
+            "<br><b>Consecuencias:</b> Necesita un swap en disco (partición o archivo); sin él no tiene efecto, y por eso queda bloqueado. No debe combinarse con zram (comprimiría dos veces). Se activa al instante y se mantiene en cada arranque mediante /etc/tmpfiles.d/blip-eraser-zswap.conf, sin tocar el gestor de arranque. Al desactivarlo se borra ese archivo."
+            "<br><b>Beneficio:</b> Menos escrituras al swap en disco bajo presión de memoria: el sistema responde mejor y el SSD se desgasta menos."
+        ),
         "perf_mirror_sort": "Sincronizar y ordenar los espejos de pacman",
         "perf_trim_mounts_help": (
             "Programa fstrim para recortar automáticamente las unidades SSD "
             "y prolongar su vida útil."
         ),
         "perf_compress_ram_help": (
-            "Habilita zswap para comprimir en RAM los datos poco usados "
-            "y reducir el intercambio a disco."
+            "Crea un espacio de intercambio comprimido en RAM (zram) para reducir el uso del disco cuando la memoria escasea. Se bloquea si tu distribución ya gestiona zram."
         ),
         "perf_mirror_sort_help": (
             "Sincroniza los listados de los espejos de pacman y los ordena "
@@ -214,18 +222,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "escritura a largo plazo y prolonga la vida útil del SSD."
         ),
         "perf_compress_ram_tip": (
-            "<b>Mecanismo:</b> zswap es una caché de compresión en RAM del "
-            "kernel: cuando la memoria escasea, comprime las páginas "
-            "(zstd/lzo) y las guarda en un pool en RAM en lugar de escribir "
-            "a swap. Solo cuando ese pool se llena (por defecto ~20 % de la "
-            "RAM) las páginas pasan al swap real en disco."
-            "<br><b>Consecuencias:</b> Comprimir consume algo de CPU al "
-            "escribir y leer páginas. Requiere que exista una partición o "
-            "archivo de swap, o no tiene efecto. Reduce drásticamente el "
-            "uso de swap en disco bajo presión de memoria."
-            "<br><b>Beneficio:</b> En momentos de memoria llena evita el "
-            "intercambio a disco (mucho más lento): el sistema responde "
-            "mejor y se reduce el desgaste del SSD."
+            "<b>Mecanismo:</b> zram crea un dispositivo de bloques en RAM que se usa como swap con compresión (zstd): las páginas poco usadas se comprimen en memoria en vez de ir al disco."
+            "<br><b>Consecuencias:</b> Usa algo de CPU al comprimir. BlipEraser lo configura con un tamaño máximo de 4 GB (o la mitad de la RAM si es menor). Por eso queda bloqueado si tu sistema ya trae su propio zram (por ejemplo CachyOS): lo reduciría. Requiere el paquete zram-generator."
+            "<br><b>Beneficio:</b> En sistemas Arch sin zram, evita el swap a disco (mucho más lento) y desgasta menos el SSD."
         ),
         "perf_mirror_sort_tip": (
             "<b>Mecanismo:</b> pacman descarga paquetes de los servidores "
@@ -241,6 +240,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "sobre todo en actualizaciones grandes, al usar primero los "
             "espejos más rápidos."
         ),
+        "perf_block_system_zram": "Tu sistema ya gestiona su propio zram (por ejemplo CachyOS). BlipEraser no lo sobrescribe para no reducir su tamaño.",
+        "perf_block_system_mirrors": "Tu lista de espejos la gestiona otra herramienta (por ejemplo cachyos-rate-mirrors). BlipEraser no la sobrescribe.",
+        "perf_block_zram_swap": "Tu swap es zram: activar zswap además comprimiría dos veces sin beneficio. Desactiva zram primero si prefieres zswap.",
+        "perf_block_no_swap": "zswap necesita una partición o archivo de swap en disco, y no hay ninguno activo.",
+        "perf_block_zswap_unsupported": "Tu kernel no incluye zswap.",
+        "perf_block_system_zswap": "zswap ya está activado por tu sistema (parámetro del kernel). BlipEraser no lo gestiona.",
         "perf_effect_disk": "Disco",
         "perf_effect_ram": "RAM",
         "perf_effect_network": "Red",
@@ -595,15 +600,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "applied instantly and can be reverted."
         ),
         "perf_trim_mounts": "Enable automatic SSD trim (fstrim)",
-        "perf_compress_ram": "Compress memory in use (zswap)",
+        "perf_compress_ram": "Compress RAM with zram (compressed swap)",
+        "perf_zswap": "Compress pages before disk swap (zswap)",
+        "perf_zswap_help": (
+            "Enables zswap, the kernel compression cache that intercepts pages before they are written to disk swap. Mutually exclusive with zram: blocked if your swap is already zram."
+        ),
+        "perf_zswap_tip": (
+            "<b>Mechanism:</b> zswap is a compressed cache in kernel RAM: when memory is low, it compresses pages and keeps them in a RAM pool (up to ~20% of RAM by default). Only when that pool fills up do pages go to real swap on disk."
+            "<br><b>Consequences:</b> It needs disk swap (a partition or file); without it it has no effect, so it is blocked. It must not be combined with zram (it would compress twice). It takes effect immediately and persists across boots via /etc/tmpfiles.d/blip-eraser-zswap.conf, without touching the bootloader. Disabling it deletes that file."
+            "<br><b>Benefit:</b> Fewer writes to disk swap under memory pressure: the system responds better and the SSD wears less."
+        ),
         "perf_mirror_sort": "Sync and sort pacman mirrors",
         "perf_trim_mounts_help": (
             "Schedules fstrim to automatically trim SSD drives and extend "
             "their lifespan."
         ),
         "perf_compress_ram_help": (
-            "Enables zswap to compress rarely used data in RAM and reduce "
-            "swapping to disk."
+            "Creates compressed swap space in RAM (zram) to reduce disk use when memory runs low. Blocked if your distribution already manages zram."
         ),
         "perf_mirror_sort_help": (
             "Syncs the pacman mirror lists and sorts them by speed to speed "
@@ -625,18 +638,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "and extends the SSD's lifespan."
         ),
         "perf_compress_ram_tip": (
-            "<b>Mechanism:</b> zswap is a compressed cache in kernel RAM: "
-            "when memory is low, it compresses pages (zstd/lzo) and keeps "
-            "them in a RAM pool instead of writing to swap. Only when that "
-            "pool fills up (by default ~20% of RAM) do pages go to real "
-            "swap on disk."
-            "<br><b>Consequences:</b> Compression uses some CPU when "
-            "writing and reading pages. It requires a defined swap partition "
-            "or file, otherwise it has no effect. It drastically reduces "
-            "disk swapping under memory pressure."
-            "<br><b>Benefit:</b> Under heavy memory load it avoids the much "
-            "slower disk swap: the system responds better and SSD wear is "
-            "reduced."
+            "<b>Mechanism:</b> zram creates a block device in RAM used as compressed swap (zstd): rarely used pages are compressed in memory instead of going to disk."
+            "<br><b>Consequences:</b> Uses some CPU to compress. BlipEraser configures it with a 4 GB cap (or half the RAM if smaller). That is why it is blocked when your system already ships its own zram (e.g. CachyOS): it would shrink it. Requires the zram-generator package."
+            "<br><b>Benefit:</b> On Arch systems without zram, it avoids much slower disk swap and reduces SSD wear."
         ),
         "perf_mirror_sort_tip": (
             "<b>Mechanism:</b> pacman downloads packages from the mirror "
@@ -651,6 +655,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "<br><b>Benefit:</b> Faster downloads and installs, especially "
             "on large updates, by using the fastest mirrors first."
         ),
+        "perf_block_system_zram": "Your system already manages its own zram (e.g. CachyOS). BlipEraser will not overwrite it so as not to shrink it.",
+        "perf_block_system_mirrors": "Your mirror list is managed by another tool (e.g. cachyos-rate-mirrors). BlipEraser will not overwrite it.",
+        "perf_block_zram_swap": "Your swap is zram: enabling zswap too would compress twice with no benefit. Disable zram first if you prefer zswap.",
+        "perf_block_no_swap": "zswap needs a swap partition or file on disk, and none is active.",
+        "perf_block_zswap_unsupported": "Your kernel does not include zswap.",
+        "perf_block_system_zswap": "zswap is already enabled by your system (kernel parameter). BlipEraser does not manage it.",
         "perf_effect_disk": "Disk",
         "perf_effect_ram": "RAM",
         "perf_effect_network": "Network",

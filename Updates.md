@@ -686,3 +686,8 @@ systemctl status blip-eraser-privileged.service
   (señal `font_changed` → `QApplication.font()`, widgets y persistencia), y el
   ícono de aplicación propio (`app_icon()` con fallback silencioso a `QIcon()`
   vacío, y construcción de `MainWindow` + `SplashScreen` con y sin asset).
+
+## Tweaks: protecciones y zswap
+- zram y espejos gestionados por el sistema (p. ej. CachyOS) ya no se sobrescriben: el tweak queda bloqueado con el motivo en el tooltip.
+- Nuevo tweak opcional **zswap** (apagado por defecto): persistente vía `/etc/tmpfiles.d/blip-eraser-zswap.conf`, sin tocar el bootloader; bloqueado si el swap es zram, si no hay swap en disco o si el kernel ya lo activa.
+- El tweak antes llamado "zswap" (que en realidad configuraba zram) se llama ahora "zram". Textos ES/EN detallados para cada tweak.

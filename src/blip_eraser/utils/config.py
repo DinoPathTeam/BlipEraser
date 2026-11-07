@@ -26,6 +26,7 @@ PREFS_DEFAULTS: dict[str, Any] = {
     # Performance tweaks (persist user selection)
     "perf_trim_mounts": False,
     "perf_compress_ram": False,
+    "perf_zswap": False,
     "perf_mirror_sort": False,
 }
 
