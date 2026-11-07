@@ -126,11 +126,10 @@ class TestRootFileBackup:
 class TestTweakRegistry:
     """Tests del registro de tweaks."""
 
-    def test_all_three_tweaks_registered(self):
-        assert "perf_trim_mounts" in TWEAKS
-        assert "perf_compress_ram" in TWEAKS
-        assert "perf_mirror_sort" in TWEAKS
-        assert len(TWEAKS) == 3
+    def test_all_tweaks_registered(self):
+        assert set(TWEAKS) == {
+            "perf_trim_mounts", "perf_compress_ram", "perf_zswap", "perf_mirror_sort",
+        }
 
     def test_each_tweak_has_required_fields(self):
         for key, info in TWEAKS.items():
@@ -429,3 +428,118 @@ class TestSystemManagedProtections:
     def test_trim_has_no_block(self):
         from blip_eraser.utils import performance as perf
         assert perf.get_tweak_block_reason("perf_trim_mounts") is None
+
+
+class TestZswapTweak:
+    """zswap: opcional, persistente vía tmpfiles.d, excluyente con zram."""
+
+    @pytest.fixture
+    def perf(self, monkeypatch):
+        from blip_eraser.utils import performance as p
+        monkeypatch.setattr(p, "_zswap_supported", lambda: True)
+        monkeypatch.setattr(p, "_zswap_enabled", lambda: False)
+        monkeypatch.setattr(p, "_blip_zswap_config_exists", lambda: False)
+        monkeypatch.setattr(p, "_swap_devices", lambda: ["/dev/nvme0n1p3"])
+        return p
+
+    def test_registered_as_tweak(self):
+        assert "perf_zswap" in TWEAKS
+
+    def test_no_block_with_disk_swap(self, perf):
+        assert perf.get_tweak_block_reason("perf_zswap") is None
+
+    def test_blocked_when_zram_swap_active(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_swap_devices", lambda: ["/dev/zram0"])
+        b = perf.get_tweak_block_reason("perf_zswap")
+        assert b is not None and b.code == "zram_swap" and b.enable_only
+
+    def test_blocked_without_any_swap(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_swap_devices", lambda: [])
+        b = perf.get_tweak_block_reason("perf_zswap")
+        assert b is not None and b.code == "no_swap" and b.enable_only
+
+    def test_blocked_when_kernel_lacks_zswap(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_zswap_supported", lambda: False)
+        b = perf.get_tweak_block_reason("perf_zswap")
+        assert b is not None and b.code == "zswap_unsupported" and not b.enable_only
+
+    def test_blocked_when_enabled_by_system(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_zswap_enabled", lambda: True)
+        b = perf.get_tweak_block_reason("perf_zswap")
+        assert b is not None and b.code == "system_zswap" and not b.enable_only
+
+    def test_ours_can_still_be_disabled_when_zram_appears(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_zswap_enabled", lambda: True)
+        monkeypatch.setattr(perf, "_blip_zswap_config_exists", lambda: True)
+        monkeypatch.setattr(perf, "_swap_devices", lambda: ["/dev/zram0"])
+        calls = []
+        monkeypatch.setattr(perf, "_remove_root_file", lambda p: calls.append(("rm", p)) or True)
+        monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: calls.append(("run", c)) or MagicMock(returncode=0))
+        res = perf.apply_tweak("perf_zswap", False)
+        assert res.success
+        assert ("rm", perf.ZSWAP_CONFIG_PATH) in calls
+
+    def test_enable_refused_with_zram_and_writes_nothing(self, perf, monkeypatch):
+        monkeypatch.setattr(perf, "_swap_devices", lambda: ["/dev/zram0"])
+        calls = []
+        monkeypatch.setattr(perf, "_write_root_file", lambda *a, **k: calls.append(a) or True)
+        monkeypatch.setattr(perf, "_run_cmd", lambda *a, **k: calls.append(a))
+        res = perf.apply_tweak("perf_zswap", True)
+        assert not res.success and calls == []
+
+    def test_enable_writes_tmpfiles_and_applies_now(self, perf, monkeypatch):
+        written, ran = [], []
+        monkeypatch.setattr(perf, "_write_root_file", lambda p, c: written.append((p, c)) or True)
+        monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: ran.append(c) or MagicMock(returncode=0))
+        res = perf.apply_tweak("perf_zswap", True)
+        assert res.success and not res.needs_reboot
+        path, content = written[0]
+        assert path == perf.ZSWAP_CONFIG_PATH
+        assert str(path).startswith("/etc/tmpfiles.d/")
+        assert "/sys/module/zswap/parameters/enabled" in content
+        assert any("systemd-tmpfiles" in c for c in ran)
+
+    def test_enable_does_not_touch_bootloader(self, perf, monkeypatch):
+        ran = []
+        monkeypatch.setattr(perf, "_write_root_file", lambda p, c: True)
+        monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: ran.append(c) or MagicMock(returncode=0))
+        perf.apply_tweak("perf_zswap", True)
+        flat = " ".join(" ".join(c) for c in ran)
+        for forbidden in ("grub", "limine", "kernel-install", "cmdline", "mkinitcpio"):
+            assert forbidden not in flat
+
+    def test_state_requires_our_config_and_enabled(self, perf, monkeypatch):
+        assert perf.tweak_zswap_check_state() is False
+        monkeypatch.setattr(perf, "_zswap_enabled", lambda: True)
+        assert perf.tweak_zswap_check_state() is False  # activo pero del sistema
+        monkeypatch.setattr(perf, "_blip_zswap_config_exists", lambda: True)
+        assert perf.tweak_zswap_check_state() is True
+
+    def test_swap_devices_parses_proc_swaps(self, monkeypatch, tmp_path):
+        from blip_eraser.utils import performance as p
+        f = tmp_path / "swaps"
+        f.write_text("Filename\tType\tSize\tUsed\tPriority\n/dev/zram0\tpartition\t1\t0\t100\n")
+        monkeypatch.setattr(p, "_PROC_SWAPS", f)
+        assert p._swap_devices() == ["/dev/zram0"]
+
+
+class TestTweakTexts:
+    KEYS = ("perf_zswap", "perf_zswap_help", "perf_zswap_tip",
+            "perf_compress_ram", "perf_compress_ram_help", "perf_compress_ram_tip",
+            "perf_block_system_zram", "perf_block_system_mirrors", "perf_block_zram_swap",
+            "perf_block_no_swap", "perf_block_zswap_unsupported", "perf_block_system_zswap")
+
+    @pytest.mark.parametrize("lang", ["es", "en"])
+    def test_all_keys_present(self, lang):
+        from blip_eraser.utils.i18n import TRANSLATIONS
+        missing = [k for k in self.KEYS if k not in TRANSLATIONS[lang]]
+        assert missing == []
+
+    @pytest.mark.parametrize("lang", ["es", "en"])
+    def test_zram_text_no_longer_says_zswap(self, lang):
+        from blip_eraser.utils.i18n import TRANSLATIONS
+        assert "zswap" not in TRANSLATIONS[lang]["perf_compress_ram"].lower()
+
+    def test_default_pref_off(self):
+        from blip_eraser.utils.config import PREFS_DEFAULTS
+        assert PREFS_DEFAULTS["perf_zswap"] is False

@@ -49,6 +49,13 @@ _PERF_OPTIONS = [
         "level": 0.62,
     },
     {
+        "key": "perf_zswap",
+        "desc": "perf_zswap_help",
+        "tip": "perf_zswap_tip",
+        "effect": "perf_effect_ram",
+        "level": 0.55,
+    },
+    {
         "key": "perf_mirror_sort",
         "desc": "perf_mirror_sort_help",
         "tip": "perf_mirror_sort_tip",
@@ -250,6 +257,8 @@ class PerformancePage(BasePage):
             checkbox = row["checkbox"]
 
             block = get_tweak_block_reason(key)
+            if block is not None and block.enable_only and system_states.get(key, False):
+                block = None  # activado por nosotros: debe poder desactivarse
             if block is not None:
                 # Configuración gestionada por el sistema: no se toca ni se
                 # sobrescribe la preferencia guardada.
@@ -257,7 +266,8 @@ class PerformancePage(BasePage):
                 checkbox.setChecked(False)
                 checkbox.blockSignals(False)
                 checkbox.setEnabled(False)
-                checkbox.setToolTip(block.message)
+                text = tr(f"perf_block_{block.code}")
+                checkbox.setToolTip(block.message if text.startswith("[") else text)
                 continue
 
             # Estado persistido en config
