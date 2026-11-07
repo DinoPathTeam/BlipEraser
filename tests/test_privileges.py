@@ -4,6 +4,7 @@ Sin PyQt6, sin borrados reales de sistema: se mockea la API privilegiada y se us
 rutas temporales para la parte de $HOME.
 """
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -122,7 +123,7 @@ class TestRemovePathsSystem:
 
     def test_success_via_api(self, monkeypatch):
         self._mock_api_success(monkeypatch)
-        outcome = remove_paths([Path("/var/log/test.log"), Path("/var/log/pacman.log")])
+        outcome = remove_paths([Path("/var/log/test.log"), Path("/var/log/Xorg.0.log")])
         assert outcome.removed == 2
         assert outcome.errors == []
 
@@ -226,3 +227,64 @@ class TestPrivilegedAPIIntegration:
         with pytest.raises(ValueError) as exc:
             pacman.uninstall_packages(["invalid"])
         assert "rechazados" in str(exc.value)
+
+class TestElevationEdgeCases:
+    @pytest.mark.parametrize("bare", ["/var", "/etc", "/usr", "/boot", "/root", "/opt", "/srv", "/mnt", "/media"])
+    def test_bare_system_roots_require_elevation(self, bare):
+        assert needs_elevation(Path(bare), home=Path("/home/someone"))
+
+    def test_user_owned_app_on_secondary_drive_is_not_elevated(self, monkeypatch):
+        from blip_eraser.utils import privileges as priv
+        monkeypatch.setattr(priv, "_user_can_delete", lambda p: True)
+        assert not needs_elevation(Path("/mnt/games/App"))
+        assert not needs_elevation(Path("/media/adrian/disk/App.AppImage"))
+
+    def test_root_owned_path_on_mnt_still_requires_elevation(self, monkeypatch):
+        from blip_eraser.utils import privileges as priv
+        monkeypatch.setattr(priv, "_user_can_delete", lambda p: False)
+        assert needs_elevation(Path("/mnt/games/App"))
+
+    def test_var_and_etc_never_user_deletable(self, monkeypatch):
+        from blip_eraser.utils import privileges as priv
+        monkeypatch.setattr(priv, "_user_can_delete", lambda p: True)
+        assert needs_elevation(Path("/var/lib/foo"))
+        assert needs_elevation(Path("/etc/foo"))
+        assert needs_elevation(Path("/usr/share/foo"))
+
+    def test_bare_mount_root_stays_elevated_even_if_writable(self, monkeypatch):
+        from blip_eraser.utils import privileges as priv
+        monkeypatch.setattr(priv, "_user_can_delete", lambda p: True)
+        assert needs_elevation(Path("/mnt"))
+
+    def test_user_can_delete_true_when_parent_writable(self, tmp_path):
+        from blip_eraser.utils.privileges import _user_can_delete
+        target = tmp_path / "app"
+        target.mkdir()
+        assert _user_can_delete(target)
+
+    def test_user_can_delete_false_when_missing(self, tmp_path):
+        from blip_eraser.utils.privileges import _user_can_delete
+        assert not _user_can_delete(tmp_path / "nope")
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignora los permisos")
+    def test_user_can_delete_false_when_parent_readonly(self, tmp_path):
+        from blip_eraser.utils.privileges import _user_can_delete
+        parent = tmp_path / "ro"
+        parent.mkdir()
+        (parent / "app").mkdir()
+        parent.chmod(0o555)
+        try:
+            assert not _user_can_delete(parent / "app")
+        finally:
+            parent.chmod(0o755)
+
+    def test_mount_point_is_never_deleted(self, tmp_path, monkeypatch):
+        from blip_eraser.utils import privileges as priv
+        target = tmp_path / "drive"
+        target.mkdir()
+        monkeypatch.setattr(priv.os.path, "ismount", lambda p: str(p) == str(target))
+        deleted = []
+        monkeypatch.setattr(priv, "delete_path", lambda p: deleted.append(p))
+        outcome = remove_paths([target])
+        assert deleted == [] and outcome.removed == 0
+        assert outcome.errors[0].detail == "refuses_mount_point"

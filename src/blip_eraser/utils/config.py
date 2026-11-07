@@ -11,17 +11,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+from blip_eraser.utils.file_utils import DEFAULT_SCAN_PATHS
+
 CONFIG_DIR = Path.home() / ".config" / "blip-eraser"
 PREFS_FILE = CONFIG_DIR / "prefs.json"
 
 PREFS_DEFAULTS: dict[str, Any] = {
     "theme": "red",
     "font": "system",
-    "scan_paths": [
-        "~/Games",
-        "~/Descargas",
-        "~/Applications",
-    ],
+    "scan_paths": list(DEFAULT_SCAN_PATHS),
     "scan_ignore": ["applications", "icons", "mime", "fonts", "sounds"],
     # Performance tweaks (persist user selection)
     "perf_trim_mounts": False,

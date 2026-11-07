@@ -21,12 +21,39 @@ ALLOWED_SYSTEM_PREFIXES: tuple[str, ...] = (
     "/var/log",
 )
 
-# S4: ni el journal ni la bitácora propia se pueden borrar aunque vivan
-# bajo /var/log (borrar el rastro es parte del abuso).
-AUDIT_EXCLUDE_PREFIXES: tuple[str, ...] = (
-    "/var/log/journal",
-    "/var/log/blip-eraser",
+# S4: rastro de auditoría e identidad bajo /var/log: nunca se borra ni se
+# cuenta como "recuperable" (borrar el rastro es parte del abuso). Se compara
+# la primera componente bajo /var/log y sus rotaciones (`wtmp.1`, `btmp-2026`).
+PROTECTED_LOG_NAMES: tuple[str, ...] = (
+    "journal", "blip-eraser",            # journal y bitácora propia
+    "audit",                              # auditd
+    "wtmp", "btmp", "lastlog", "faillog",  # inicios de sesión
+    "auth.log", "secure",                 # autenticación (otras distros)
+    "pacman.log",                         # historial de instalaciones
 )
+
+# Compatibilidad: prefijos exactos (la comprobación real es is_audit_protected).
+AUDIT_EXCLUDE_PREFIXES: tuple[str, ...] = tuple(
+    f"/var/log/{name}" for name in PROTECTED_LOG_NAMES
+)
+
+
+def is_audit_protected(path: str | Path, log_root: str = "/var/log") -> bool:
+    """True si `path` es (o cuelga de) un registro de auditoría protegido.
+
+    Normaliza `..` antes de comparar. `log_root` permite reutilizarla con
+    otra raíz (tests, listados).
+    """
+    norm = posixpath.normpath(str(path).replace("\\", "/"))
+    root = posixpath.normpath(log_root)
+    if not norm.startswith(root + "/"):
+        return False
+    first = norm[len(root) + 1:].split("/", 1)[0]
+    return any(
+        first == name or first.startswith((name + ".", name + "-"))
+        for name in PROTECTED_LOG_NAMES
+    )
+
 
 # Denylist dentro de $HOME (nunca se usa en daemon, pero por consistencia)
 HOME_DENYLIST_PREFIXES: tuple[str, ...] = (

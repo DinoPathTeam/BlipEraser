@@ -57,7 +57,7 @@ reporting the result (good or bad) is very welcome.
 
 ## Installation
 
-### From the AUR package files
+### Build the package locally (PKGBUILD)
 
 `packaging/aur/` contains the `PKGBUILD` that builds the release tarball and
 installs everything (app, privileged daemon, polkit policy and rules, D-Bus,

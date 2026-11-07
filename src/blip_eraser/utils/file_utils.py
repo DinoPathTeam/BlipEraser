@@ -13,13 +13,42 @@ from pathlib import Path
 
 from blip_eraser.utils.host_cmd import expanduser as _expand_host
 
-DEFAULT_SCAN_PATHS = (
+def xdg_downloads_path(user_dirs_file: Path | None = None) -> str:
+    """Carpeta de descargas según XDG (`user-dirs.dirs`), en forma `~/...`.
+
+    No depende del idioma del sistema (`Descargas`, `Downloads`, ...). Si el
+    archivo falta o el valor no es seguro (relativo, con `..` o el propio
+    $HOME) cae a `~/Downloads`.
+    """
+    fallback = "~/Downloads"
+    if user_dirs_file is None:
+        user_dirs_file = _expand_host("~/.config/user-dirs.dirs")
+    try:
+        lines = user_dirs_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return fallback
+    for line in lines:
+        line = line.strip()
+        if line.startswith("#") or not line.startswith("XDG_DOWNLOAD_DIR="):
+            continue
+        value = line.split("=", 1)[1].strip().strip('"')
+        if value.startswith("$HOME/"):
+            value = "~/" + value[len("$HOME/"):]
+        if value in ("", "~/") or ".." in value.split("/"):
+            return fallback
+        if value.startswith("~/") or value.startswith("/"):
+            return value.rstrip("/")
+        return fallback
+    return fallback
+
+
+def default_scan_paths() -> tuple[str, ...]:
     # D1: ~/.local/share FUERA por defecto (carteras KDE, Steam, Papelera…:
     # datos, no apps). El usuario puede añadirlo a mano en Ajustes.
-    "~/Games",
-    "~/Descargas",
-    "~/Applications",
-)
+    return ("~/Games", xdg_downloads_path(), "~/Applications")
+
+
+DEFAULT_SCAN_PATHS = default_scan_paths()
 
 DEFAULT_IGNORE_NAMES = {"applications", "icons", "mime", "fonts", "sounds"}
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from blip_eraser.utils.file_utils import get_dir_size, path_size_for_display
 from blip_eraser.utils.host_cmd import expanduser as _expand_host, host_cmd
+from blip_eraser.utils.validation import is_audit_protected
 
 _PACMAN_CACHE = Path("/var/cache/pacman/pkg")
 _LOG_DIR = Path("/var/log")
@@ -192,12 +193,34 @@ def best_effort_dir_size(path: Path) -> int:
         return 0
 
 
+def _cleanable_logs_bytes(base: Path) -> int:
+    """Tamaño de /var/log sin los registros de auditoría protegidos."""
+    if not base.exists():
+        return 0
+    total = 0
+    try:
+        for entry in base.iterdir():
+            if is_audit_protected(str(entry), log_root=str(base)):
+                continue
+            total += best_effort_dir_size(entry) if entry.is_dir() and not entry.is_symlink() else _file_size(entry)
+    except (OSError, PermissionError):
+        pass
+    return total
+
+
+def _file_size(path: Path) -> int:
+    try:
+        return path.lstat().st_size
+    except OSError:
+        return 0
+
+
 def scan_cleanup() -> dict[str, int]:
     """Espacio recuperable por categoría (junk/cache/logs) + huérfanos."""
     return {
         "junk_bytes": best_effort_dir_size(_cache_dir()),
         "pacman_cache_bytes": best_effort_dir_size(_PACMAN_CACHE),
-        "logs_bytes": best_effort_dir_size(_LOG_DIR),
+        "logs_bytes": _cleanable_logs_bytes(_LOG_DIR),
         "orphan_count": len(orphan_packages()),
     }
 
@@ -226,6 +249,8 @@ def scan_cleanup_items(
             continue
         try:
             for entry in base.iterdir():
+                if cat_key == "logs" and is_audit_protected(str(entry), log_root=str(base)):
+                    continue  # protegido: no se lista ni se puede borrar
                 items.append((cat_key, entry, path_size_for_display(entry)))
         except (OSError, PermissionError):
             continue

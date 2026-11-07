@@ -28,6 +28,7 @@ Seguridad (Fase 1 + Fase 2):
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import Callable
@@ -38,7 +39,7 @@ from blip_eraser.utils.validation import (
     is_symlink_or_reparse,
     ALLOWED_SYSTEM_PREFIXES,  # noqa: F401 (re-export; performance/tests lo importaban de aquí)
     HOME_DENYLIST_PREFIXES,
-    AUDIT_EXCLUDE_PREFIXES,
+    is_audit_protected,
 )
 from blip_eraser.utils.dbus_client import (
     get_privileged_api,
@@ -67,6 +68,25 @@ SYSTEM_PATH_PREFIXES: tuple[str, ...] = (
     "/mnt/",
     "/media/",
 )
+
+# Subconjunto de lo anterior donde un usuario puede ser dueño de lo suyo
+# (discos secundarios, /opt propio): si puede borrarlo sin privilegios, no se
+# eleva. /var, /etc, /usr, /boot y /root nunca entran aquí.
+USER_DELETABLE_PREFIXES: tuple[str, ...] = ("/opt/", "/srv/", "/mnt/", "/media/")
+
+
+def _user_can_delete(path: Path) -> bool:
+    """True si el usuario actual puede borrar `path` sin privilegios."""
+    try:
+        return path.exists() and os.access(path.parent, os.W_OK | os.X_OK)
+    except OSError:
+        return False
+
+
+def _under_prefix(text: str, prefix: str) -> bool:
+    """`/mnt` y `/mnt/x` caen bajo `/mnt/`; `/mntfoo` no."""
+    return text == prefix.rstrip("/") or text.startswith(prefix)
+
 
 # NOTA: ALLOWED_SYSTEM_PREFIXES y HOME_DENYLIST_PREFIXES viven en
 # utils.validation (fuente única, compartida con el daemon). Aquí se
@@ -191,8 +211,17 @@ def needs_elevation(path: Path, home: Path | None = None) -> bool:
     # ruta (mantiene el prefijo /var/ incluso en sistemas donde resolve()
     # lo reescribiría, p. ej. pruebas en Windows). Normaliza separadores
     # para que funcione igual en Windows (\var) y Linux (/var).
-    text = str(expanded).replace("\\", "/")
-    return any(text.startswith(prefix) for prefix in SYSTEM_PATH_PREFIXES)
+    text = str(expanded).replace("\\", "/").rstrip("/") or "/"
+    if not any(_under_prefix(text, prefix) for prefix in SYSTEM_PATH_PREFIXES):
+        return False
+    # Discos secundarios / /opt propio: si es del usuario no hace falta elevar.
+    # La raíz desnuda (/mnt, /opt...) siempre se trata como de sistema.
+    if (
+        any(text.startswith(prefix) for prefix in USER_DELETABLE_PREFIXES)
+        and _user_can_delete(resolved)
+    ):
+        return False
+    return True
 
 
 def _home_removal_error(path: Path, exc: BaseException) -> RemovalError:
@@ -265,6 +294,13 @@ def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | No
                 continue
         except OSError:
             pass
+        # Nunca borrar un punto de montaje (un disco entero), esté donde esté.
+        if os.path.ismount(path):
+            err = RemovalError(paths=[path], code="validation_failed", detail="refuses_mount_point")
+            outcome.errors.append(err)
+            _audit_log("remove_home", [path], "rejected", "refuses_mount_point")
+            _tick()
+            continue
         # Validación denylist en $HOME
         if _is_path_denied_in_home(path):
             err = RemovalError(paths=[path], code="validation_failed", detail="path_in_home_denylist")
@@ -300,10 +336,7 @@ def remove_paths(paths: list[Path], on_progress: Callable[[int, int], None] | No
                 resolved = str(path.resolve(strict=False)).replace("\\", "/")
             except OSError:
                 resolved = ""
-            if any(
-                resolved == excl or resolved.startswith(f"{excl}/")
-                for excl in AUDIT_EXCLUDE_PREFIXES
-            ):
+            if is_audit_protected(resolved):
                 err = RemovalError(paths=[path], code="validation_failed", detail="audit_path_protected")
                 outcome.errors.append(err)
                 _audit_log("remove_system", [path], "rejected", "audit_path_protected")
