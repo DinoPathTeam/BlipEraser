@@ -5,11 +5,29 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
+
+- **Fluidez**: el escaneo (botón y autoescaneo) ya no deja la app colgada. La
+  lista aparece enseguida (filas por tandas), los pesos de carpetas sueltas se
+  calculan en segundo plano con caché, y pacman, limpieza y apps corren a la
+  vez. Medido en un equipo real con 1668 apps: de ~9 s a ~2 s por escaneo, con
+  la interfaz usable durante todo el proceso.
+- **Arranque**: el splash refleja comprobaciones reales (dependencias del
+  daemon, binarios necesarios) y ya no bloquea antes de mostrar la ventana.
+- **Seguridad**: el daemon abre rutas sin seguir symlinks en ningún tramo y
+  usa un filtro mínimo de syscalls; el instalador normaliza permisos de
+  código que corre como root y rechaza symlinks.
+- **Tweaks**: una sola autorización (pkexec) por ajuste.
+- **Aviso de versión nueva** en segundo plano, con caché de 24 h y opción
+  `check_updates: false` para desactivarlo.
+- **Mantenimiento**: Dependabot agrupa subidas menores y parches en un PR.
+- Detalle de cada cambio en las entradas siguientes.
 
 ### 🧊 Escaneo: tamaños de carpetas sin acaparar el GIL
 

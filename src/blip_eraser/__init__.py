@@ -4,4 +4,4 @@
 la barra de título ("BlipEraser - vX.Y.Z") y debe subirse en cada release.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
