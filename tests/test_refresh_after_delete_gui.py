@@ -238,7 +238,7 @@ class TestBackgroundScans:
         started = threading.Event()
         release = threading.Event()
 
-        def slow_list():
+        def slow_list(**_kw):
             started.set()
             release.wait(2)
             return [InstalledApp(name="foo", source="pacman", kind=KIND_APP)]

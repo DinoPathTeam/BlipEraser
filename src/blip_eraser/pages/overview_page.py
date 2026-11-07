@@ -98,6 +98,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._apps: list[InstalledApp] = []
         self._apps_limit = APPS_BATCH  # filas que deben existir (ventana de render)
         self._apps_rendered = 0  # filas realmente creadas
+        self._sub_labels: list[tuple[InstalledApp, QLabel]] = []
         self._initial_scan_callback: Callable[[], None] | None = None
         self._build_ui()
         self._init_scan_buttons([self.scan_btn, self.cleanup_btn])
@@ -290,7 +291,9 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         t0 = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2, thread_name_prefix="scan") as pool:
             cleanup_f = pool.submit(self._timed, scan_cleanup)
-            apps_f = pool.submit(self._timed, list_installed_apps)
+            apps_f = pool.submit(
+                self._timed, lambda: list_installed_apps(manual_sizes=False)
+            )
             apps, apps_s = apps_f.result()
             cleanup, cleanup_s = cleanup_f.result()
         write_diagnostic(
@@ -304,6 +307,24 @@ class OverviewPage(QWidget, BackgroundScanMixin):
     def _timed(fn: Callable[[], Any]) -> tuple[Any, float]:
         start = time.perf_counter()
         return fn(), time.perf_counter() - start
+
+    def _on_sizes_filled(self, apps: list[InstalledApp]) -> None:
+        """Los pesos de carpetas sueltas ya están: actualiza filas y registro."""
+        if apps is not self._apps:
+            return  # llegó un escaneo más nuevo
+        for app, label in self._sub_labels:
+            try:
+                label.setText(self._sub_text(app))
+            except RuntimeError:
+                continue  # fila ya destruida por un rebuild
+        total_space = sum(a.size_bytes for a in apps)
+        log_buffer.add(
+            tr("log_scan_completed").format(count=len(apps), space=human_size(total_space))
+        )
+
+    @staticmethod
+    def _sub_text(app: InstalledApp) -> str:
+        return f"{app.detail}  |  {human_size(app.size_bytes)}" if app.size_bytes else app.detail
 
     def _cleanup_now(self):
         """Botón del resumen: limpia basura + caché + registros (fondo, no bloquea)."""
@@ -361,13 +382,11 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             cleanup = result["cleanup"]
             self._apply_cleanup(cleanup)
 
-            total_space = sum(a.size_bytes for a in self._apps)
-            log_buffer.add(
-                tr("log_scan_completed").format(count=len(self._apps), space=human_size(total_space))
-            )
-
             self._apply_metrics(cleanup)
             self.refresh()
+            # Los pesos de carpetas sueltas se rellenan aparte: la lista y los
+            # botones ya están disponibles.
+            self._start_size_fill(self._apps, self._on_sizes_filled)
             # Ejecutar callback de finalización si existe
             callback = getattr(self, "_initial_scan_callback", None)
             if callable(callback):
@@ -471,11 +490,8 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         name_row.addStretch(1)
         meta.addLayout(name_row)
 
-        sub_label = QLabel(
-            f"{app.detail}  |  {human_size(app.size_bytes)}"
-            if app.size_bytes
-            else app.detail
-        )
+        sub_label = QLabel(self._sub_text(app))
+        self._sub_labels.append((app, sub_label))
         sub_label.setObjectName("SubText")
         sub_label.setWordWrap(True)
         meta.addWidget(sub_label)
@@ -566,6 +582,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
                     widget.deleteLater()
                 cleared_rows += 1
             self._apps_rendered = 0
+            self._sub_labels = []
 
             if not self._apps:
                 empty = QLabel(tr("apps_empty"))

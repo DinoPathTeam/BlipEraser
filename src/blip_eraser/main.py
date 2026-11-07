@@ -143,6 +143,11 @@ def main() -> int:
 
     from PyQt6.QtWidgets import QApplication
 
+    # Los escaneos corren en hilos de Python puro; con el intervalo por defecto
+    # (5 ms) el hilo de la interfaz espera hasta 5 ms por cada vez que pierde el
+    # GIL. Un intervalo corto mantiene la ventana fluida mientras se escanea.
+    sys.setswitchinterval(0.001)
+
     app = QApplication(sys.argv)
     # Ícono de la aplicación (barra de tareas/dock). Fallback silencioso a
     # QIcon() vacío si el asset no existe (ver widgets/logo.py).

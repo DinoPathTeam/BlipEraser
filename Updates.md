@@ -28,6 +28,16 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
   manual se hacían en fila; ahora corren a la vez (`ThreadPoolExecutor`), y
   `scan_cleanup` mide sus 4 partes también a la vez, igual que apps y limpieza
   entre sí. El escaneo tarda ahora lo de la parte más lenta, no la suma.
+- **Perfil en host** (`scripts/profile_scan.py`): pacman entero cuesta <0,6 s;
+  dimensionar las 163 carpetas sueltas (`~/.local`, Steam, `.gradle`…) sumaba
+  ~6,3 s y era lo que mantenía la lista vacía. Ahora `list_installed_apps(
+  manual_sizes=False)` devuelve la lista al instante y `fill_manual_sizes`
+  calcula los pesos en un hilo aparte (3 carpetas a la vez) mientras la
+  interfaz ya es usable; al terminar se actualizan las filas (Vista general) o
+  se re-renderiza la tabla si no hay selección (Desinstalador). Los pesos se
+  cachean 10 min: reescanear o abrir el Desinstalador no vuelve a recorrer.
+- `sys.setswitchinterval(0.001)` al arrancar: los hilos de escaneo en Python
+  puro ya no retienen el GIL hasta 5 ms cada vez que la interfaz lo pide.
 - `scripts/profile_scan.py`: mide cada fase sin GUI
   (`PYTHONPATH=src python scripts/profile_scan.py`).
 - Lotes de la lista de 100 a 40 filas (≈0,15 s por lote en tu equipo).
