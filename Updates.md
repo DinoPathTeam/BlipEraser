@@ -691,3 +691,7 @@ systemctl status blip-eraser-privileged.service
 - zram y espejos gestionados por el sistema (p. ej. CachyOS) ya no se sobrescriben: el tweak queda bloqueado con el motivo en el tooltip.
 - Nuevo tweak opcional **zswap** (apagado por defecto): persistente vía `/etc/tmpfiles.d/blip-eraser-zswap.conf`, sin tocar el bootloader; bloqueado si el swap es zram, si no hay swap en disco o si el kernel ya lo activa.
 - El tweak antes llamado "zswap" (que en realidad configuraba zram) se llama ahora "zram". Textos ES/EN detallados para cada tweak.
+
+## Tweaks: reconciliación al arrancar
+- Tu elección guardada ya no se sobrescribe con el estado del sistema. Si dejaste un ajuste activado y el sistema lo perdió, la página de Rendimiento lo avisa y ofrece "Reaplicar".
+- Tests de GUI reales para la página de Rendimiento.
