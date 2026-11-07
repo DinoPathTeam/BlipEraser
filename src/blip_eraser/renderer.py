@@ -47,6 +47,7 @@ from blip_eraser.utils.i18n import (
 )
 from blip_eraser.utils.log import log as log_buffer
 from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SidebarActivity, SystemStatusBar
+from blip_eraser.widgets import table_delegates
 from blip_eraser.widgets.card import Card
 from blip_eraser.widgets.logo import AppLogo, app_icon
 
@@ -308,6 +309,7 @@ class MainWindow(QMainWindow):
         self.sidebar.set_icon_color(palette.get("icon", "#ffffff"))
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
+        table_delegates.set_theme_colors(palette["subtext"], theme["tags"])
         for card in self.findChildren(Card):
             card.set_theme(
                 palette["panel"],

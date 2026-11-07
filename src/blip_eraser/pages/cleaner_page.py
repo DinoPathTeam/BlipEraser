@@ -15,7 +15,7 @@ borrado real (delete_path) no se toca.
 
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -46,9 +46,11 @@ from blip_eraser.utils.scan_cache import (
     is_stale,
     mark_scanned,
 )
+from blip_eraser.widgets.card import Card
 from blip_eraser.widgets.check_table import CheckTable
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.scan_worker import BackgroundScanMixin
+from blip_eraser.widgets.table_delegates import SubTextDelegate
 
 
 class _SectionBase(QWidget, BackgroundScanMixin):
@@ -61,6 +63,10 @@ class _SectionBase(QWidget, BackgroundScanMixin):
 
     # -- hooks (subclase) -------------------------------------------------
     _columns: int = 0
+    # Columnas de ancho fijo {índice: px}; el resto se reparte el espacio.
+    _fixed_widths: dict[int, int] = {}
+    # Columnas de texto secundario (atenuado).
+    _dim_columns: tuple[int, ...] = ()
     _cache_section: str = ""
     _forensic: str = ""
 
@@ -108,26 +114,39 @@ class _SectionBase(QWidget, BackgroundScanMixin):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setContentsMargins(0, 4, 0, 0)
         layout.setSpacing(8)
 
         self.table = CheckTable(self._columns)
+        self.table.set_right_aligned_columns((self._columns - 1,))
         self.table.setHorizontalHeaderLabels(self._headers())
         header = self.table.horizontalHeader()
-        header.setMinimumSectionSize(70)
+        header.setMinimumSectionSize(36)
         for col in range(1, self._columns):
-            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
+            if col in self._fixed_widths:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Fixed)
+                self.table.setColumnWidth(col, self._fixed_widths[col])
+            else:
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.Stretch)
         header.setStretchLastSection(False)
-        self.table.setColumnWidth(self._columns - 1, 110)
+        for col in self._dim_columns:
+            self.table.setItemDelegateForColumn(col, SubTextDelegate(self.table))
         self.table.select_all_box.setToolTip(tr("select_all_tooltip"))
-        layout.addWidget(self.table)
+
+        card = Card(padding=6)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.addWidget(self.table)
+        layout.addWidget(card, 1)
 
         buttons = QHBoxLayout()
         self.refresh_btn = QPushButton(tr("refresh_button"))
         self.refresh_btn.clicked.connect(self.scan)
         buttons.addWidget(self.refresh_btn)
+        buttons.addStretch(1)
 
         self.delete_btn = QPushButton(tr("delete_button"))
+        self.delete_btn.setObjectName("PrimaryButton")
         self.delete_btn.clicked.connect(self.delete_selected)
         buttons.addWidget(self.delete_btn)
 
@@ -182,7 +201,12 @@ class _SectionBase(QWidget, BackgroundScanMixin):
             for item in self._visible:
                 row = self.table.add_check_row()
                 for col, text in enumerate(self._cells(item), start=1):
-                    self.table.setItem(row, col, QTableWidgetItem(text))
+                    cell = QTableWidgetItem(text)
+                    if self.table.right_aligned(col):
+                        cell.setTextAlignment(
+                            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                        )
+                    self.table.setItem(row, col, cell)
             self.table.blockSignals(False)
             self.table.refresh_header_state()
         except RuntimeError as exc:
@@ -216,6 +240,8 @@ class _RecommendedSection(_SectionBase):
     """Sección (a): 'Limpieza recomendada' (basura + caché + registros)."""
 
     _columns = 4
+    _fixed_widths = {1: 130, 3: 110}
+    _dim_columns = (2, 3)
     _cache_section = SECTION_CLEANER_RECOMMENDED
     _forensic = "recommended"
 
@@ -264,6 +290,8 @@ class _ManualSection(_SectionBase):
     """Sección (b): 'Aplicaciones instaladas' (carpetas sueltas/AppImages)."""
 
     _columns = 3
+    _fixed_widths = {2: 110}
+    _dim_columns = (2,)
     _cache_section = SECTION_CLEANER_MANUAL
     _forensic = "manual"
 
@@ -322,8 +350,12 @@ class CleanerPage(BasePage):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 8)
+        layout.setSpacing(8)
 
         self.info_label = QLabel(tr("cleaner_info"))
+        self.info_label.setObjectName("SubText")
+        self.info_label.setWordWrap(True)
         layout.addWidget(self.info_label)
 
         self.tabs = QTabWidget()

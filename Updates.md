@@ -100,6 +100,20 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
   `sidebar_activity_empty`.
 
+### Sin versionar: rediseño (lote 2) — Desinstalador y Limpiador
+
+- **Tablas**: sin rejilla, con separador fino por fila, encabezados en
+  mayúsculas pequeñas, Peso/Fecha/Tamaño alineados a la derecha y columnas
+  secundarias atenuadas. Dentro de una tarjeta con sombra.
+- **Tipo** (Desinstalador): etiqueta con contorno (`TagDelegate`) con los
+  mismos colores que en la Vista general.
+- **Pestañas** (Limpiador, Configuración): control segmentado con degradado en
+  la activa. Botón principal a la derecha y «Actualizar lista» a la izquierda;
+  el principal se atenúa cuando está deshabilitado. Marca de verificación
+  propia en las casillas (SVG generado por color en el directorio temporal).
+- **Vista general**: anillo con más aire, cifras en tarjetas con barra y brillo
+  del tema (`StatTile`) y botón «Escanear ahora» más compacto.
+
 ### Sin versionar: rediseño (lote 1) — estructura y Vista general
 
 - **Estructura**: logo y nombre arriba de la barra lateral, navegación solo de

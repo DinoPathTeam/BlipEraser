@@ -9,6 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QFrame,
     QHeaderView,
     QTableWidget,
     QTableWidgetItem,
@@ -27,8 +28,19 @@ class CheckTable(QTableWidget):
         if not show_select_all:
             self.select_all_box.hide()
 
+        self._right_columns: set[int] = set()
+        self.setShowGrid(False)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAlternatingRowColors(False)
+        self.setWordWrap(False)
+        self.verticalHeader().hide()
+        self.verticalHeader().setDefaultSectionSize(38)
+
         header = self.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        header.setHighlightSections(False)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setFixedHeight(34)
         self.setColumnWidth(0, 36)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -39,6 +51,24 @@ class CheckTable(QTableWidget):
         header.geometriesChanged.connect(self._place_select_all)
         self.itemChanged.connect(self.refresh_header_state)
         self._place_select_all()
+
+    # ------------------------------------------------------------------
+    # Presentación
+    # ------------------------------------------------------------------
+    def set_right_aligned_columns(self, columns) -> None:
+        """Columnas (Peso, Fecha, Tamaño…) con encabezado y celdas a la derecha."""
+        self._right_columns = set(columns)
+
+    def right_aligned(self, column: int) -> bool:
+        return column in self._right_columns
+
+    def setHorizontalHeaderLabels(self, labels) -> None:  # noqa: N802 - API de Qt
+        """Encabezados en mayúsculas (estilo del rediseño) y alineados."""
+        super().setHorizontalHeaderLabels([str(label).upper() for label in labels])
+        for col in self._right_columns:
+            item = self.horizontalHeaderItem(col)
+            if item is not None:
+                item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
     # ------------------------------------------------------------------
     # Encabezado / selección

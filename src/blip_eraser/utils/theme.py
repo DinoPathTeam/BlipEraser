@@ -161,6 +161,28 @@ def fill_gradient(theme_key: str) -> str:
     )
 
 
+def check_icon_path(color: str) -> str:
+    """Ruta (con '/') de un SVG con la marca de verificación en `color`.
+
+    QSS no admite colores dentro de imágenes ni data-URI, así que se genera un
+    archivo pequeño por color en el directorio temporal (se reutiliza).
+    """
+    import tempfile
+    from pathlib import Path
+
+    folder = Path(tempfile.gettempdir()) / "bliperaser-qss"
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"check-{color.lstrip('#').lower()}.svg"
+    if not target.exists():
+        target.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">'
+            f'<path d="M3.6 8.4l2.9 2.9 5.9-6.2" fill="none" stroke="{color}" stroke-width="2" '
+            'stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            encoding="utf-8",
+        )
+    return target.as_posix()
+
+
 def build_qss(theme_key: str) -> str:
     """Hoja de estilos Qt completa para un tema dado (por clave)."""
     theme = THEMES.get(theme_key, THEMES["red"])
@@ -172,6 +194,7 @@ def build_qss(theme_key: str) -> str:
     hover_fill = theme["hover_fill"]
     bot = theme["fill_bot"]
     tags = theme["tags"]
+    check = check_icon_path(on)
     return f"""
 QWidget {{ background-color: {p['bg']}; color: {p['text']}; }}
 QMainWindow {{ background-color: {p['bg']}; }}
@@ -208,22 +231,40 @@ QPushButton:pressed {{ background-color: {bot}; color: {on}; }}
 QPushButton:checked {{ background: {fill}; color: {on}; border: none; }}
 QPushButton#PrimaryButton {{ background: {fill}; color: {on}; border: none; }}
 QPushButton#PrimaryButton:hover {{ background-color: {hover_fill}; }}
+QPushButton#PrimaryButton:disabled {{ background: {p['hover']}; color: {p['subtext']}; }}
+QPushButton:disabled {{ color: {p['subtext']}; }}
 QLineEdit {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; padding: 6px 10px; selection-background-color: {accent}; selection-color: {on}; }}
-QTableWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; gridline-color: {p['border']}; }}
-QHeaderView::section {{ background-color: {p['sidebar']}; border: none; border-bottom: 1px solid {p['border']}; padding: 6px; color: {p['subtext']}; }}
+QTableWidget {{ background: transparent; border: none; outline: 0; gridline-color: transparent; selection-background-color: transparent; }}
+QTableWidget::item {{ border-bottom: 1px solid {p['border']}; padding: 0 6px; }}
+QTableWidget::item:selected {{ background-color: {p['hover']}; color: {p['text']}; }}
+QTableWidget::item:hover {{ background-color: {p['hover']}; }}
+QHeaderView {{ background: transparent; border: none; }}
+QHeaderView::section {{ background: transparent; border: none; padding: 0 6px; color: {p['subtext']}; font-size: 11px; font-weight: bold; }}
 QHeaderView::section:first {{ padding: 0; }}
+QTableView::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 1px solid {p['subtext']}; background-color: {p['bg']}; }}
+QTableView::indicator:hover {{ border-color: {accent}; }}
+QTableView::indicator:checked {{ background-color: {accent}; border-color: {accent}; image: url({check}); }}
+QTableView::indicator:indeterminate {{ background-color: {accent}; border-color: {accent}; }}
+QTabWidget::pane {{ border: none; top: 6px; }}
+QTabWidget::tab-bar {{ left: 0px; }}
+QTabBar {{ background: transparent; }}
+QTabBar::tab {{ background: {p['panel']}; color: {p['subtext']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 7px 16px; margin: 0 4px 0 0; font-weight: 600; }}
+QTabBar::tab:hover:!selected {{ background: {p['hover']}; color: {p['text']}; }}
+QTabBar::tab:selected {{ background: {fill}; color: {on}; border: none; padding: 8px 17px; }}
 QCheckBox#SelectAllCheck {{ background: transparent; spacing: 0; }}
 QCheckBox#SelectAllCheck::indicator {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 3px; width: 14px; height: 14px; }}
 QCheckBox#SelectAllCheck::indicator:hover {{ border-color: {accent}; }}
 QCheckBox#SelectAllCheck::indicator:checked {{ background-color: {accent}; border-color: {accent}; }}
 QCheckBox#SelectAllCheck::indicator:indeterminate {{ background-color: {accent}; border-color: {accent}; }}
-QTableWidget::item:selected {{ background-color: {accent}; color: {on}; }}
 QProgressBar {{ background-color: {p['hover']}; border: none; border-radius: 3px; height: 8px; }}
 QProgressBar::chunk {{ background: {fill}; border-radius: 3px; }}
 QPlainTextEdit#LogView {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; }}
 QGroupBox {{ border: 1px solid {p['border']}; border-radius: 6px; margin-top: 10px; }}
 QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color: {p['subtext']}; }}
-QComboBox, QListWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 6px; padding: 4px; }}
+QComboBox, QListWidget {{ background-color: {p['panel']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 4px 8px; }}
+QToolButton {{ background-color: {p['panel']}; color: {p['text']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 6px 12px; }}
+QToolButton:hover {{ background-color: {p['hover']}; }}
+QToolButton::menu-indicator {{ subcontrol-position: right center; right: 6px; }}
 QLabel#SubText {{ color: {p['subtext']}; }}
 QLabel#PanelTitle {{ color: {p['subtext']}; font-size: 11px; font-weight: bold; }}
 QWidget#SidebarActivity {{ background: transparent; }}
