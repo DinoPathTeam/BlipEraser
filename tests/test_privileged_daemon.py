@@ -2,6 +2,7 @@
 
 import os
 import sys
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -365,13 +366,13 @@ class TestRateLimit:
         try:
             for i in range(daemon_mod._RATE_LIMIT_MAX):
                 inv = FakeInv()
-                svc.on_method_call(
+                svc._handle_call(
                     MagicMock(), f":1.{100 + i}", "/", "com.dinopath.BlipEraser.Privileged",
                     "CleanSystemPaths", [["/var/log/x"]], inv,
                 )
                 assert inv.error == "org.freedesktop.DBus.Error.InvalidArgs"
             inv = FakeInv()
-            svc.on_method_call(
+            svc._handle_call(
                 MagicMock(), ":1.999", "/", "com.dinopath.BlipEraser.Privileged",
                 "CleanSystemPaths", [["/var/log/x"]], inv,
             )
@@ -408,7 +409,7 @@ class TestPolkitGate:
                 self.value = value
 
         inv = FakeInv()
-        svc.on_method_call(
+        svc._handle_call(
             MagicMock(), ":1.77", "/", "com.dinopath.BlipEraser.Privileged",
             "CleanSystemPaths", [["/var/log/x"]], inv,
         )
@@ -445,7 +446,7 @@ class TestNoPackageManagementInDaemon:
                 pass
 
         inv = FakeInv()
-        svc.on_method_call(
+        svc._handle_call(
             MagicMock(), ":1.5", "/", "com.dinopath.BlipEraser.Privileged",
             "RemovePackages", [["x"]], inv,
         )
@@ -464,3 +465,111 @@ class TestNoPackageManagementInDaemon:
             / "packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged"
         ).read_text(encoding="utf-8")
         assert "/usr/bin/pacman " not in profile and "/usr/bin/pacman-key" not in profile
+
+
+class TestNonBlockingDispatch:
+    """Punto 2: un prompt de polkit abierto no congela al daemon."""
+
+    class FakeInv:
+        def __init__(self):
+            self.error = None
+            self.value = None
+            self.done = threading.Event()
+
+        def return_dbus_error(self, name, msg):
+            self.error = name
+            self.done.set()
+
+        def return_value(self, value):
+            self.value = value
+            self.done.set()
+
+    def _svc(self, monkeypatch, polkit):
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        svc = daemon_mod.PrivilegedService()
+        monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
+        monkeypatch.setattr(svc, "_polkit_authorized", polkit)
+        monkeypatch.setattr(daemon_mod, "clean_system_paths", lambda paths: "ok")
+        daemon_mod._rate_limit_hits.pop("uid:1000", None)
+        daemon_mod._inflight_uids.discard(1000)
+        return daemon_mod, svc
+
+    def test_ping_answers_while_polkit_prompt_is_open(self, monkeypatch):
+        release = threading.Event()
+        entered = threading.Event()
+
+        def slow_polkit(conn, sender, action):
+            entered.set()
+            release.wait(5)
+            return True
+
+        daemon_mod, svc = self._svc(monkeypatch, slow_polkit)
+        clean, ping = self.FakeInv(), self.FakeInv()
+        try:
+            svc.on_method_call(MagicMock(), ":1.1", "/", "i", "CleanSystemPaths", [["/var/log/x"]], clean)
+            assert entered.wait(2), "el prompt de polkit no llegó a abrirse"
+            svc.on_method_call(MagicMock(), ":1.1", "/", "i", "Ping", [], ping)
+            assert ping.done.wait(2), "Ping quedó bloqueado por el prompt abierto"
+            assert not clean.done.is_set()
+        finally:
+            release.set()
+        assert clean.done.wait(2)
+        assert clean.error is None
+        daemon_mod._rate_limit_hits.pop("uid:1000", None)
+
+    def test_second_operation_same_uid_rejected_while_one_in_flight(self, monkeypatch):
+        release = threading.Event()
+        entered = threading.Event()
+
+        def slow_polkit(conn, sender, action):
+            entered.set()
+            release.wait(5)
+            return True
+
+        daemon_mod, svc = self._svc(monkeypatch, slow_polkit)
+        first, second = self.FakeInv(), self.FakeInv()
+        try:
+            svc.on_method_call(MagicMock(), ":1.1", "/", "i", "CleanSystemPaths", [["/var/log/x"]], first)
+            assert entered.wait(2)
+            svc.on_method_call(MagicMock(), ":1.2", "/", "i", "CleanSystemPaths", [["/var/log/y"]], second)
+            assert second.done.wait(2)
+            assert second.error == "org.freedesktop.DBus.Error.LimitsExceeded"
+        finally:
+            release.set()
+        assert first.done.wait(2)
+        daemon_mod._rate_limit_hits.pop("uid:1000", None)
+
+    def test_rate_limit_counts_denied_polkit_attempts(self, monkeypatch):
+        daemon_mod, svc = self._svc(monkeypatch, lambda conn, sender, action: False)
+        try:
+            for _ in range(daemon_mod._RATE_LIMIT_MAX):
+                inv = self.FakeInv()
+                svc._handle_call(MagicMock(), ":1.1", "/", "i", "CleanSystemPaths", [["/var/log/x"]], inv)
+                assert inv.error == "org.freedesktop.DBus.Error.AccessDenied"
+            inv = self.FakeInv()
+            svc._handle_call(MagicMock(), ":1.1", "/", "i", "CleanSystemPaths", [["/var/log/x"]], inv)
+            assert inv.error == "org.freedesktop.DBus.Error.LimitsExceeded"
+        finally:
+            daemon_mod._rate_limit_hits.pop("uid:1000", None)
+
+    def test_inflight_slot_released_after_failure(self, monkeypatch):
+        daemon_mod, svc = self._svc(monkeypatch, lambda conn, sender, action: False)
+        inv = self.FakeInv()
+        svc._handle_call(MagicMock(), ":1.1", "/", "i", "CleanSystemPaths", [["/var/log/x"]], inv)
+        assert 1000 not in daemon_mod._inflight_uids
+        daemon_mod._rate_limit_hits.pop("uid:1000", None)
+
+    def test_busy_when_no_worker_slots(self, monkeypatch):
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        svc = daemon_mod.PrivilegedService()
+        held = [daemon_mod._worker_slots.acquire(blocking=False) for _ in range(daemon_mod._MAX_WORKERS)]
+        try:
+            inv = self.FakeInv()
+            svc.on_method_call(MagicMock(), ":1.1", "/", "i", "Ping", [], inv)
+            assert inv.error == "org.freedesktop.DBus.Error.LimitsExceeded"
+        finally:
+            for ok in held:
+                if ok:
+                    daemon_mod._worker_slots.release()

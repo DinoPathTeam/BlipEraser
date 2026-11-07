@@ -11,6 +11,21 @@ Versión del código: `1.0.6` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧵 Daemon: un prompt de polkit ya no lo congela
+
+- **Problema**: cada llamada D-Bus corría en el bucle principal; con un
+  diálogo de polkit abierto (hasta 180 s) el daemon no atendía ni `Ping`, y el
+  cliente cortaba a los 25 s (timeout por defecto de GDBus) mientras el daemon
+  seguía esperando: si el usuario escribía la contraseña después, borraba pese
+  al error mostrado.
+- **Cambio**: cada llamada se atiende en un hilo daemon (máx. 8); un solo
+  prompt/operación por UID (el resto recibe `LimitsExceeded`); la cuota por
+  UID se aplica **antes** de polkit (cancelar o fallar el prompt también
+  cuenta); la limpieza en sí se serializa; el cliente espera hasta 200 s.
+- Tests: Ping responde con un prompt abierto, segunda operación del mismo UID
+  rechazada, cuota previa a polkit, ranura liberada tras fallo, servidor
+  ocupado, timeout del cliente > prompt de polkit.
+
 ### 🐛 Desinstalar paquetes: el daemon ya no ejecuta pacman
 
 - **Bug real (CachyOS, reproducido en host)**: el daemon arrancaba con
