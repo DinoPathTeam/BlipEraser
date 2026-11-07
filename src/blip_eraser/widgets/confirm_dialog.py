@@ -30,7 +30,6 @@ from blip_eraser.utils.privileges import (
     remove_paths,
     get_allowed_operation,
 )
-from blip_eraser.utils.pacman import PackageIdentityUntrustedError
 from blip_eraser.utils.scan_cache import invalidate
 
 
@@ -137,17 +136,6 @@ def run_destructive_action(
     def _done(result: _DeleteResult):
         dlg.close()
         worker.deleteLater()
-        if result.untrusted:
-            QMessageBox.critical(
-                parent,
-                "Identidad no reconocida",
-                "La identidad de los paquetes no pudo verificarse. "
-                "La desinstalación fue bloqueada y la aplicación se cerrará.",
-            )
-            from PyQt6.QtWidgets import QApplication
-
-            QApplication.quit()
-            return
         if result.removed:
             log_buffer.add(tr(log_key).format(count=result.removed))
             for section in invalidate_sections:
@@ -179,7 +167,6 @@ def _progress_text(label: str, done: int, total: int) -> str:
 class _DeleteResult:
     removed: int = 0
     errors: list[str] = field(default_factory=list)
-    untrusted: bool = False
 
 
 class _DeleteWorker(QThread):
@@ -238,10 +225,9 @@ class _DeleteWorker(QThread):
             except ValueError as e:
                 # Paquetes no válidos (rechazados por validación en pacman.py)
                 result.errors.append(str(e))
-            except PackageIdentityUntrustedError:
-                result.untrusted = True
-                self.finished.emit(result)
-                return
+            except RuntimeError as e:
+                # Consulta a pacman fallida (stderr ya en bitácora): no es "0 paquetes".
+                result.errors.append(str(e))
             except Exception:  # noqa: BLE001 - límite de la capa GUI
                 result.errors.append(tr("priv_error_failed").format(path=item.label))
             _tick(item.label)

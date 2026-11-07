@@ -5,12 +5,13 @@ This daemon runs as root via systemd (Type=dbus) and exposes a D-Bus interface
 for the BlipEraser UI to request privileged operations without using pkexec.
 
 D-Bus Interface: com.dinopath.BlipEraser.Privileged
-- RemovePackages(as packages) -> s (stdout)
 - CleanSystemPaths(as paths) -> s (stdout)
 - Ping() -> b
 
 Security:
 - Validates all inputs against strict allowlists
+- Solo limpia rutas de sistema: la desinstalación de paquetes va por
+  `pkexec pacman -Rns` (pacman ejecuta hooks y escribe fuera del sandbox)
 - No shell execution, only subprocess with explicit args
 - Audit logging for all operations
 - TOCTOU protection via fd-based atomic operations
@@ -44,12 +45,6 @@ except ImportError:
 # NOTA: ALLOWED_SYSTEM_PREFIXES se importa de utils.validation (línea ~151,
 # aliasado para los tests). HOME_DENYLIST no se usa en el daemon (solo en el
 # cliente): no redefinir nada aquí para no sombrear el import.
-
-# Caché de paquetes instalados (thread-safe)
-_package_cache: set[str] | None = None
-_CACHE_LOCK = threading.Lock()
-_cache_initialized = False
-_cache_verification_done = False  # Para verificación async de firmas
 
 # Rate-limit: ventana fija por sender para métodos destructivos (Ping exento).
 # Un borrado a medias no se puede interrumpir, así que frenar ráfagas aquí
@@ -331,133 +326,7 @@ def _validate_clean_paths(paths: list[str]) -> tuple[list[str], list[str]]:
     return valid, rejected
 
 
-# ─── Caché de paquetes (supply chain) ─────────────────────────────────
-
-def _verify_package_signatures() -> tuple[bool, list[str]]:
-    """Verifica firmas de paquetes en /var/cache/pacman/pkg.
-    Retorna (all_valid, failed_packages).
-    """
-    cache_dir = Path("/var/cache/pacman/pkg")
-    if not cache_dir.exists():
-        return True, []
-    try:
-        # Buscar todos los formatos de paquete válidos con un solo rglob
-        pkg_files = list(cache_dir.rglob("*.pkg.tar.*"))
-        
-        if not pkg_files:
-            return True, []
-        
-        failed: list[str] = []
-        for pkg_file in pkg_files:
-            sig_file = pkg_file.with_suffix(pkg_file.suffix + ".sig")
-            if not sig_file.exists():
-                _audit_log("pacman_verify", f"package={pkg_file.name} result=missing_signature")
-                failed.append(pkg_file.name)
-                continue
-            result = subprocess.run(
-                ["/usr/bin/pacman-key", "--verify", str(sig_file), str(pkg_file)],
-                capture_output=True, text=True, timeout=30
-            )
-            if result.returncode != 0:
-                _audit_log("pacman_verify",
-                    f"package={pkg_file.name} result=invalid_signature stderr={result.stderr.strip()[:200]}")
-                failed.append(pkg_file.name)
-                continue
-        if failed:
-            _audit_log("pacman_verify_all", f"result=partial_failed failed={failed}")
-            return False, failed
-        _audit_log("pacman_verify_all", f"result=success count={len(pkg_files)}")
-        return True, []
-    except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
-        _audit_log("pacman_verify", f"result=error detail={e}")
-        return False, []
-
-
-def _load_package_cache() -> set[str]:
-    """Carga y verifica la caché de paquetes instalados.
-    
-    Primero verifica las firmas de los paquetes en cache. Si la verificación
-    falla, loggea warning pero NO bloquea la carga de la caché (RT-6 fix).
-    Solo popula la caché con paquetes verificados.
-    """
-    global _package_cache, _cache_initialized, _cache_verification_done
-    with _CACHE_LOCK:
-        if _cache_initialized:
-            return _package_cache or set()
-        _cache_verification_done = False
-        
-        # 1. Primero verificar firmas de paquetes en cache
-        sig_ok, failed = _verify_package_signatures()
-        if not sig_ok:
-            # RT-6: No bloquear - loggear warning pero continuar
-            _audit_log("pacman_cache_init", f"result=signature_verification_failed failed={failed} (continuing anyway)")
-        else:
-            _audit_log("pacman_verify_async", "result=success")
-        
-        # 2. Cargar paquetes instalados (solo si queremos ser estrictos, filtrar por firmas válidas)
-        # Por compatibilidad y RT-6, cargamos todos los paquetes de pacman -Q
-        # pero loggeamos los que fallaron verificación
-        try:
-            result = subprocess.run(
-                ["/usr/bin/pacman", "-Q"], capture_output=True, text=True, check=True, timeout=30
-            )
-            names: set[str] = set()
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                name = line.split(None, 1)[0]
-                names.add(name)
-            _package_cache = names
-        except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
-            _audit_log("pacman_cache_init", f"result=failed detail={e}")
-            _package_cache = set()
-        
-        _cache_initialized = True
-        _cache_verification_done = True
-        cache_count = len(_package_cache)
-        _audit_log("pacman_cache_init", f"result=success count={cache_count}")
-        return _package_cache or set()
-
-
-def get_cached_package_names() -> set[str]:
-    if not _cache_initialized:
-        return _load_package_cache()
-    return _package_cache or set()
-
-
-def invalidate_package_cache() -> None:
-    global _package_cache, _cache_initialized
-    with _CACHE_LOCK:
-        _package_cache = None
-        _cache_initialized = False
-        _audit_log("pacman_cache_invalidate", "result=success")
-
-
-def _validate_packages_exist(packages: list[str]) -> tuple[list[str], list[str]]:
-    installed = get_cached_package_names()
-    valid = [p for p in packages if p in installed]
-    invalid = [p for p in packages if p not in installed]
-    return valid, invalid
-
-
 # ─── Operaciones privilegiadas ────────────────────────────────────────
-
-def remove_packages(packages: list[str]) -> str:
-    """Desinstala paquetes vía pacman -Rns. Devuelve stdout."""
-    if not packages:
-        return ""
-    valid, invalid = _validate_packages_exist(packages)
-    if invalid:
-        _audit_log("uninstall_rejected", f"packages={invalid} reason=not_installed")
-        raise ValueError(f"Paquetes no instalados (rechazados): {', '.join(invalid)}")
-    _audit_log("uninstall_started", f"packages={valid}")
-    cmd = ["/usr/bin/pacman", "-Rns", "--noconfirm", "--", *valid]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    _audit_log("uninstall_success", f"packages={valid}")
-    invalidate_package_cache()
-    return result.stdout
-
 
 def clean_system_paths(paths: list[str]) -> str:
     """Borra rutas de sistema usando operaciones atómicas fd-based. Devuelve resumen."""
@@ -480,8 +349,6 @@ def clean_system_paths(paths: list[str]) -> str:
         raise ValueError(f"Errores en limpieza: {'; '.join(errors)}")
     
     _audit_log("clean_success", f"paths={valid}")
-    # Invalidar caché porque se pudo borrar /var/lib/pacman
-    invalidate_package_cache()
     return f"Eliminadas {len(valid)} ruta(s)"
 
 
@@ -697,7 +564,6 @@ class PrivilegedService:
 
     # Acciones polkit declaradas en packaging/polkit/*.policy (S1: antes el
     # daemon no las comprobaba; wheel+sesión no piden contraseña).
-    POLKIT_ACTION_PACKAGES = "com.dinopath.blip-eraser.pacman-remove"
     POLKIT_ACTION_CLEAN = "com.dinopath.blip-eraser.system-clean"
 
     def _polkit_authorized(self, connection: Any, sender: str, action_id: str) -> bool:
@@ -763,22 +629,7 @@ class PrivilegedService:
         rate_key = f"uid:{uid}"
 
         try:
-            if method_name == "RemovePackages":
-                packages = parameters[0]
-                if not self._require_polkit(
-                    connection, sender, method_name, self.POLKIT_ACTION_PACKAGES, invocation
-                ):
-                    return
-                if not _check_rate_limit(rate_key):
-                    _audit_log("rate_limited", f"sender={sender} uid={uid} method={method_name}")
-                    invocation.return_dbus_error(
-                        "org.freedesktop.DBus.Error.LimitsExceeded",
-                        "Demasiadas operaciones seguidas, espera un minuto"
-                    )
-                    return
-                result = remove_packages(packages)
-                invocation.return_value(GLib.Variant("(s)", (result,)))
-            elif method_name == "CleanSystemPaths":
+            if method_name == "CleanSystemPaths":
                 paths = parameters[0]
                 if not self._require_polkit(
                     connection, sender, method_name, self.POLKIT_ACTION_CLEAN, invocation
@@ -862,53 +713,6 @@ class PrivilegedService:
         
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
-        # SIGHUP para recargar caché manualmente
-        def _sighup_handler(signum: int, frame: Any) -> None:
-            _audit_log("cache_reload_requested", "signal=SIGHUP")
-            invalidate_package_cache()
-        sighup = getattr(signal, "SIGHUP", None)
-        if sighup is not None:
-            signal.signal(sighup, _sighup_handler)
-
-    def _start_periodic_cache_refresh(self):
-        """Timer periódico para refrescar caché de paquetes (cada 5 min)."""
-        def _refresh():
-            if not self._shutdown_requested:
-                invalidate_package_cache()
-                get_cached_package_names()  # Trigger reload
-                _audit_log("cache_periodic_refresh", "result=success")
-            # Re-programar
-            if not self._shutdown_requested:
-                self._verify_timer = GLib.timeout_add_seconds(300, _refresh)
-                return False  # No repetir automáticamente, lo re-programa manual
-            return False
-        
-        # Primera verificación a los 30s, luego cada 5 min
-        GLib.timeout_add_seconds(30, _refresh)
-
-    def _start_signature_verification(self):
-        """Inicia verificación periódica de firmas en background (cada 5 min).
-        
-        Nota: La verificación inicial ya se hizo en _load_package_cache.
-        Esta función solo re-verifica periódicamente para detectar cambios.
-        """
-        def _bg_verify():
-            try:
-                all_valid, failed = _verify_package_signatures()
-                if all_valid:
-                    _audit_log("pacman_verify_periodic", "result=success")
-                else:
-                    _audit_log("pacman_verify_periodic", f"result=partial_failed failed={failed}")
-                    # Invalidar caché para forzar recarga en próxima operación
-                    invalidate_package_cache()
-            except Exception as e:
-                _audit_log("pacman_verify_periodic", f"result=error detail={e}")
-        
-        # Ejecutar en hilo separado después de 10s para no bloquear startup
-        GLib.timeout_add_seconds(10, lambda: (threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify-periodic").start(), False)[1])
-        # Programar verificación periódica cada 5 min
-        GLib.timeout_add_seconds(300, lambda: (threading.Thread(target=_bg_verify, daemon=True, name="pacman-verify-periodic").start(), False)[1])
-
     def run(self) -> int:
         """Ejecuta el bucle principal."""
         # Verificar que somos root
@@ -941,10 +745,6 @@ class PrivilegedService:
         self.register(self._bus)
         _audit_log("daemon_started", "bus=system")
         print("BlipEraser Privileged Daemon iniciado", flush=True)
-
-        # Iniciar tareas de fondo
-        self._start_periodic_cache_refresh()
-        self._start_signature_verification()
 
         self._loop = GLib.MainLoop()
         try:

@@ -11,6 +11,27 @@ Versión del código: `1.0.6` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🐛 Desinstalar paquetes: el daemon ya no ejecuta pacman
+
+- **Bug real (CachyOS, reproducido en host)**: el daemon arrancaba con
+  `pacman_cache_init count=0` (su `pacman -Q` fallaba con código 255 dentro
+  del sandbox) y rechazaba TODA desinstalación como
+  `Paquetes no instalados (rechazados)`, aunque el paquete estuviera instalado.
+- **Causa de fondo**: `pacman -Rns` ejecuta hooks (snapper, limine-snapper-sync,
+  initramfs…) y escribe en `/usr`, `/etc` y `/var/lib/pacman`; no encaja con
+  `ProtectSystem=strict` + AppArmor.
+- **Cambio**: se elimina `RemovePackages` del daemon (método D-Bus, caché de
+  paquetes, verificación de firmas, refresco periódico). La desinstalación va por
+  `pkexec pacman -Rns` (acción polkit `pacman-remove`); el daemon solo limpia
+  caché y logs. Perfil AppArmor y unidad systemd sin rastro de pacman.
+- **Cliente**: la validación consulta `pacman -Q` en vivo, sin caché. Si la
+  consulta falla se informa el stderr: un fallo ya no equivale a "0 paquetes".
+- **Se elimina el gate de firmas de la caché** (`.sig`): en CachyOS/AUR la caché
+  no trae firmas, así que bloqueaba todo (y cerraba la app). pacman ya verifica
+  firmas al instalar.
+- Tests de regresión: consulta fallida ≠ BD vacía, `RemovePackages` desconocido
+  en el daemon, `pkexec` siempre en el cliente.
+
 ### ✨ v1.0.6: splash sin franja gris
 
 - Mensaje del video sin panel: texto blanco en negrita con sombra,

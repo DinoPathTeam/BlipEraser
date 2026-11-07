@@ -24,23 +24,10 @@
   dbus (send, receive) bus=system peer=(label=/usr/bin/blip-eraser),
 
   # Binarios que el daemon ejecuta (heredan el confinamiento).
-  # gpg/grep/pacman-conf los invoca pacman-key al verificar firmas.
-  /usr/bin/pacman      rix,
-  /usr/bin/pacman-key  rix,
-  /usr/bin/pacman-conf rix,
+  # El daemon ya NO ejecuta pacman: la desinstalación va por pkexec.
   /usr/bin/loginctl    rix,
   /usr/bin/pkcheck     rix,
-  /usr/bin/gpg         rix,
-  /usr/bin/gpgconf     rix,
-  /usr/bin/gpgsm       rix,
-  /usr/bin/grep        rix,
   /usr/lib/blip-eraser/blip-eraser-privileged r,
-
-  # Lecturas de pacman/pacman-key (conf, mirrorlists, helpers makepkg)
-  /etc/pacman.conf r,
-  /etc/pacman.d/** r,
-  /usr/share/makepkg/** r,
-  /dev/tty rw,
 
   # Usuarios/sesiones (loginctl, userdb, wheel)
   /etc/group r,
@@ -53,7 +40,6 @@
   # Listados de los propios dirs (/** no cubre el dir en sí)
   /var/cache/pacman/pkg/ r,
   /var/log/ r,
-  /var/lib/pacman/ r,
   /dev/null rw,
 
   # Introspección que hacen python/systemd (boot_id, mounts propios)
@@ -63,8 +49,7 @@
   # La interfaz D-Bus la lee gi en tiempo de ejecución
   /usr/share/dbus-1/interfaces/com.dinopath.BlipEraser.Privileged.xml r,
 
-  # Rutas con escritura: las operaciones privilegiadas.
-  # S2: /var/lib/pacman fuera (nadie lo limpia).
+  # Rutas con escritura: las operaciones privilegiadas (solo limpieza).
   /var/cache/pacman/pkg/** rw,
   /var/log/** rw,
 

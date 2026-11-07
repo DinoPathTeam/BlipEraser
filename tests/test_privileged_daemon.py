@@ -23,12 +23,6 @@ from blip_eraser.daemon.privileged_daemon import (
     validate_path_resolved as _validate_path_resolved,
     _validate_clean_paths,
     _hash_path,
-    _verify_package_signatures,
-    _load_package_cache,
-    get_cached_package_names,
-    invalidate_package_cache,
-    _validate_packages_exist,
-    remove_packages,
     clean_system_paths,
 )
 
@@ -112,82 +106,13 @@ class TestAuditLogging:
         assert "AUDIT action=test_event" in (tmp_path / "daemon.log").read_text()
 
 
-class TestPackageCache:
-    """Tests de la caché de paquetes con verificación de firmas."""
-
+class TestHashPathLength:
     def test_hash_path(self):
-        h = _hash_path("/test/path")
-        assert len(h) == 16
-
-    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=(True, []))
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_load_package_cache_success(self, mock_run, mock_verify):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout="package1 1.0-1\npackage2 2.0-1\n"
-        )
-        invalidate_package_cache()
-        cache = _load_package_cache()
-        assert "package1" in cache
-        assert "package2" in cache
-
-    @patch("blip_eraser.daemon.privileged_daemon._verify_package_signatures", return_value=(False, ["pkg1"]))
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_load_package_cache_signature_fail(self, mock_run, mock_verify):
-        mock_run.return_value = MagicMock(returncode=0, stdout="pkg1 1.0-1\n")
-        invalidate_package_cache()
-        cache = _load_package_cache()
-        assert "pkg1" in cache
-
-    def test_get_cached_package_names(self, monkeypatch):
-        monkeypatch.setattr(
-            "blip_eraser.daemon.privileged_daemon._load_package_cache",
-            lambda: {"pkg1", "pkg2"}
-        )
-        invalidate_package_cache()
-        assert get_cached_package_names() == {"pkg1", "pkg2"}
-
-    def test_invalidate_package_cache(self, monkeypatch):
-        monkeypatch.setattr(
-            "blip_eraser.daemon.privileged_daemon._load_package_cache",
-            lambda: {"pkg1"}
-        )
-        get_cached_package_names()
-        invalidate_package_cache()
-        assert get_cached_package_names() == {"pkg1"}
-
-    def test_validate_packages_exist(self, monkeypatch):
-        monkeypatch.setattr(
-            "blip_eraser.daemon.privileged_daemon.get_cached_package_names",
-            lambda: {"pkg1", "pkg2"}
-        )
-        valid, invalid = _validate_packages_exist(["pkg1", "pkg3", "pkg2"])
-        assert valid == ["pkg1", "pkg2"]
-        assert invalid == ["pkg3"]
+        assert len(_hash_path("/test/path")) == 16
 
 
 class TestOperations:
     """Tests de operaciones privilegiadas (mockeando subprocess)."""
-
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    @patch("blip_eraser.daemon.privileged_daemon._validate_packages_exist")
-    def test_remove_packages_success(self, mock_validate, mock_run):
-        mock_validate.return_value = (["pkg1", "pkg2"], [])
-        mock_run.return_value = MagicMock(returncode=0, stdout="removed")
-
-        result = remove_packages(["pkg1", "pkg2"])
-        assert result == "removed"
-        mock_run.assert_called_once_with(
-            ["/usr/bin/pacman", "-Rns", "--noconfirm", "--", "pkg1", "pkg2"],
-            capture_output=True, text=True, check=True
-        )
-
-    @patch("blip_eraser.daemon.privileged_daemon._validate_packages_exist")
-    def test_remove_packages_invalid_rejected(self, mock_validate):
-        mock_validate.return_value = ([], ["pkg3"])
-        with pytest.raises(ValueError) as exc:
-            remove_packages(["pkg3"])
-        assert "no instalados" in str(exc.value)
 
     @patch("blip_eraser.daemon.privileged_daemon._validate_clean_paths")
     @patch("blip_eraser.daemon.privileged_daemon._rm_rf_atomic")
@@ -216,65 +141,13 @@ class TestOperations:
         assert "Eliminadas 1 ruta(s)" in result
 
 
-class TestSignatureVerification:
-    """Tests de verificación de firmas de paquetes."""
-
-    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=False)
-    @patch("blip_eraser.daemon.privileged_daemon.Path.glob", return_value=[])
-    def test_verify_no_cache_dir(self, mock_glob, mock_exists):
-        valid, failed = _verify_package_signatures()
-        assert valid is True
-        assert failed == []
-
-    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
-    @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
-    def test_verify_no_packages(self, mock_glob, mock_exists):
-        mock_glob.return_value = []
-        valid, failed = _verify_package_signatures()
-        assert valid is True
-        assert failed == []
-
-    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
-    @patch("blip_eraser.daemon.privileged_daemon.Path.glob")
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_verify_package_with_signature(self, mock_run, mock_glob, mock_exists):
-        pkg_file = MagicMock()
-        pkg_file.name = "pkg-1.0-1-x86_64.pkg.tar.zst"
-        pkg_file.suffix = ".pkg.tar.zst"
-        sig_file = MagicMock()
-        sig_file.exists.return_value = True
-        pkg_file.with_suffix.return_value = sig_file
-        mock_glob.return_value = [pkg_file]
-        mock_run.return_value = MagicMock(returncode=0)
-        
-        valid, failed = _verify_package_signatures()
-        assert valid is True
-        assert failed == []
-
-    @patch("blip_eraser.daemon.privileged_daemon.Path.exists", return_value=True)
-    @patch("blip_eraser.daemon.privileged_daemon.Path.rglob")
-    @patch("blip_eraser.daemon.privileged_daemon.subprocess.run")
-    def test_verify_missing_signature_fails(self, mock_run, mock_rglob, mock_exists):
-        pkg_file = MagicMock()
-        pkg_file.name = "pkg-1.0-1-x86_64.pkg.tar.zst"
-        pkg_file.suffix = ".pkg.tar.zst"
-        sig_file = MagicMock()
-        sig_file.exists.return_value = False
-        pkg_file.with_suffix.return_value = sig_file
-        mock_rglob.return_value = [pkg_file]
-        
-        valid, failed = _verify_package_signatures()
-        assert valid is False
-        assert len(failed) == 1
-        assert "pkg-1.0-1-x86_64.pkg.tar.zst" in failed[0]
-
-
 class TestPrivilegedDaemonIntegration:
     """Tests de integración del servicio D-Bus (mocking GLib/Gio)."""
 
     def test_interface_xml_contains_required_methods(self):
         from blip_eraser.daemon.privileged_daemon import INTERFACE_XML
-        assert "RemovePackages" in INTERFACE_XML
+        # El daemon solo limpia rutas: la desinstalación va por pkexec pacman.
+        assert "RemovePackages" not in INTERFACE_XML
         assert "CleanSystemPaths" in INTERFACE_XML
         assert "Ping" in INTERFACE_XML
         assert 'type="as"' in INTERFACE_XML
@@ -474,8 +347,8 @@ class TestRateLimit:
         monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
         monkeypatch.setattr(svc, "_polkit_authorized", lambda conn, sender, action: True)
         monkeypatch.setattr(
-            daemon_mod, "remove_packages",
-            lambda pkgs: (_ for _ in ()).throw(ValueError("rechazado")),
+            daemon_mod, "clean_system_paths",
+            lambda paths: (_ for _ in ()).throw(ValueError("rechazado")),
         )
 
         class FakeInv:
@@ -494,13 +367,13 @@ class TestRateLimit:
                 inv = FakeInv()
                 svc.on_method_call(
                     MagicMock(), f":1.{100 + i}", "/", "com.dinopath.BlipEraser.Privileged",
-                    "RemovePackages", [["x"]], inv,
+                    "CleanSystemPaths", [["/var/log/x"]], inv,
                 )
                 assert inv.error == "org.freedesktop.DBus.Error.InvalidArgs"
             inv = FakeInv()
             svc.on_method_call(
                 MagicMock(), ":1.999", "/", "com.dinopath.BlipEraser.Privileged",
-                "RemovePackages", [["x"]], inv,
+                "CleanSystemPaths", [["/var/log/x"]], inv,
             )
             assert inv.error == "org.freedesktop.DBus.Error.LimitsExceeded"
         finally:
@@ -520,7 +393,7 @@ class TestPolkitGate:
         monkeypatch.setattr(svc, "_polkit_authorized", lambda conn, sender, action: authorized)
         called = []
         monkeypatch.setattr(
-            daemon_mod, "remove_packages", lambda pkgs: called.append(pkgs) or "ok"
+            daemon_mod, "clean_system_paths", lambda paths: called.append(paths) or "ok"
         )
 
         class FakeInv:
@@ -537,7 +410,7 @@ class TestPolkitGate:
         inv = FakeInv()
         svc.on_method_call(
             MagicMock(), ":1.77", "/", "com.dinopath.BlipEraser.Privileged",
-            "RemovePackages", [["pkg"]], inv,
+            "CleanSystemPaths", [["/var/log/x"]], inv,
         )
         return inv, called
 
@@ -549,4 +422,45 @@ class TestPolkitGate:
     def test_authorized_runs_operation(self, monkeypatch):
         inv, called = self._call(monkeypatch, True)
         assert inv.error is None
-        assert called == [["pkg"]]
+        assert called == [["/var/log/x"]]
+
+class TestNoPackageManagementInDaemon:
+    """Regresión: el daemon no ejecuta pacman (hooks y escrituras fuera del sandbox)."""
+
+    def test_remove_packages_method_is_unknown(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        svc = daemon_mod.PrivilegedService()
+        monkeypatch.setattr(svc, "_authorized_uid", lambda conn, sender: 1000)
+
+        class FakeInv:
+            error = None
+
+            def return_dbus_error(self, name, msg):
+                self.error = name
+
+            def return_value(self, value):
+                pass
+
+        inv = FakeInv()
+        svc.on_method_call(
+            MagicMock(), ":1.5", "/", "com.dinopath.BlipEraser.Privileged",
+            "RemovePackages", [["x"]], inv,
+        )
+        assert inv.error == "org.freedesktop.DBus.Error.UnknownMethod"
+
+    def test_daemon_module_has_no_pacman_code(self):
+        from blip_eraser.daemon import privileged_daemon as daemon_mod
+
+        assert not hasattr(daemon_mod, "remove_packages")
+        assert not hasattr(daemon_mod, "_verify_package_signatures")
+        assert "/usr/bin/pacman" not in Path(daemon_mod.__file__).read_text(encoding="utf-8")
+
+    def test_apparmor_profile_does_not_exec_pacman(self):
+        profile = (
+            Path(__file__).parent.parent
+            / "packaging/apparmor/usr.lib.blip-eraser.blip-eraser-privileged"
+        ).read_text(encoding="utf-8")
+        assert "/usr/bin/pacman " not in profile and "/usr/bin/pacman-key" not in profile
