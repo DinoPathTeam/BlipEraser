@@ -299,6 +299,31 @@ QTableView::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 
 QTableView::indicator:hover {{ border-color: {accent}; }}
 QTableView::indicator:checked {{ background-color: {accent}; border-color: {accent}; image: url({check}); }}
 QTableView::indicator:indeterminate {{ background-color: {accent}; border-color: {accent}; }}
+QPushButton#SwatchButton {{ background: {p['bg']}; color: {p['text']}; border: 1px solid {p['border']}; border-radius: 10px; padding: 12px 14px; font-weight: 600; text-align: left; }}
+QPushButton#SwatchButton:hover {{ background: {p['hover']}; }}
+QPushButton#SwatchButton:checked {{ background: {p['bg']}; color: {p['text']}; border: 2px solid {accent}; padding: 11px 13px; }}
+QPushButton#ChipButton {{ background: {p['bg']}; color: {p['text']}; border: 1px solid {p['border']}; border-radius: 8px; padding: 7px 14px; }}
+QPushButton#ChipButton:hover {{ background: {p['hover']}; }}
+QPushButton#ChipButton:checked {{ background: {fill}; color: {on}; border: none; padding: 8px 15px; }}
+QPushButton#PosButton {{ background: {p['bg']}; border: 1px solid {p['border']}; border-radius: 6px; }}
+QListWidget#PathList {{ background: transparent; border: none; outline: 0; padding: 0; }}
+QListWidget#PathList::item {{ border-bottom: 1px solid {p['border']}; padding: 10px 8px; font-weight: 600; }}
+QListWidget#PathList::item:selected {{ background: {p['hover']}; color: {p['text']}; }}
+QCheckBox {{ background: transparent; spacing: 8px; }}
+QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 4px; border: 1px solid {p['subtext']}; background-color: {p['bg']}; }}
+QCheckBox::indicator:hover {{ border-color: {accent}; }}
+QCheckBox::indicator:checked {{ background-color: {accent}; border-color: {accent}; image: url({check}); }}
+QWidget#Plain {{ background: transparent; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: {p['border']}; border-radius: 4px; min-height: 28px; }}
+QScrollBar::handle:vertical:hover {{ background: {p['subtext']}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; background: transparent; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+QScrollBar:horizontal {{ background: transparent; height: 10px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background: {p['border']}; border-radius: 4px; min-width: 28px; }}
+QScrollBar::handle:horizontal:hover {{ background: {p['subtext']}; }}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; background: transparent; }}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: transparent; }}
 QCheckBox#TweakSwitch {{ background: transparent; spacing: 12px; font-weight: 600; }}
 QCheckBox#TweakSwitch::indicator {{ width: 40px; height: 22px; border: none; background: transparent; image: url({sw['off']}); }}
 QCheckBox#TweakSwitch::indicator:checked {{ image: url({sw['on']}); }}

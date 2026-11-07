@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from blip_eraser import __version__
 from blip_eraser.pages.base import BasePage
 from blip_eraser.utils.i18n import tr
+from blip_eraser.widgets.card import Card
 
 _SECTIONS = [
     ("help_usage_title", "help_usage_body"),
@@ -37,10 +38,13 @@ class HelpPage(BasePage):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
 
+        # El título lo muestra la pestaña; se conserva el QLabel (oculto).
         title = QLabel(tr("help_title"))
         title.setObjectName("PageTitle")
-        layout.addWidget(title)
+        title.hide()
 
         self.intro = QLabel(tr("help_intro"))
         self.intro.setWordWrap(True)
@@ -51,14 +55,16 @@ class HelpPage(BasePage):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.viewport().setAutoFillBackground(False)
 
         container = QWidget()
+        container.setObjectName("AppsContainer")  # fondo transparente (ver theme)
         container.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
         )
         content = QVBoxLayout(container)
-        content.setContentsMargins(4, 8, 8, 8)
-        content.setSpacing(10)
+        content.setContentsMargins(0, 0, 0, 0)
+        content.setSpacing(0)
 
         for title_key, body_key in _SECTIONS:
             content.addWidget(self._make_group(title_key, body_key))
@@ -75,17 +81,17 @@ class HelpPage(BasePage):
         self.about_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.about_label)
 
-    def _make_group(self, title_key: str, body_key: str) -> QFrame:
-        frame = QFrame()
-        frame.setFrameShape(QFrame.Shape.StyledPanel)
+    def _make_group(self, title_key: str, body_key: str) -> Card:
+        frame = Card()
         vbox = QVBoxLayout(frame)
-        vbox.setContentsMargins(12, 10, 12, 10)
+        vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(4)
 
         title_label = QLabel()
-        title_label.setStyleSheet("font-weight: bold;")
+        title_label.setObjectName("CardRowName")
         title_label.setWordWrap(True)
         body_label = QLabel()
+        body_label.setObjectName("SubText")
         body_label.setWordWrap(True)
         body_label.setTextInteractionFlags(
             body_label.textInteractionFlags() | Qt.TextInteractionFlag.TextSelectableByMouse
