@@ -11,6 +11,20 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### Sin versionar: fix — la app se cerraba sola al abrir el Desinstalador
+
+- **Síntoma**: la ventana desaparecía al instante al entrar en la pestaña
+  Desinstalador (salida limpia, código 0, sin traceback). El log mostraba un
+  `DeferredDelete` sobre la `MainWindow` sin `closeEvent`.
+- **Causa**: en `main()` la ventana era una variable local del slot
+  `_on_worker_finished` y solo la mantenía un ciclo de referencias (ventana →
+  página → callback `_post_scan` → ventana). Sin dueño externo, el recolector
+  de Python podía destruirla en cualquier momento; cargar miles de paquetes lo
+  provocaba.
+- **Arreglo**: `retain_main_window(app, window)` ancla la ventana a la
+  `QApplication` desde que se crea. Se añade `scripts/diag_close.py` (rama de
+  diagnóstico) para investigar cierres inesperados.
+
 ### 🔔 Bandeja del sistema (`blip-eraser-tray`)
 
 - **Qué es**: proceso aparte (`blip-eraser-tray` o `python -m blip_eraser.tray`)
