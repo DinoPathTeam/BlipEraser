@@ -7,7 +7,9 @@ no importa PyQt6, no toca pacman, no depende del sistema operativo
 
 from __future__ import annotations
 
+import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -63,18 +65,41 @@ def human_size(num_bytes: int) -> str:
     return f"{size:.1f} PB"
 
 
+# Cada cuántas entradas el hilo de escaneo cede el GIL al hilo de la interfaz.
+# Un recorrido largo en Python puro mantiene el GIL casi todo el tiempo y la
+# ventana se siente colgada aunque el escaneo corra en otro hilo.
+_YIELD_EVERY = 256
+
+
 def get_dir_size(path: Path) -> int:
-    """Suma el tamaño de todos los archivos bajo `path` (no sigue symlinks)."""
+    """Suma el tamaño de todos los archivos bajo `path` (no sigue symlinks).
+
+    Recorrido iterativo con `os.scandir` (sin crear un `Path` por entrada) que
+    cede el GIL periódicamente para no ahogar la interfaz cuando se ejecuta en
+    un hilo de fondo.
+    """
     total = 0
-    try:
-        for entry in path.rglob("*"):
-            if entry.is_file() and not entry.is_symlink():
-                try:
-                    total += entry.stat().st_size
-                except (OSError, PermissionError):
-                    continue
-    except (OSError, PermissionError):
-        pass
+    seen = 0
+    stack = [str(path)]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    seen += 1
+                    if seen % _YIELD_EVERY == 0:
+                        time.sleep(0.0005)
+                    try:
+                        if entry.is_symlink():
+                            continue
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
     return total
 
 

@@ -66,7 +66,7 @@ _ICON_FALLBACK = "application-x-executable"
 # widgets con estilo QSS y word-wrap: crear miles de golpe bloqueaba la
 # interfaz varios segundos tras cada escaneo (coste más que lineal). El resto
 # se crea al acercarse al final del scroll.
-APPS_BATCH = 100
+APPS_BATCH = 40
 _APPS_LOAD_MARGIN_PX = 400
 
 
@@ -284,8 +284,15 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self._start_background_scan(self._scan_worker, self._on_scan_done)
 
     def _scan_worker(self) -> ScanResult:
+        t0 = time.perf_counter()
         apps = list_installed_apps()
+        t1 = time.perf_counter()
         cleanup = scan_cleanup()
+        t2 = time.perf_counter()
+        write_diagnostic(
+            f"PERF overview_scan_worker apps={len(apps)} "
+            f"list_apps_ms={(t1 - t0) * 1000:.0f} cleanup_ms={(t2 - t1) * 1000:.0f}"
+        )
         return ScanResult(apps=apps, cleanup=cast(CleanupSummary, cleanup))
 
     def _cleanup_now(self):

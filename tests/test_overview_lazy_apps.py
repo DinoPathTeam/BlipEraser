@@ -91,7 +91,7 @@ def test_scrolling_near_the_end_loads_next_batch(page, app):
 def test_everything_can_eventually_be_reached(page, app):
     page._apps = _apps(250)
     page._rebuild_apps()
-    for _ in range(10):
+    for _ in range(40):
         _settle(app, page)
         bar = page._apps_scroll.verticalScrollBar()
         bar.setValue(bar.maximum())

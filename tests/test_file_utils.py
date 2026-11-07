@@ -43,6 +43,22 @@ class TestGetDirSize:
     def test_nonexistent_dir(self, tmp_path):
         assert get_dir_size(tmp_path / "missing") == 0
 
+    def test_symlinks_are_not_followed_or_counted(self, tmp_path):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "big.bin").write_bytes(b"z" * 1000)
+        root = tmp_path / "root"
+        root.mkdir()
+        (root / "a.txt").write_bytes(b"x" * 10)
+        (root / "link_dir").symlink_to(outside, target_is_directory=True)
+        (root / "link_file").symlink_to(outside / "big.bin")
+        assert get_dir_size(root) == 10
+
+    def test_many_entries_cross_the_yield_boundary(self, tmp_path):
+        for i in range(600):
+            (tmp_path / f"f{i}").write_bytes(b"x")
+        assert get_dir_size(tmp_path) == 600
+
 
 class TestScanManualEntries:
     def test_finds_dirs_and_appimages(self, tmp_path):

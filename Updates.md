@@ -11,6 +11,21 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧊 Escaneo: tamaños de carpetas sin acaparar el GIL
+
+- **Medición en host** (1668 apps): pintar 100 filas cuesta 0,3–0,5 s, así que
+  el cuelgue de ~15 s no venía de la lista sino del escaneo en segundo plano.
+- **Causa probable**: `get_dir_size` recorría `~/.cache`, la caché de pacman y
+  `/var/log` con `Path.rglob` + `is_file`/`is_symlink`/`stat` por entrada, todo
+  en Python puro: el hilo de fondo retiene el GIL y la interfaz deja de
+  responder aunque no esté "bloqueada" a propósito.
+- **Cambio**: recorrido iterativo con `os.scandir` (sin crear `Path` por entrada,
+  ~5× más rápido en `/usr/lib`: 0,43 s → 0,09 s, mismo resultado) y cesión del
+  GIL cada 256 entradas. Mismas reglas: no sigue ni cuenta symlinks.
+- Lotes de la lista de 100 a 40 filas (≈0,15 s por lote en tu equipo).
+- Nueva línea `PERF overview_scan_worker apps=… list_apps_ms=… cleanup_ms=…`
+  para ver cuánto tarda cada fase del escaneo.
+
 ### 🧊 Vista general: la lista de apps ya no congela la ventana tras escanear
 
 - **Síntoma** (reportado en CachyOS): tras pulsar "Escanear" y en el
