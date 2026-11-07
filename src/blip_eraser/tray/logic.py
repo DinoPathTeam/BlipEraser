@@ -224,17 +224,42 @@ def _valid_custom(value: object) -> tuple[int, int] | None:
     return None
 
 
+def guess_tray_corner(
+    geometry: tuple[int, int, int, int], available: tuple[int, int, int, int]
+) -> str:
+    """Esquina de la pantalla donde suele estar la bandeja, según dónde hay panel.
+
+    Compara la pantalla completa con su área disponible (sin paneles): panel
+    arriba → arriba a la derecha; panel en un lateral → abajo en ese lado;
+    en cualquier otro caso (panel abajo o sin panel) → abajo a la derecha.
+    """
+    gx, gy, gw, gh = geometry
+    ax, ay, aw, ah = available
+    top = ay > gy
+    bottom = ay + ah < gy + gh
+    left = ax > gx
+    right = ax + aw < gx + gw
+    if top and not bottom:
+        return "top-right"
+    if left and not (right or bottom):
+        return "bottom-left"
+    return "bottom-right"
+
+
 def resolve_position(
     prefs: dict,
-    anchor: tuple[int, int],
+    anchor: tuple[int, int] | None,
     size: tuple[int, int],
     screen: tuple[int, int, int, int],
+    tray_corner: str = "bottom-right",
 ) -> tuple[int, int]:
     """Dónde abrir la ventanita según la preferencia del usuario.
 
     - posición fija elegida en la app → esa esquina/borde/centro;
     - `custom` → la última posición arrastrada, recortada a la pantalla;
-    - `auto` o valor desconocido/corrupto → junto al icono.
+    - `auto` (o valor desconocido/corrupto) → junto al icono si se conoce su
+      posición (`anchor`); si no (Wayland no la da), en la esquina donde suele
+      estar la bandeja (`tray_corner`, ver `guess_tray_corner`).
     """
     key = prefs.get(PREF_POSITION, POS_AUTO)
     if key in FIXED_POSITIONS:
@@ -248,20 +273,19 @@ def resolve_position(
                 max(sx, min(custom[0], sx + sw - w)),
                 max(sy, min(custom[1], sy + sh - h)),
             )
+    if anchor is None:
+        return fixed_position(tray_corner, size, screen, margin=POPUP_MARGIN)
     return popup_position(anchor, size, screen)
 
 
-def should_force_xcb(env: dict, prefs: dict) -> bool:
+def should_force_xcb(env: dict, prefs: dict | None = None) -> bool:
     """True si conviene arrancar la bandeja vía XWayland para poder colocarla.
 
-    En Wayland una aplicación no puede decidir dónde se abre su ventana; con
-    X11/XWayland sí. Solo se fuerza cuando el usuario eligió una posición fija o
-    personalizada, hay sesión Wayland con XWayland disponible y no fijó él mismo
-    `QT_QPA_PLATFORM`. (Con `auto` se queda en Wayland nativo: nítido con
-    escalado fraccionario.)
+    En Wayland una aplicación no puede decidir dónde se abre su ventana (ni
+    siquiera "junto a la bandeja"); con X11/XWayland sí. Se usa cuando hay
+    sesión Wayland con XWayland disponible y el usuario no fijó él mismo
+    `QT_QPA_PLATFORM`.
     """
     if env.get("QT_QPA_PLATFORM"):
-        return False
-    if prefs.get(PREF_POSITION, POS_AUTO) in (POS_AUTO, None):
         return False
     return bool(env.get("WAYLAND_DISPLAY")) and bool(env.get("DISPLAY"))

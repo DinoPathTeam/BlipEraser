@@ -31,12 +31,22 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   "Junto al icono" (`tray_popup_position`). Tras arrastrar en X11/XWayland se
   guarda la posición (`custom` + `tray_popup_custom`, recortada a la pantalla
   al abrir). En Wayland el compositor no deja a una app elegir dónde se abre
-  su ventana, así que con una posición fija/personalizada la bandeja arranca
-  por XWayland (`QT_QPA_PLATFORM=xcb;wayland`, con Wayland como respaldo) solo
-  si existe y el usuario no fijó la plataforma; con "Junto al icono" sigue en
-  Wayland nativo. Tras cambiar entre automático y fijo en Wayland hay que usar
-  "Reiniciar bandeja" (clic derecho), que relanza esperando el bloqueo
+  su ventana, así que la bandeja arranca por XWayland (ver más abajo).
+  "Reiniciar bandeja" (clic derecho) la relanza esperando el bloqueo
   (`--wait-lock`).
+- **"Junto a la bandeja" (auto)**: Wayland no entrega la posición del icono ni
+  deja colocar ventanas, así que la bandeja arranca siempre por XWayland si
+  existe (`QT_QPA_PLATFORM=xcb;wayland`, con Wayland nativo de respaldo). Si la
+  posición del icono se conoce (geometría del icono, o el cursor en X11 real)
+  se abre junto a él; si no, en la esquina donde suele estar la bandeja,
+  deducida de dónde hay panel (`guess_tray_corner`: pantalla completa vs área
+  disponible).
+- **La bandeja sigue al cerrar la app**: al salir, la app principal lanza la
+  bandeja si no hay una activa (`tray/launcher.py`, comprobando su bloqueo de
+  instancia única) para dejarla en segundo plano; cerrar del todo es un paso
+  más ("Salir" en su menú). Casilla en Ajustes ("Mantener la bandeja activa al
+  cerrar BlipEraser", `tray_keep_running`, activa por defecto). No se lanza en
+  Flatpak.
 - **Clic derecho = ajustes**: abrir, iniciar con la sesión, avisos y salir.
 - **Consumo en reposo nulo**: CPU/RAM/disco y `scan_cleanup` se calculan en un
   hilo solo al abrir la ventanita o pulsar Escanear.

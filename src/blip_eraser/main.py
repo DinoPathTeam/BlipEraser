@@ -232,8 +232,18 @@ def main() -> int:
             worker.wait(3000)  # Esperar hasta 3 segundos
     
     app.aboutToQuit.connect(_cleanup)
-    
-    return app.exec()
+
+    code = app.exec()
+    # Al cerrar la app, la bandeja queda en segundo plano (si el usuario lo
+    # quiere): cerrar del todo es un paso más, "Salir" en su menú.
+    try:
+        from blip_eraser.tray.launcher import ensure_tray_running
+        from blip_eraser.utils.config import load_prefs
+
+        ensure_tray_running(load_prefs())
+    except Exception:  # noqa: BLE001 - cerrar la app nunca debe fallar por esto
+        pass
+    return code
 
 
 if __name__ == "__main__":

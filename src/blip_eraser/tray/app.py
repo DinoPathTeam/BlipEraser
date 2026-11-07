@@ -18,7 +18,7 @@ import time
 from typing import Any
 
 from blip_eraser import __version__
-from blip_eraser.tray import logic
+from blip_eraser.tray import launcher, logic
 from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.dependency_check import check_pyqt6_available
 from blip_eraser.utils.file_utils import human_size
@@ -72,6 +72,9 @@ def startup_check() -> dict[str, Any]:
     }
 
 
+_applied_appearance: dict[int, tuple[str, str]] = {}
+
+
 def apply_app_appearance() -> str:
     """Tema y fuente elegidos en la app principal, aplicados a toda la bandeja.
 
@@ -88,10 +91,14 @@ def apply_app_appearance() -> str:
     if key not in theme_mod.THEMES:
         key = "red"
     app = QApplication.instance()
-    if app is not None:
+    font_id = prefs.get("font", "system")
+    # Re-aplicar una hoja de estilos global repule todos los widgets: solo si cambió.
+    if app is not None and _applied_appearance.get(id(app)) != (key, font_id):
         app.setStyleSheet(theme_mod.build_qss(key))
-        family = theme_mod.font_family(prefs.get("font", "system"))
+        family = theme_mod.font_family(font_id)
         app.setFont(QFont(family) if family else QFont())
+        _applied_appearance.clear()
+        _applied_appearance[id(app)] = (key, font_id)
     return key
 
 
@@ -172,18 +179,33 @@ def build_controller(app: Any = None) -> Any:
                 self.show_popup()
 
         def show_popup(self) -> None:
+            import os
+
             geometry = self.tray.geometry()
-            anchor = geometry.center() if not geometry.isEmpty() else QCursor.pos()
-            screen = QGuiApplication.screenAt(anchor) or QGuiApplication.primaryScreen()
+            if not geometry.isEmpty():
+                anchor = geometry.center()
+            elif QGuiApplication.platformName() == "xcb" and not os.environ.get("WAYLAND_DISPLAY"):
+                anchor = QCursor.pos()  # X11 real: el cursor está sobre el icono al pulsarlo
+            else:
+                anchor = None  # Wayland/XWayland: no hay forma fiable de saberlo
+            screen = (
+                (QGuiApplication.screenAt(anchor) if anchor is not None else None)
+                or QGuiApplication.primaryScreen()
+            )
             area = screen.availableGeometry()
+            full = screen.geometry()
             apply_app_appearance()
             self.popup.apply_theme()
             self.popup.adjustSize()
             pos = logic.resolve_position(
                 load_prefs(),
-                (anchor.x(), anchor.y()),
+                (anchor.x(), anchor.y()) if anchor is not None else None,
                 (self.popup.width(), self.popup.height()),
                 (area.x(), area.y(), area.width(), area.height()),
+                tray_corner=logic.guess_tray_corner(
+                    (full.x(), full.y(), full.width(), full.height()),
+                    (area.x(), area.y(), area.width(), area.height()),
+                ),
             )
             self.popup.show_at(pos)
             self.refresh_stats()
@@ -362,12 +384,12 @@ def main() -> int:
 
     import os
 
-    # Wayland no deja que una app elija dónde se abre su ventana: con una
-    # posición fija/arrastrada se usa XWayland si existe (y Wayland si falla).
-    if logic.should_force_xcb(dict(os.environ), load_prefs()):
+    # Wayland no deja que una app elija dónde se abre su ventana: se usa
+    # XWayland si existe (y Wayland nativo como respaldo si falla).
+    if logic.should_force_xcb(dict(os.environ)):
         os.environ["QT_QPA_PLATFORM"] = "xcb;wayland"
 
-    from PyQt6.QtCore import QDir, QLockFile
+    from PyQt6.QtCore import QLockFile
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 
     sys.setswitchinterval(0.001)
@@ -380,7 +402,7 @@ def main() -> int:
         print(tr("tray_unavailable"), file=sys.stderr)
         return 1
 
-    lock = QLockFile(QDir.tempPath() + "/blip-eraser-tray.lock")
+    lock = QLockFile(launcher.lock_path())
     lock.setStaleLockTime(0)
     if not lock.tryLock(6000 if WAIT_LOCK_FLAG in sys.argv[1:] else 100):
         return 0  # ya hay una bandeja activa

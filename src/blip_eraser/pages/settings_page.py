@@ -8,6 +8,7 @@ claro/oscuro y paleta completa.
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QGridLayout,
     QHBoxLayout,
@@ -18,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser.pages.base import BasePage
+from blip_eraser.tray import launcher as tray_launcher
 from blip_eraser.tray import logic as tray_logic
 from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
@@ -69,6 +71,14 @@ class SettingsPage(BasePage):
         self.tray_hint.setWordWrap(True)
         self.tray_hint.setObjectName("SubText")
         layout.addWidget(self.tray_hint)
+        self.tray_keep_check = QCheckBox(tr("settings_tray_keep"))
+        self.tray_keep_check.setChecked(
+            tray_launcher.keep_running_enabled(load_prefs())
+        )
+        self.tray_keep_check.toggled.connect(
+            lambda on: save_prefs({tray_launcher.PREF_KEEP_RUNNING: bool(on)})
+        )
+        layout.addWidget(self.tray_keep_check)
         self.tray_custom_label = QLabel(tr("settings_tray_custom"))
         self.tray_custom_label.setObjectName("SubText")
         self.tray_custom_label.setWordWrap(True)
@@ -126,6 +136,9 @@ class SettingsPage(BasePage):
             btn.setChecked(btn_key == key)
         self._pos_group.setExclusive(True)
         self.tray_custom_label.setVisible(key == tray_logic.POS_CUSTOM)
+        self.tray_keep_check.blockSignals(True)
+        self.tray_keep_check.setChecked(tray_launcher.keep_running_enabled(load_prefs()))
+        self.tray_keep_check.blockSignals(False)
 
     def set_accent(self, accent: str) -> None:
         """Color de acento del tema para los botones de posición marcados."""
@@ -183,4 +196,5 @@ class SettingsPage(BasePage):
         self.tray_title.setText(tr("settings_tray_title"))
         self.tray_hint.setText(tr("settings_tray_hint"))
         self.tray_custom_label.setText(tr("settings_tray_custom"))
+        self.tray_keep_check.setText(tr("settings_tray_keep"))
         self._pos_buttons[tray_logic.POS_AUTO].setText(tr("settings_tray_auto"))

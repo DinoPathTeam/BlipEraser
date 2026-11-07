@@ -333,12 +333,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "tray_quit": "Salir",
         "tray_restart": "Reiniciar bandeja",
         "settings_tray_title": "Posición de la ventana de la bandeja",
-        "settings_tray_auto": "Junto al icono",
+        "settings_tray_auto": "Junto a la bandeja",
+        "settings_tray_keep": "Mantener la bandeja activa al cerrar BlipEraser",
         "settings_tray_custom": "Posición actual: arrastrada por ti. Elige otra para cambiarla.",
         "settings_tray_hint": (
             "Elige dónde se abre la ventana de la bandeja. También puedes "
-            "arrastrarla desde cualquier zona libre. En Wayland, tras elegir una "
-            "posición fija usa «Reiniciar bandeja» (clic derecho en su icono)."
+            "arrastrarla desde cualquier zona libre."
         ),
         "tray_calculating": "Calculando…",
         "tray_recoverable_title": "Espacio recuperable",
@@ -776,12 +776,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "tray_quit": "Quit",
         "tray_restart": "Restart tray",
         "settings_tray_title": "Tray window position",
-        "settings_tray_auto": "Next to the icon",
+        "settings_tray_auto": "Next to the tray",
+        "settings_tray_keep": "Keep the tray running when BlipEraser closes",
         "settings_tray_custom": "Current position: dragged by you. Pick another to change it.",
         "settings_tray_hint": (
             "Choose where the tray window opens. You can also drag it from any "
-            "empty area. On Wayland, after choosing a fixed position use "
-            "\"Restart tray\" (right-click its icon)."
+            "empty area."
         ),
         "tray_calculating": "Calculating…",
         "tray_recoverable_title": "Recoverable space",

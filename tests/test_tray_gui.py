@@ -49,6 +49,14 @@ def ctl(qapp, tmp_path, monkeypatch, destructive_calls):
     yield c
     c.popup.hide()
     c.menu.close()
+    # Destrucción determinista: widgets huérfanos esperando al GC hacían que
+    # un setStyleSheet global posterior tocara objetos ya muertos (segfault).
+    from PyQt6.QtCore import QCoreApplication, QEvent
+
+    for obj in (c.popup, c.menu, c.tray, c):
+        obj.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qapp.processEvents()
 
 
 def _pump(qapp, cond, timeout=3.0):
@@ -439,3 +447,27 @@ def test_compositor_drag_also_counts_as_dragged(qapp, ctl, monkeypatch):
     assert ctl.popup._dragged
     ctl.popup.hide()
     assert config_mod.load_prefs()[logic.PREF_POSITION] == "custom"
+
+
+def test_auto_position_without_icon_geometry_goes_to_the_tray_corner(qapp, ctl, monkeypatch):
+    from PyQt6.QtGui import QGuiApplication
+
+    _fake_stats(monkeypatch)
+    config_mod.save_prefs({logic.PREF_POSITION: "auto"})
+    ctl.show_popup()  # offscreen: el icono no da geometría
+    area = QGuiApplication.primaryScreen().availableGeometry()
+    assert ctl.popup.x() + ctl.popup.width() == area.right() + 1 - logic.POPUP_MARGIN
+    assert ctl.popup.y() + ctl.popup.height() <= area.bottom() + 1
+    _pump(qapp, lambda: not ctl._gathering)
+
+
+def test_settings_keep_running_checkbox_persists(qapp, ctl):
+    from blip_eraser.pages.settings_page import SettingsPage
+    from blip_eraser.tray import launcher
+
+    page = SettingsPage()
+    assert page.tray_keep_check.isChecked()  # por defecto, como pidió el usuario
+    page.tray_keep_check.setChecked(False)
+    assert config_mod.load_prefs()[launcher.PREF_KEEP_RUNNING] is False
+    page.tray_keep_check.setChecked(True)
+    assert config_mod.load_prefs()[launcher.PREF_KEEP_RUNNING] is True

@@ -191,17 +191,46 @@ class TestResolvePosition:
 class TestForceXcb:
     WL = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}
 
-    def test_only_when_a_fixed_or_custom_position_is_chosen(self):
-        assert not logic.should_force_xcb(self.WL, {})
-        assert not logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "auto"})
-        assert logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "top"})
-        assert logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "custom"})
+    def test_wayland_with_xwayland_uses_it_for_every_position(self):
+        for prefs in ({}, {logic.PREF_POSITION: "auto"}, {logic.PREF_POSITION: "top"}):
+            assert logic.should_force_xcb(self.WL, prefs)
 
     def test_needs_wayland_session_with_xwayland(self):
-        prefs = {logic.PREF_POSITION: "top"}
-        assert not logic.should_force_xcb({"DISPLAY": ":0"}, prefs)  # ya es X11
-        assert not logic.should_force_xcb({"WAYLAND_DISPLAY": "wayland-0"}, prefs)  # sin XWayland
+        assert not logic.should_force_xcb({"DISPLAY": ":0"})  # ya es X11
+        assert not logic.should_force_xcb({"WAYLAND_DISPLAY": "wayland-0"})  # sin XWayland
 
     def test_respects_an_explicit_platform(self):
-        env = {**self.WL, "QT_QPA_PLATFORM": "wayland"}
-        assert not logic.should_force_xcb(env, {logic.PREF_POSITION: "top"})
+        assert not logic.should_force_xcb({**self.WL, "QT_QPA_PLATFORM": "wayland"})
+
+
+class TestGuessTrayCorner:
+    FULL = (0, 0, 1920, 1080)
+
+    def test_panel_at_the_bottom_or_none(self):
+        assert logic.guess_tray_corner(self.FULL, (0, 0, 1920, 1040)) == "bottom-right"
+        assert logic.guess_tray_corner(self.FULL, self.FULL) == "bottom-right"
+
+    def test_panel_on_top(self):
+        assert logic.guess_tray_corner(self.FULL, (0, 40, 1920, 1040)) == "top-right"
+
+    def test_vertical_panels(self):
+        assert logic.guess_tray_corner(self.FULL, (48, 0, 1872, 1080)) == "bottom-left"
+        assert logic.guess_tray_corner(self.FULL, (0, 0, 1872, 1080)) == "bottom-right"
+
+    def test_top_and_bottom_panels_prefer_bottom_right(self):
+        assert logic.guess_tray_corner(self.FULL, (0, 30, 1920, 1000)) == "bottom-right"
+
+
+class TestAutoWithoutKnownIcon:
+    SCREEN = (0, 0, 1920, 1040)
+    SIZE = (300, 233)
+
+    def test_uses_the_guessed_corner_next_to_the_panel(self):
+        x, y = logic.resolve_position({}, None, self.SIZE, self.SCREEN, "bottom-right")
+        assert (x, y) == (1920 - 300 - 8, 1040 - 233 - 8)
+        x, y = logic.resolve_position({}, None, self.SIZE, self.SCREEN, "top-right")
+        assert y == 8 and x == 1920 - 300 - 8
+
+    def test_known_icon_still_wins_over_the_guess(self):
+        got = logic.resolve_position({}, (100, 1030), self.SIZE, self.SCREEN, "top-right")
+        assert got == logic.popup_position((100, 1030), self.SIZE, self.SCREEN)
