@@ -13,6 +13,7 @@ el diálogo ni este módulo persiste ningún estado de confirmación.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -89,3 +90,24 @@ def build_confirmation_plan(items: list[ConfirmItem]) -> ConfirmPlan:
         total_bytes=total_bytes,
         is_large=is_large_operation(total_bytes),
     )
+
+def cleanup_confirm_items(
+    entries: Iterable[tuple[str, Path, int]],
+    label_for: Callable[[str], str],
+) -> list[ConfirmItem]:
+    """ConfirmItems de la limpieza recomendada (basura/caché/registros).
+
+    `entries` es lo que devuelve `scan_cleanup_items()`: (categoría, ruta,
+    tamaño). `label_for` traduce la clave de categoría a su etiqueta visible.
+    Lo comparten la Vista general y la bandeja para que ambas confirmen
+    exactamente lo mismo.
+    """
+    return [
+        ConfirmItem(
+            label=str(path),
+            category_label=label_for(cat_key),
+            size_bytes=size,
+            paths=[path],
+        )
+        for cat_key, path, size in entries
+    ]

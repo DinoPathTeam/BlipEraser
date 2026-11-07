@@ -119,6 +119,10 @@ sudo systemctl daemon-reload
 El script es la referencia; úsalo en vez de copiar estas líneas a mano.
 </details>
 
+### Icono de bandeja (opcional)
+
+`blip-eraser-tray` lanza un icono de bandeja aparte y ligero (no abre la ventana principal). El clic izquierdo abre una ventanita con el tema de la app principal, con CPU/RAM/disco, el espacio recuperable y tres botones: **Escanear**, **Limpiar** y **Abrir BlipEraser**. En reposo no calcula nada. **Limpiar** usa el mismo flujo que la app: lista lo que se va a borrar, pide confirmación y el borrado con privilegios te pide la contraseña. Puedes arrastrar la ventana donde quieras, o elegir en Ajustes de la app una de nueve posiciones de la pantalla (esquinas, bordes, centro) o «junto al icono». En Wayland las aplicaciones no pueden elegir dónde se abre su ventana, así que allí la bandeja corre vía XWayland. Al cerrar la app principal, la bandeja queda en segundo plano (se desactiva en Ajustes); sal de ella desde su menú para cerrar todo. El clic derecho da los ajustes de la bandeja (iniciar con la sesión, avisos, reiniciar, salir). Una vez al iniciar usa la caché de 24 h para avisar de una versión nueva, y avisa (como mucho una vez al día) si se pueden recuperar 5 GiB o más (`"tray_notifications": false` en `prefs.json` lo silencia). Solo en la instalación nativa: el Flatpak no la incluye.
+
 ### Flatpak
 
 Cada [release](https://github.com/DinoPathTeam/BlipEraser/releases/latest) incluye un paquete `.flatpak`. Instala primero el daemon en el host (`./scripts/install-daemon.sh`) y luego `flatpak install --user BlipEraser-v<versión>-x86_64.flatpak`.

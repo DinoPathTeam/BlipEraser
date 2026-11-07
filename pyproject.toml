@@ -37,6 +37,7 @@ dev = ["pytest>=7.0"]
 
 [project.scripts]
 blip-eraser = "blip_eraser.main:main"
+blip-eraser-tray = "blip_eraser.tray.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

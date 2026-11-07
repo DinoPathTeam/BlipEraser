@@ -53,6 +53,7 @@ package() {
     "$pkgdir/etc/apparmor.d/usr.lib.blip-eraser.blip-eraser-privileged"
   # Acceso directo + icono (Icon= exige el .desktop)
   install -Dm644 packaging/blip-eraser.desktop "$pkgdir/usr/share/applications/blip-eraser.desktop"
+  install -Dm644 packaging/blip-eraser-tray.desktop "$pkgdir/usr/share/applications/blip-eraser-tray.desktop"
   install -Dm644 packaging/icons/hicolor/512x512/apps/blip-eraser.png \
     "$pkgdir/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
 }

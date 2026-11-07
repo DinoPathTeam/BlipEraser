@@ -11,6 +11,65 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔔 Bandeja del sistema (`blip-eraser-tray`)
+
+- **Qué es**: proceso aparte (`blip-eraser-tray` o `python -m blip_eraser.tray`)
+  con un icono de bandeja; no abre la ventana principal. Instancia única
+  (`QLockFile`); sale con un mensaje si el escritorio no tiene bandeja.
+  Aplica el tema/fuente de la app también a los diálogos de confirmación.
+- **Clic izquierdo = ventanita** (`tray/popup.py`) con el tema y la fuente de la
+  app principal (relee `prefs.json` cada vez que se abre): barras de CPU/RAM/
+  disco, espacio recuperable y tres acciones: **Escanear**, **Limpiar** y
+  **Abrir BlipEraser**. Es una ventana `Tool` sin marco (no `Qt.Popup`: en Wayland un
+  popup con grab exige una ventana padre con input y falla con "Failed to create
+  grabbing popup"); se cierra al perder el foco o con Esc. Se coloca junto al icono (`logic.popup_position`, siempre dentro de la
+  pantalla; en Wayland el compositor decide la posición de las ventanas, así que
+  allí puede aparecer en otro sitio) y un clic que acaba de cerrarla no la reabre.
+- **Posición**: se puede **arrastrar** desde cualquier zona libre (con
+  `startSystemMove`, que también funciona en Wayland; si no, arrastre manual).
+  En Ajustes de la app padre hay un selector 3x3 (esquinas, bordes y centro) +
+  "Junto al icono" (`tray_popup_position`). Tras arrastrar en X11/XWayland se
+  guarda la posición (`custom` + `tray_popup_custom`, recortada a la pantalla
+  al abrir). En Wayland el compositor no deja a una app elegir dónde se abre
+  su ventana, así que la bandeja arranca por XWayland (ver más abajo).
+  "Reiniciar bandeja" (clic derecho) la relanza esperando el bloqueo
+  (`--wait-lock`).
+- **"Junto a la bandeja" (auto)**: Wayland no entrega la posición del icono ni
+  deja colocar ventanas, así que la bandeja arranca siempre por XWayland si
+  existe (`QT_QPA_PLATFORM=xcb;wayland`, con Wayland nativo de respaldo). Si la
+  posición del icono se conoce (geometría del icono, o el cursor en X11 real)
+  se abre junto a él; si no, en la esquina donde suele estar la bandeja,
+  deducida de dónde hay panel (`guess_tray_corner`: pantalla completa vs área
+  disponible).
+- **La bandeja sigue al cerrar la app**: al salir, la app principal lanza la
+  bandeja si no hay una activa (`tray/launcher.py`, comprobando su bloqueo de
+  instancia única) para dejarla en segundo plano; cerrar del todo es un paso
+  más ("Salir" en su menú). Casilla en Ajustes ("Mantener la bandeja activa al
+  cerrar BlipEraser", `tray_keep_running`, activa por defecto). No se lanza en
+  Flatpak.
+- **Clic derecho = ajustes**: abrir, iniciar con la sesión, avisos y salir.
+- **Consumo en reposo nulo**: CPU/RAM/disco y `scan_cleanup` se calculan en un
+  hilo solo al abrir la ventanita o pulsar Escanear.
+- **Limpiar usa el mismo flujo que la app** (`run_destructive_action`): lista lo
+  que se va a borrar (`cleanup_confirm_items`, compartido con la Vista
+  general), pide confirmación y el borrado con privilegios pide la
+  contraseña de polkit. Desde la bandeja no hay ningún camino que borre sin
+  confirmar. Si el listado falla o está vacío, no se borra nada.
+- **Avisos** (`tray/logic.py`, pura y testeada): UNA comprobación 10 s después
+  de iniciar, con la caché de 24 h de `check_for_updates`. Versión nueva: una
+  vez por versión (`tray_notified_version`). Espacio recuperable ≥ 5 GiB: como
+  mucho cada 24 h (`tray_junk_notified_at`); una marca corrupta o futura no
+  silencia para siempre. `tray_notifications: false` lo apaga todo. Pulsar el
+  aviso de versión abre la página de releases; el de espacio abre la ventanita.
+- **Autoarranque opt-in** desde el propio menú: crea/borra
+  `~/.config/autostart/blip-eraser-tray.desktop` (respeta `XDG_CONFIG_HOME`).
+- **Empaquetado**: script `blip-eraser-tray` en `pyproject.toml`,
+  `packaging/blip-eraser-tray.desktop` instalado por el PKGBUILD y por
+  `install-daemon.sh`. El Flatpak no la incluye (necesitaría permiso para
+  StatusNotifierWatcher).
+- Claves i18n nuevas `tray_*` (ES/EN). Tests: `test_tray_logic.py`,
+  `test_tray_gui.py`.
+
 ### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
 
 - **Fluidez**: el escaneo (botón y autoescaneo) ya no deja la app colgada. La

@@ -53,6 +53,7 @@ install -Dm 644 "$REPO/packaging/polkit/49-blip-eraser.rules" "$POLKIT_RULES"
 
 echo "[4/8] Acceso directo (.desktop) + icono"
 install -Dm 644 "$REPO/packaging/blip-eraser.desktop" "$DEST/usr/share/applications/blip-eraser.desktop"
+install -Dm 644 "$REPO/packaging/blip-eraser-tray.desktop" "$DEST/usr/share/applications/blip-eraser-tray.desktop"
 install -Dm 644 "$REPO/packaging/icons/hicolor/512x512/apps/blip-eraser.png" \
     "$DEST/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
 if [[ -z "$DEST" ]]; then

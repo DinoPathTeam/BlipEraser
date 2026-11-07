@@ -119,6 +119,10 @@ sudo systemctl daemon-reload
 The script is the reference; prefer it over copying these lines by hand.
 </details>
 
+### Tray icon (optional)
+
+`blip-eraser-tray` runs a separate, lightweight tray icon (it does not open the main window). Left-click opens a small window themed like the main app, with CPU/RAM/disk, the recoverable space and three buttons: **Scan**, **Clean** and **Open BlipEraser**. Nothing is computed while it idles. **Clean** uses the same flow as the app: it lists what will be removed, asks for confirmation and the privileged deletion asks for your password. You can drag the window anywhere, or pick one of nine screen positions (corners, edges, centre) or "next to the icon" in the app's Settings page. On Wayland apps cannot choose where their window opens, so the tray runs through XWayland there. When you close the main app the tray stays running in the background (turn this off in Settings); quit it from its menu to close everything. Right-click gives the tray settings (start with your session, notifications, restart, quit). Once at start it uses the 24-hour update cache to notify about a new version, and warns (at most once a day) when 5 GiB or more can be recovered (`"tray_notifications": false` in `prefs.json` silences it). Native install only: the Flatpak does not ship it.
+
 ### Flatpak
 
 Each [release](https://github.com/DinoPathTeam/BlipEraser/releases/latest) includes a `.flatpak` bundle. Install the host daemon first (`./scripts/install-daemon.sh`), then `flatpak install --user BlipEraser-v<version>-x86_64.flatpak`.

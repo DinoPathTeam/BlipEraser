@@ -5,19 +5,33 @@ de Qt (theme_changed, font_changed). Cada tema define su propio modo
 claro/oscuro y paleta completa.
 """
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QButtonGroup,
+    QCheckBox,
     QComboBox,
+    QGridLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from blip_eraser.pages.base import BasePage
-from blip_eraser.utils.config import load_prefs
+from blip_eraser.tray import launcher as tray_launcher
+from blip_eraser.tray import logic as tray_logic
+from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils import theme as theme_mod
 from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
+
+
+_POSITION_ARROWS = {
+    "top-left": "↖", "top": "↑", "top-right": "↗",
+    "left": "←", "center": "●", "right": "→",
+    "bottom-left": "↙", "bottom": "↓", "bottom-right": "↘",
+}
 
 
 class SettingsPage(BasePage):
@@ -28,6 +42,7 @@ class SettingsPage(BasePage):
         super().__init__()
         self._build_ui()
         self._load_initial()
+        self._sync_tray_position()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -48,6 +63,27 @@ class SettingsPage(BasePage):
         self.font_combo = QComboBox()
         layout.addWidget(self.font_combo)
 
+        layout.addSpacing(12)
+        self.tray_title = QLabel(tr("settings_tray_title"))
+        layout.addWidget(self.tray_title)
+        layout.addWidget(self._build_tray_position_picker())
+        self.tray_hint = QLabel(tr("settings_tray_hint"))
+        self.tray_hint.setWordWrap(True)
+        self.tray_hint.setObjectName("SubText")
+        layout.addWidget(self.tray_hint)
+        self.tray_keep_check = QCheckBox(tr("settings_tray_keep"))
+        self.tray_keep_check.setChecked(
+            tray_launcher.keep_running_enabled(load_prefs())
+        )
+        self.tray_keep_check.toggled.connect(
+            lambda on: save_prefs({tray_launcher.PREF_KEEP_RUNNING: bool(on)})
+        )
+        layout.addWidget(self.tray_keep_check)
+        self.tray_custom_label = QLabel(tr("settings_tray_custom"))
+        self.tray_custom_label.setObjectName("SubText")
+        self.tray_custom_label.setWordWrap(True)
+        layout.addWidget(self.tray_custom_label)
+
         layout.addSpacing(20)
         self.permissions_btn = QPushButton(tr("help_security_permissions_button"))
         self.permissions_btn.clicked.connect(
@@ -56,6 +92,67 @@ class SettingsPage(BasePage):
         layout.addWidget(self.permissions_btn)
 
         layout.addStretch(1)
+
+    def _build_tray_position_picker(self) -> QWidget:
+        """Rejilla 3x3 (esquinas, bordes, centro) + 'junto al icono'."""
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(0, 0, 0, 0)
+        grid = QGridLayout()
+        grid.setSpacing(4)
+        self._pos_group = QButtonGroup(self)
+        self._pos_group.setExclusive(True)
+        self._pos_buttons: dict[str, QPushButton] = {}
+
+        def make(key: str, text: str) -> QPushButton:
+            btn = QPushButton(text)
+            btn.setCheckable(True)
+            btn.setObjectName("PosButton")
+            btn.setFixedSize(40, 30)
+            self._pos_group.addButton(btn)
+            self._pos_buttons[key] = btn
+            btn.clicked.connect(lambda _=False, k=key: self._on_tray_position(k))
+            return btn
+
+        for key, col, rw in tray_logic.GRID_POSITIONS:
+            grid.addWidget(make(key, _POSITION_ARROWS[key]), rw, col)
+        row.addLayout(grid)
+        auto = make(tray_logic.POS_AUTO, tr("settings_tray_auto"))
+        auto.setFixedSize(130, 30)
+        row.addSpacing(12)
+        row.addWidget(auto, 0, Qt.AlignmentFlag.AlignTop)
+        row.addStretch(1)
+        return box
+
+    def _on_tray_position(self, key: str) -> None:
+        save_prefs({tray_logic.PREF_POSITION: key})
+        self._sync_tray_position()
+
+    def _sync_tray_position(self) -> None:
+        """Refleja la preferencia (la bandeja también la cambia al arrastrar)."""
+        key = load_prefs().get(tray_logic.PREF_POSITION, tray_logic.POS_AUTO)
+        self._pos_group.setExclusive(False)
+        for btn_key, btn in self._pos_buttons.items():
+            btn.setChecked(btn_key == key)
+        self._pos_group.setExclusive(True)
+        self.tray_custom_label.setVisible(key == tray_logic.POS_CUSTOM)
+        self.tray_keep_check.blockSignals(True)
+        self.tray_keep_check.setChecked(tray_launcher.keep_running_enabled(load_prefs()))
+        self.tray_keep_check.blockSignals(False)
+
+    def set_accent(self, accent: str) -> None:
+        """Color de acento del tema para los botones de posición marcados."""
+        self._pos_box_qss = (
+            "QPushButton#PosButton { padding: 2px; }"
+            f"QPushButton#PosButton:checked {{ background-color: {accent}; color: #ffffff;"
+            f" border: 1px solid {accent}; }}"
+        )
+        for btn in self._pos_buttons.values():
+            btn.setStyleSheet(self._pos_box_qss)
+
+    def showEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        super().showEvent(event)
+        self._sync_tray_position()
 
     def _load_initial(self):
         prefs = load_prefs()
@@ -96,3 +193,8 @@ class SettingsPage(BasePage):
                     self.font_combo.setItemText(i, label)
                     break
         self.theme_hint.setText(tr("theme_hint"))
+        self.tray_title.setText(tr("settings_tray_title"))
+        self.tray_hint.setText(tr("settings_tray_hint"))
+        self.tray_custom_label.setText(tr("settings_tray_custom"))
+        self.tray_keep_check.setText(tr("settings_tray_keep"))
+        self._pos_buttons[tray_logic.POS_AUTO].setText(tr("settings_tray_auto"))
