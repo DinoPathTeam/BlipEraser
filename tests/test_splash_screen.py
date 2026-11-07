@@ -385,22 +385,18 @@ class TestSplashScreenMessages:
 
 
 class TestStartupWorker:
-    """Tests del StartupWorker (sin cambios en lógica)."""
+    """El worker ahora hace comprobaciones reales: ver tests/test_startup_checks.py."""
 
-    def test_worker_emits_messages_in_order(self, app):
+    def test_worker_emits_two_real_steps_in_order(self, app, monkeypatch):
+        from blip_eraser.utils.i18n import tr
+        from blip_eraser.widgets import splash_screen as ss
+
+        monkeypatch.setattr(ss, "localized_missing_lines", lambda names: [])
+        monkeypatch.setattr(ss, "check_daemon_dependencies", lambda: [])
         worker = StartupWorker()
         messages = []
-
-        def capture(msg):
-            messages.append(msg)
-
-        worker.message.connect(capture)
+        worker.message.connect(messages.append)
         worker.start()
         worker.wait()
 
-        assert len(messages) == 5
-        assert "updates" in messages[0].lower()
-        assert "permissions" in messages[1].lower()
-        assert "dependencies" in messages[2].lower()
-        assert "scanning" in messages[3].lower()
-        assert "welcome" in messages[4].lower()
+        assert messages == [tr("splash_check_dependencies"), tr("splash_check_daemon")]

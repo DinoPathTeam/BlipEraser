@@ -21,7 +21,9 @@ from PyQt6 import QtGui
 from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPixmap
 
 from blip_eraser.widgets.logo import app_icon
+from blip_eraser.utils.dependency_check import REQUIRED_BINARIES, check_daemon_dependencies
 from blip_eraser.utils.i18n import tr
+from blip_eraser.utils.ui_text import localized_missing_lines
 from blip_eraser.utils.log import write_diagnostic
 
 # Compatibilidad de PyQt6: algunos tests importan QRect desde QtGui,
@@ -469,32 +471,40 @@ class SplashScreen(QWidget):
 
 
 class StartupWorker(QThread):
-    """Worker que simula la preparación del arranque y emite eventos de progreso."""
+    """Comprobaciones REALES de arranque, fuera del hilo de la interfaz.
+
+    Cada paso emite su mensaje (traducido) y calcula algo de verdad; el
+    resultado queda en atributos que `main.py` consume tras el primer
+    escaneo. Un fallo en una comprobación nunca impide arrancar.
+    """
 
     message = _Signal()
 
     def __init__(self):
         super().__init__()
         self.missing_lines: list[str] = []
-        self.show_permissions_notice = False
+        self.missing_daemon_deps: list = []
+
+    def _check_binaries(self) -> None:
+        names = [dep.binary for dep in REQUIRED_BINARIES]
+        self.missing_lines = localized_missing_lines(names)
+
+    def _check_daemon(self) -> None:
+        self.missing_daemon_deps = check_daemon_dependencies()
 
     def run(self) -> None:
-        steps = [
-            "checking for updates",
-            "checking permissions",
-            "checking dependencies",
-            "scanning installed apps",
-            "welcome",
-        ]
-
-        for text in steps:
+        steps = (
+            ("splash_check_dependencies", self._check_binaries),
+            ("splash_check_daemon", self._check_daemon),
+        )
+        for key, check in steps:
             if self.isInterruptionRequested():
                 return
-            self.message.emit(text)
-            self.msleep(100)
-
-        self.missing_lines = []
-        self.show_permissions_notice = False
+            self.message.emit(tr(key))
+            try:
+                check()
+            except Exception:
+                pass  # arrancar sin el aviso es mejor que no arrancar
 
 
 __all__ = ["SplashScreen", "StartupWorker", "_VideoWidget"]

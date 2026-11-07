@@ -11,6 +11,33 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🚦 Arranque: comprobaciones reales, fuera del hilo de la interfaz
+
+- **Hallazgo**: `main()` ejecutaba `_check_and_install_daemon_deps()` de forma
+  síncrona ANTES del splash: hasta 6 subprocesos (PyGObject, `gst-inspect`,
+  `systemctl`) de 5 s cada uno, y cada comando se lanzaba dos veces porque el de
+  "instalado" y el de "activo" eran idénticos. Además `StartupWorker` solo emitía
+  5 pasos decorativos de 100 ms, en inglés fijo (las claves `splash_check_*`
+  estaban sin usar), y los avisos de binarios y de permisos nunca se calculaban.
+- **Ahora**: `StartupWorker` hace dos comprobaciones reales durante el splash
+  (binarios `pacman`/`pkexec` y dependencias del daemon), con mensajes traducidos
+  y sin esperas artificiales. Un fallo en una comprobación no impide arrancar.
+  Los resultados se usan tras el primer escaneo: modal de binarios faltantes
+  (solo si falta algo) y oferta de instalar dependencias del daemon, con la
+  ventana ya visible.
+- **Dependencias del daemon**: un solo subproceso por comprobación (el de
+  "activo" solo se lanza si es distinto del de "instalado"). `gst-libav` deja de
+  ser "dependencia del daemon" (solo sirve al vídeo del splash, que ya registra
+  su propio hint); PyGObject y `dbus` siguen ofreciendo instalación.
+- **Permisos**: el diálogo informativo se queda solo en Configuración (decisión
+  del mantenedor). Se elimina la rama muerta de `main.py`.
+- Claves i18n nuevas: `splash_check_daemon` (ES/EN). Siguen sin uso
+  `splash_check_updates`, `splash_check_permissions`, `splash_scanning` y
+  `splash_welcome` (el mensaje de "escaneo finalizado" no era cierto: el escaneo
+  corre después del splash; se retomará en la revisión de fluidez).
+- **Pendiente**: el modal de dependencias del daemon sigue con textos fijos en
+  español (no pasa por `tr()`).
+
 ### 🤖 Dependabot: subidas menores y parches en un solo PR
 
 - Las acciones de GitHub están pineadas por SHA en las mismas líneas de
