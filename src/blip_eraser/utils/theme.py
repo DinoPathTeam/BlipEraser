@@ -191,6 +191,7 @@ QLabel#PageTitle {{ color: {p['text']}; font-weight: bold; font-size: 15px; }}
 QScrollArea {{ background: transparent; border: none; }}
 QWidget#AppsContainer {{ background: transparent; }}
 QLabel#HeaderTitle {{ color: {p['text']}; font-weight: bold; font-size: 17px; }}
+QLabel#StatValue {{ color: {atext}; font-weight: bold; font-size: 22px; }}
 QLabel#CardValue {{ color: {atext}; font-weight: bold; font-size: 18px; }}
 QLabel#CardValueNeutral {{ color: {p['text']}; font-weight: bold; font-size: 20px; }}
 QLabel#CardRowName {{ color: {p['text']}; font-weight: 600; }}

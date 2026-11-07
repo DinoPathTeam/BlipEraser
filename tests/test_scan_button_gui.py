@@ -30,39 +30,37 @@ SUBTITLES = [
 
 
 @pytest.mark.parametrize("subtitle", SUBTITLES)
-def test_subtitle_does_not_reach_badge(app, subtitle):
-    """El subtítulo termina con aire antes de que empiece la badge."""
+def test_subtitle_fits_in_one_line(app, subtitle):
+    """Título y subtítulo caben a lo ancho del tamaño mínimo (con la lupa)."""
     btn = ScanNowButton("SCAN NOW", subtitle)
-    btn.resize(240, 112)
     try:
         font = QtGui.QFont(btn.font())
         font.setPointSize(8)
         metrics = QtGui.QFontMetrics(font)
-        # Alto real del bloque de texto: título(26) + gap(2) + subtítulo(20),
-        # empezando en top+8+2(margen) con altura mínima 112.
-        text_bottom = 2 + 8 + 26 + 2 + 20
-        badge_top = 112 - 4 - 8 - 32
-        assert text_bottom < badge_top, f"{text_bottom=} {badge_top=}"
-        # Y el texto cabe a lo ancho en una línea.
-        assert metrics.horizontalAdvance(subtitle) < 240 - 16, subtitle
+        # 16 px de margen de resplandor + 38 de lupa + 8 de aire a la derecha.
+        available = btn.minimumWidth() - 16 - 38 - 8
+        assert metrics.horizontalAdvance(subtitle) <= available, subtitle
     finally:
         btn.close()
 
 
-def test_badge_has_no_fill(app):
-    """El círculo de la lupa no pinta relleno: el borde es el acento."""
+def test_button_is_compact(app):
     btn = ScanNowButton("SCAN NOW", "Análisis profundo del sistema")
-    btn.resize(240, 112)
+    try:
+        assert btn.minimumHeight() <= 72
+    finally:
+        btn.close()
+
+
+def test_center_is_painted_with_accent_gradient(app):
+    btn = ScanNowButton("SCAN NOW", "x")
+    btn.set_accent("#D32F2F", "#ffffff", "#D32F2F", "#B71C1C")
+    btn.resize(250, 68)
     try:
         btn.show()
         pix = btn.grab().toImage()
-        accent = btn._accent
-        # Punto del borde superior del círculo (centro_x, badge_top):
-        # con relleno blanco-40 sería claro; sin relleno es el acento.
-        cx = pix.width() // 2
-        badge_top = pix.height() - 4 - 8 - 32
-        ring = {QtGui.QColor(pix.pixel(cx + i, badge_top)).name() for i in (-4, 4)}
-        assert len(ring) == 1, ring
-        assert next(iter(ring)) == accent.name(), ring
+        # Esquina interior izquierda (sin texto ni lupa): color del degradado.
+        color = QtGui.QColor(pix.pixel(12, 34))
+        assert color.red() > color.green() and color.red() > color.blue()
     finally:
         btn.close()

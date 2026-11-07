@@ -309,7 +309,14 @@ class MainWindow(QMainWindow):
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
         for card in self.findChildren(Card):
-            card.set_theme(palette["panel"], palette["border"], bool(theme["is_dark"]))
+            card.set_theme(
+                palette["panel"],
+                palette["border"],
+                bool(theme["is_dark"]),
+                hover=palette["hover"],
+                accent_top=theme["fill_top"],
+                accent_bot=theme["fill_bot"],
+            )
         self._overview.set_accent(accent, theme)
         self._overview.set_text_color(palette.get("text", "#ececef"))
         self._tools.settings.set_accent(accent, theme["on_accent"])

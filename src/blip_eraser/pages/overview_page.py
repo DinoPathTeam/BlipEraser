@@ -59,7 +59,7 @@ from blip_eraser.utils.system_stats import (
     ram_total_bytes,
     read_cpu_sample,
 )
-from blip_eraser.widgets.card import Card
+from blip_eraser.widgets.card import Card, StatTile
 from blip_eraser.widgets.confirm_dialog import run_destructive_action
 from blip_eraser.widgets.health_gauge import HealthGauge
 from blip_eraser.widgets.scan_button import ScanNowButton
@@ -160,7 +160,7 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         top.setSpacing(0)
 
         health_card = Card()
-        health_card.setFixedWidth(230)
+        health_card.setFixedWidth(270)
         health_layout = QVBoxLayout(health_card)
         health_layout.setContentsMargins(0, 0, 0, 0)
         health_layout.setSpacing(4)
@@ -169,23 +169,16 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         self.health_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         health_layout.addWidget(self.health_title)
         self.gauge = HealthGauge()
-        self.gauge.setMinimumSize(170, 150)
+        self.gauge.setMinimumSize(200, 190)
         self.gauge.set_accent(self._accent)
         health_layout.addWidget(self.gauge, 1)
         top.addWidget(health_card)
 
-        self.metric_junk = QLabel()
-        self.metric_orphans = QLabel()
-        self.metric_loose = QLabel()
+        self.metric_junk = StatTile()
+        self.metric_orphans = StatTile()
+        self.metric_loose = StatTile()
         for metric in (self.metric_junk, self.metric_orphans, self.metric_loose):
-            card = Card()
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(0, 0, 0, 0)
-            metric.setObjectName("CardValue")
-            metric.setWordWrap(True)
-            metric.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-            card_layout.addWidget(metric)
-            top.addWidget(card, 1)
+            top.addWidget(metric, 1)
         outer.addLayout(top)
 
         # --- Fila media: aplicaciones instaladas + información del sistema ---
@@ -265,12 +258,12 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         cleanup_outer.addWidget(self.cleanup_title)
 
         cleanup_row = QHBoxLayout()
-        cleanup_row.setSpacing(24)
-        self.cleanup_junk_label = QLabel()
-        self.cleanup_cache_label = QLabel()
-        self.cleanup_logs_label = QLabel()
+        cleanup_row.setSpacing(12)
+        self.cleanup_junk_label = StatTile(flat=True)
+        self.cleanup_cache_label = StatTile(flat=True)
+        self.cleanup_logs_label = StatTile(flat=True)
         for label in (self.cleanup_junk_label, self.cleanup_cache_label, self.cleanup_logs_label):
-            label.setObjectName("CardValue")
+            label.setMinimumWidth(150)
             cleanup_row.addWidget(label)
         cleanup_row.addStretch(1)
 
