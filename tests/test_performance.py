@@ -543,3 +543,55 @@ class TestTweakTexts:
     def test_default_pref_off(self):
         from blip_eraser.utils.config import PREFS_DEFAULTS
         assert PREFS_DEFAULTS["perf_zswap"] is False
+
+
+class TestReconcile:
+    """La preferencia guardada es la intención del usuario: no se pierde."""
+
+    def test_intent_on_but_system_off_is_drift_not_overwritten(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks({"perf_zswap": True}, {"perf_zswap": False}, set())
+        assert r.drifted == ["perf_zswap"]
+        assert r.adopt == {}
+
+    def test_in_sync_has_no_drift(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks({"perf_zswap": True}, {"perf_zswap": True}, set())
+        assert r.drifted == [] and r.adopt == {}
+
+    def test_active_in_system_but_not_in_prefs_is_adopted(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks({"perf_trim_mounts": False}, {"perf_trim_mounts": True}, set())
+        assert r.adopt == {"perf_trim_mounts": True}
+        assert r.drifted == []
+
+    def test_missing_pref_counts_as_off(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks({}, {"perf_trim_mounts": True}, set())
+        assert r.adopt == {"perf_trim_mounts": True}
+
+    def test_blocked_tweaks_are_ignored(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks(
+            {"perf_compress_ram": True}, {"perf_compress_ram": False}, {"perf_compress_ram"},
+        )
+        assert r.drifted == [] and r.adopt == {}
+
+    def test_off_and_off_is_quiet(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        r = reconcile_tweaks({"perf_mirror_sort": False}, {"perf_mirror_sort": False}, set())
+        assert r.drifted == [] and r.adopt == {}
+
+    def test_drift_keys_follow_registry_order(self):
+        from blip_eraser.utils.performance import reconcile_tweaks
+        prefs = {k: True for k in TWEAKS}
+        states = {k: False for k in TWEAKS}
+        assert reconcile_tweaks(prefs, states, set()).drifted == list(TWEAKS)
+
+
+class TestDriftTexts:
+    @pytest.mark.parametrize("lang", ["es", "en"])
+    def test_keys(self, lang):
+        from blip_eraser.utils.i18n import TRANSLATIONS
+        for k in ("perf_drift_notice", "perf_drift_reapply"):
+            assert k in TRANSLATIONS[lang]

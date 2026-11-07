@@ -472,6 +472,34 @@ def apply_tweak(key: str, enable: bool) -> TweakResult:
     return info["apply"](enable)
 
 
+@dataclass(frozen=True)
+class Reconciliation:
+    """Diferencias entre lo que el usuario eligió y lo que hay en el sistema."""
+    drifted: list[str]        # elegido ON pero el sistema está OFF (no se pisa la elección)
+    adopt: dict[str, bool]    # activo en el sistema y no registrado: se anota en prefs
+
+
+def reconcile_tweaks(prefs: dict, states: dict, blocked: set[str]) -> Reconciliation:
+    """La preferencia guardada es la intención del usuario y no se sobrescribe.
+
+    Si el usuario dejó un tweak activado y el sistema ya no lo tiene (otra
+    herramienta lo deshizo), es una divergencia que se avisa y se ofrece
+    reaplicar. Los tweaks bloqueados se ignoran.
+    """
+    drifted: list[str] = []
+    adopt: dict[str, bool] = {}
+    for key in TWEAKS:
+        if key in blocked:
+            continue
+        wanted = bool(prefs.get(key, False))
+        actual = bool(states.get(key, False))
+        if wanted and not actual:
+            drifted.append(key)
+        elif actual and not wanted:
+            adopt[key] = True
+    return Reconciliation(drifted=drifted, adopt=adopt)
+
+
 def get_all_tweak_states() -> dict[str, bool]:
     """Retorna dict {key: estado_actual} para todos los tweaks."""
     return {key: check_tweak_state(key) for key in TWEAKS}

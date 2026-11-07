@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QToolButton,
     QToolTip,
     QVBoxLayout,
@@ -30,6 +31,7 @@ from blip_eraser.utils.performance import (
     apply_tweak,
     get_all_tweak_states,
     get_tweak_block_reason,
+    reconcile_tweaks,
     TweakResult,
 )
 
@@ -191,6 +193,21 @@ class PerformancePage(BasePage):
         self._reboot_banner.setVisible(False)
         layout.addWidget(self._reboot_banner)
 
+        # Aviso de divergencia: el sistema perdió un ajuste que el usuario eligió
+        self._drift_bar = QWidget()
+        drift_row = QHBoxLayout(self._drift_bar)
+        drift_row.setContentsMargins(0, 0, 0, 0)
+        self._drift_label = QLabel()
+        self._drift_label.setObjectName("RebootBanner")
+        self._drift_label.setWordWrap(True)
+        drift_row.addWidget(self._drift_label, 1)
+        self._drift_btn = QPushButton(tr("perf_drift_reapply"))
+        self._drift_btn.clicked.connect(self._reapply_drifted)
+        drift_row.addWidget(self._drift_btn, 0)
+        self._drift_bar.setVisible(False)
+        self._drifted: list[str] = []
+        layout.addWidget(self._drift_bar)
+
         layout.addSpacing(16)
 
         for opt in _PERF_OPTIONS:
@@ -248,20 +265,23 @@ class PerformancePage(BasePage):
         self._anim.timeout.connect(self._animate_previews)
 
     def _sync_initial_state(self) -> None:
-        """Carga estado persistido y verifica estado real en el sistema."""
+        """Refleja el estado real sin pisar la elección guardada del usuario."""
         prefs = load_prefs()
         system_states = get_all_tweak_states()
+        blocked: set[str] = set()
 
         for row in self._rows:
             key = row["key"]
             checkbox = row["checkbox"]
+            actual = system_states.get(key, False)
 
             block = get_tweak_block_reason(key)
-            if block is not None and block.enable_only and system_states.get(key, False):
+            if block is not None and block.enable_only and actual:
                 block = None  # activado por nosotros: debe poder desactivarse
             if block is not None:
                 # Configuración gestionada por el sistema: no se toca ni se
                 # sobrescribe la preferencia guardada.
+                blocked.add(key)
                 checkbox.blockSignals(True)
                 checkbox.setChecked(False)
                 checkbox.blockSignals(False)
@@ -270,21 +290,32 @@ class PerformancePage(BasePage):
                 checkbox.setToolTip(block.message if text.startswith("[") else text)
                 continue
 
-            # Estado persistido en config
-            persisted = prefs.get(key, False)
-            # Estado real en el sistema
-            actual = system_states.get(key, False)
-            
-            # Usar estado real como fuente de verdad, pero persistir la intención del usuario
             checkbox.blockSignals(True)
             checkbox.setChecked(actual)
             checkbox.blockSignals(False)
-            
-            # Si config dice True pero sistema dice False, sincronizar config
-            if persisted != actual:
-                save_prefs({key: actual})
 
+        result = reconcile_tweaks(prefs, system_states, blocked)
+        if result.adopt:
+            save_prefs(result.adopt)
+        self._show_drift(result.drifted)
         self._update_reboot_banner()
+
+    def _show_drift(self, keys: list[str]) -> None:
+        self._drifted = list(keys)
+        if not keys:
+            self._drift_bar.setVisible(False)
+            return
+        names = ", ".join(tr(k) for k in keys)
+        self._drift_label.setText(f"{tr('perf_drift_notice')}: {names}")
+        self._drift_bar.setVisible(True)
+
+    def _reapply_drifted(self) -> None:
+        """Reaplica lo que el usuario eligió (cada casilla dispara su aplicación)."""
+        keys, self._drifted = self._drifted, []
+        self._drift_bar.setVisible(False)
+        for row in self._rows:
+            if row["key"] in keys:
+                row["checkbox"].setChecked(True)
 
     def _on_tweak_toggled(self, key: str, checked: bool) -> None:
         """Maneja toggle de checkbox: aplica tweak real y actualiza UI/config."""
