@@ -243,7 +243,7 @@ class MainWindow(QMainWindow):
         save_prefs({"theme": theme_key})
         self._apply_appearance()
         theme = theme_mod.THEMES.get(theme_key, theme_mod.THEMES["red"])
-        self._overview.set_accent(theme["accent"])
+        self._overview.set_accent(theme["accent"], theme)
         label = tr(theme["label_key"])
         log_buffer.add(tr("log_theme_changed").format(theme=label))
 
@@ -273,13 +273,21 @@ class MainWindow(QMainWindow):
         theme = theme_mod.THEMES.get(theme_key, theme_mod.THEMES["red"])
         accent = theme["accent"]
         palette = theme["palette"]
-        self.sidebar.apply_theme(accent, accent, palette.get("hover", "#202024"), palette.get("subtext", "#9a9aa2"))
+        self.sidebar.apply_theme(
+            accent,
+            accent,
+            palette.get("hover", "#202024"),
+            palette.get("subtext", "#9a9aa2"),
+            on_accent=theme["on_accent"],
+            fill_top=theme["fill_top"],
+            fill_bot=theme["fill_bot"],
+        )
         self.sidebar.set_icon_color(palette.get("icon", "#ffffff"))
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
-        self._overview.set_accent(accent)
+        self._overview.set_accent(accent, theme)
         self._overview.set_text_color(palette.get("text", "#ececef"))
-        self._tools.settings.set_accent(accent)
+        self._tools.settings.set_accent(accent, theme["on_accent"])
 
         family = theme_mod.font_family(prefs.get("font", "system"))
         font = QFont(family) if family else QFont()

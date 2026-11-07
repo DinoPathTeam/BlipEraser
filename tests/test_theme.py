@@ -123,3 +123,39 @@ class TestFonts:
 
     def test_font_label_unknown_returns_id(self):
         assert font_label("no-existe") == "no-existe"
+
+class TestAccentContrast:
+    """Pares con acento: WCAG AA (4.5:1) para texto normal."""
+
+    def test_text_on_accent_fills(self):
+        for key, theme in THEMES.items():
+            for fill in ("accent", "fill_top", "fill_bot", "hover_fill"):
+                ratio = _contrast_ratio(theme["on_accent"], theme[fill])
+                assert ratio >= 4.5, f"{key}: on_accent sobre {fill} = {ratio:.2f}"
+
+    def test_accent_text_on_background_and_panel(self):
+        for key, theme in THEMES.items():
+            p = theme["palette"]
+            for bg in ("bg", "panel"):
+                ratio = _contrast_ratio(theme["accent_text"], p[bg])
+                assert ratio >= 4.5, f"{key}: accent_text sobre {bg} = {ratio:.2f}"
+
+    def test_kind_tags_on_panel(self):
+        for key, theme in THEMES.items():
+            for kind, color in theme["tags"].items():
+                ratio = _contrast_ratio(color, theme["palette"]["panel"])
+                assert ratio >= 4.5, f"{key}: etiqueta {kind} = {ratio:.2f}"
+
+    def test_subtext_readable(self):
+        for key, theme in THEMES.items():
+            p = theme["palette"]
+            for bg in ("bg", "panel", "hover"):
+                ratio = _contrast_ratio(p["subtext"], p[bg])
+                assert ratio >= 4.0, f"{key}: subtext sobre {bg} = {ratio:.2f}"
+
+    def test_qss_uses_gradient_and_on_accent(self):
+        for key, theme in THEMES.items():
+            qss = build_qss(key)
+            assert "qlineargradient" in qss
+            assert theme["on_accent"] in qss
+            assert theme["tags"]["dep"] in qss
