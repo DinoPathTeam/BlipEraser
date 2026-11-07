@@ -180,9 +180,11 @@ class OverviewPage(QWidget, BackgroundScanMixin):
         left_layout.addSpacing(8)
 
         # Botón SCAN NOW (pastilla con glow e icono)
-        accent = str(theme_mod.THEMES[str(load_prefs().get("theme", "red"))]["accent"])
+        _theme = theme_mod.THEMES[str(load_prefs().get("theme", "red"))]
         self.scan_btn = ScanNowButton(tr("overview_erase_button"), tr("overview_erase_subtitle"))
-        self.scan_btn.set_accent(accent)
+        self.scan_btn.set_accent(
+            str(_theme["accent"]), _theme["on_accent"], _theme["fill_top"], _theme["fill_bot"]
+        )
         cast(Any, self.scan_btn.clicked).connect(self._scan)
         left_layout.addWidget(self.scan_btn)
 
@@ -697,10 +699,17 @@ class OverviewPage(QWidget, BackgroundScanMixin):
             self._rebuild_apps()
         self.refresh()
 
-    def set_accent(self, color: str):
+    def set_accent(self, color: str, theme: dict | None = None):
+        """Acento del tema; `theme` aporta texto sobre acento, degradado y pista."""
         self._accent = color
         self.gauge.set_accent(color)
-        self.scan_btn.set_accent(color)
+        if theme is None:
+            self.scan_btn.set_accent(color)
+            return
+        self.scan_btn.set_accent(
+            color, theme["on_accent"], theme["fill_top"], theme["fill_bot"]
+        )
+        self.gauge.set_track_color(theme["palette"]["hover"])
 
     def set_text_color(self, color: str):
         self.gauge.set_text_color(color)

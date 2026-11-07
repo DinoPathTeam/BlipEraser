@@ -8,8 +8,8 @@ izquierda en el elemento activo. Todos los colores se toman del tema.
 from pathlib import Path
 
 from PyQt6.QtCore import QRect, QRectF, QSize, Qt
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QStyle, QStyledItemDelegate
+from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPixmap
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QSizePolicy, QStyle, QStyledItemDelegate
 
 from blip_eraser.utils.i18n import tr
 
@@ -58,12 +58,27 @@ class _SidebarDelegate(QStyledItemDelegate):
         self._active_bg = QColor("#E53935")
         self._hover = QColor("#202024")
         self._text = QColor("#9a9aa2")
+        self._on_accent = QColor("#ffffff")
+        self._fill_top = QColor("#E53935")
+        self._fill_bot = QColor("#E53935")
 
-    def apply_theme(self, accent: str, active_bg: str, hover: str, text: str) -> None:
+    def apply_theme(
+        self,
+        accent: str,
+        active_bg: str,
+        hover: str,
+        text: str,
+        on_accent: str = "#ffffff",
+        fill_top: str | None = None,
+        fill_bot: str | None = None,
+    ) -> None:
         self._accent = QColor(accent)
         self._active_bg = QColor(active_bg)
         self._hover = QColor(hover)
         self._text = QColor(text)
+        self._on_accent = QColor(on_accent)
+        self._fill_top = QColor(fill_top or active_bg)
+        self._fill_bot = QColor(fill_bot or active_bg)
 
     def paint(self, painter: QPainter, option, index) -> None:
         painter.save()
@@ -75,16 +90,24 @@ class _SidebarDelegate(QStyledItemDelegate):
 
         if is_selected:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(self._active_bg)
-            painter.drawRoundedRect(rect.adjusted(4, 2, -4, -2), 8, 8)
-            painter.setBrush(self._accent)
+            body = rect.adjusted(4, 2, -4, -2)
+            gradient = QLinearGradient(body.topLeft(), body.bottomLeft())
+            gradient.setColorAt(0.0, self._fill_top)
+            gradient.setColorAt(1.0, self._fill_bot)
+            painter.setBrush(gradient)
+            painter.drawRoundedRect(body, 8, 8)
+            # Barra indicadora: con el texto sobre el acento, para que se vea
+            # también sobre un relleno del mismo color.
+            bar = QColor(self._on_accent)
+            bar.setAlpha(200)
+            painter.setBrush(bar)
             painter.drawRoundedRect(QRectF(rect.left() + 6, rect.top() + 12, 4, rect.height() - 24), 2, 2)
         elif is_hovered:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(self._hover)
             painter.drawRoundedRect(rect.adjusted(4, 2, -4, -2), 8, 8)
 
-        text_color = Qt.GlobalColor.white if is_selected else self._text
+        text_color = self._on_accent if is_selected else self._text
 
         base_x = option.rect.left() + option.rect.width() / 2
         icon_rect = QRect(
@@ -132,6 +155,7 @@ class Sidebar(QListWidget):
         self.setIconSize(_ICON_SIZE)
         self.setSpacing(4)
         self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self._icon_color = "#ffffff"
         self._rows: list[tuple[int, str]] = []
@@ -142,6 +166,12 @@ class Sidebar(QListWidget):
             self._rows.append((row, section))
         self.refresh_icons()
         self.setCurrentRow(0)
+        # Altura justa al contenido: el espacio libre de la barra lateral
+        # queda para la actividad reciente.
+        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(
+            self.count() * (self.sizeHintForRow(0) + 2 * self.spacing()) + 2 * self.frameWidth()
+        )
 
     def refresh_icons(self) -> None:
         """Recarga los iconos: primero assets propios (color completo, sin tinte),
@@ -181,10 +211,10 @@ class Sidebar(QListWidget):
         self._icon_color = color
         self.refresh_icons()
 
-    def apply_theme(self, accent: str, active_bg: str, hover: str, text: str) -> None:
+    def apply_theme(self, accent: str, active_bg: str, hover: str, text: str, **colors: str) -> None:
         delegate = self.itemDelegate()
         if isinstance(delegate, _SidebarDelegate):
-            delegate.apply_theme(accent, active_bg, hover, text)
+            delegate.apply_theme(accent, active_bg, hover, text, **colors)
         self.viewport().update()
 
     def current_section(self) -> str:

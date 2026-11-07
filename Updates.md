@@ -69,6 +69,22 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   StatusNotifierWatcher).
 - Claves i18n nuevas `tray_*` (ES/EN). Tests: `test_tray_logic.py`,
   `test_tray_gui.py`.
+### Sin versionar: temas renovados y actividad reciente en la barra lateral
+
+- **Temas**: nueva paleta con más jerarquía entre fondo, panel y borde; relleno
+  con degradado sutil en botones, selección, insignia y barra de progreso;
+  halo en el anillo de salud; texto sobre el acento por tema (`on_accent`:
+  oscuro en Verde, donde el blanco daba 2.2:1) y colores de etiquetas
+  APP/DEP/CARPETA más oscuros en los temas claros. El hover del botón primario
+  usa un tono del propio acento. Claves nuevas en `THEMES`: `fill_top`,
+  `fill_bot`, `hover_fill`, `on_accent`, `accent_text`, `tags`. Tests de
+  contraste (≥4.5:1) para esos pares en los 4 temas. Las sombras del
+  prototipo no se replican: QSS no admite `box-shadow`.
+- **Barra lateral**: el espacio libre bajo la navegación muestra ahora las últimas
+  6 entradas del registro (la más nueva arriba, resaltada con el acento). Es un
+  resumen de solo lectura; el historial completo y el borrado siguen en el
+  panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
+  `sidebar_activity_empty`.
 
 ### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
 

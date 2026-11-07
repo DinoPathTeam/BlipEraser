@@ -140,11 +140,11 @@ class SettingsPage(BasePage):
         self.tray_keep_check.setChecked(tray_launcher.keep_running_enabled(load_prefs()))
         self.tray_keep_check.blockSignals(False)
 
-    def set_accent(self, accent: str) -> None:
+    def set_accent(self, accent: str, on_accent: str = "#ffffff") -> None:
         """Color de acento del tema para los botones de posición marcados."""
         self._pos_box_qss = (
             "QPushButton#PosButton { padding: 2px; }"
-            f"QPushButton#PosButton:checked {{ background-color: {accent}; color: #ffffff;"
+            f"QPushButton#PosButton:checked {{ background-color: {accent}; color: {on_accent};"
             f" border: 1px solid {accent}; }}"
         )
         for btn in self._pos_buttons.values():

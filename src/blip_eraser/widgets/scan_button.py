@@ -7,7 +7,7 @@ Emite `clicked` (QPushButton).
 """
 
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPen
+from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPen
 from PyQt6.QtWidgets import QPushButton
 
 
@@ -18,6 +18,9 @@ class ScanNowButton(QPushButton):
         self._subtitle = subtitle
         self._icon = QIcon.fromTheme(icon_name)
         self._accent = QColor("#E53935")
+        self._on_accent = QColor(255, 255, 255)
+        self._fill_top: QColor | None = None
+        self._fill_bot: QColor | None = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         # Altura con margen real: título + subtítulo arriba, badge abajo
         # sin solape (el subtítulo ES largo invadía el círculo).
@@ -28,8 +31,17 @@ class ScanNowButton(QPushButton):
         self._subtitle = subtitle
         self.update()
 
-    def set_accent(self, color: str):
+    def set_accent(
+        self,
+        color: str,
+        on_accent: str = "#ffffff",
+        fill_top: str | None = None,
+        fill_bot: str | None = None,
+    ):
         self._accent = QColor(color)
+        self._on_accent = QColor(on_accent)
+        self._fill_top = QColor(fill_top) if fill_top else None
+        self._fill_bot = QColor(fill_bot) if fill_bot else None
         self.update()
 
     def paintEvent(self, _event):
@@ -52,15 +64,25 @@ class ScanNowButton(QPushButton):
                 painter.drawRoundedRect(rect.adjusted(-i - 2, -i - 2, i + 2, i + 2), 34, 34)
 
         # Relleno de la cápsula
-        fill = QColor(self._accent)
+        if self._fill_top is not None and self._fill_bot is not None:
+            top, bot = QColor(self._fill_top), QColor(self._fill_bot)
+        else:
+            top = bot = QColor(self._accent)
         if disabled:
-            fill.setAlpha(120)
+            top.setAlpha(120)
+            bot.setAlpha(120)
+        gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+        gradient.setColorAt(0.0, top)
+        gradient.setColorAt(1.0, bot)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(fill)
+        painter.setBrush(gradient)
         painter.drawRoundedRect(rect, 34, 34)
 
         # Texto centrado en la parte superior (título + subtítulo)
-        painter.setPen(QColor(255, 255, 255) if not disabled else QColor(255, 255, 255, 160))
+        text_color = QColor(self._on_accent)
+        if disabled:
+            text_color.setAlpha(160)
+        painter.setPen(text_color)
 
         # Título
         title_font = QFont(self.font())

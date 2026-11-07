@@ -21,6 +21,7 @@ class HealthGauge(QWidget):
         self._status = "—"
         self._accent = "#E53935"
         self._text_color = "#ececef"
+        self._track_color = QColor(64, 64, 68)
         self.setMinimumSize(240, 210)
 
     def set_value(self, value: int) -> None:
@@ -29,6 +30,11 @@ class HealthGauge(QWidget):
 
     def set_accent(self, color: str) -> None:
         self._accent = color
+        self.update()
+
+    def set_track_color(self, color: str) -> None:
+        """Color de la pista del anillo (derivado del tema activo)."""
+        self._track_color = QColor(color)
         self.update()
 
     def set_text_color(self, color: str) -> None:
@@ -58,16 +64,23 @@ class HealthGauge(QWidget):
         )
 
         # Anillo de fondo
-        track_pen = QPen(QColor(64, 64, 68), 15)
+        track_pen = QPen(self._track_color, 15)
         track_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(track_pen)
         painter.drawArc(rect, _ARC_START * 16, _ARC_SPAN * 16)
 
-        # Anillo de valor
+        # Anillo de valor, con un halo tenue del mismo color debajo
+        span = int(_ARC_SPAN * self._value / 100)
+        if span > 0:
+            halo = QColor(self._accent)
+            halo.setAlpha(45)
+            halo_pen = QPen(halo, 25)
+            halo_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(halo_pen)
+            painter.drawArc(rect, _ARC_START * 16, -span * 16)
         value_pen = QPen(QColor(self._accent), 15)
         value_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         painter.setPen(value_pen)
-        span = int(_ARC_SPAN * self._value / 100)
         painter.drawArc(rect, _ARC_START * 16, -span * 16)
 
         # Porcentaje central (ligeramente por encima del centro)

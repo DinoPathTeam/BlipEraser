@@ -43,7 +43,7 @@ from blip_eraser.utils.i18n import (
     tr,
 )
 from blip_eraser.utils.log import log as log_buffer
-from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SystemStatusBar
+from blip_eraser.widgets import LogPanel, SearchBar, Sidebar, SidebarActivity, SystemStatusBar
 from blip_eraser.widgets.logo import AppLogo, app_icon
 
 _SECTION_ORDER = [
@@ -130,6 +130,8 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
         self.sidebar = Sidebar()
         sidebar_layout.addWidget(self.sidebar)
+        self.sidebar_activity = SidebarActivity()
+        sidebar_layout.addWidget(self.sidebar_activity, 1)
         body.addWidget(sidebar_wrap)
 
         self.stack = QStackedWidget()
@@ -241,7 +243,7 @@ class MainWindow(QMainWindow):
         save_prefs({"theme": theme_key})
         self._apply_appearance()
         theme = theme_mod.THEMES.get(theme_key, theme_mod.THEMES["red"])
-        self._overview.set_accent(theme["accent"])
+        self._overview.set_accent(theme["accent"], theme)
         label = tr(theme["label_key"])
         log_buffer.add(tr("log_theme_changed").format(theme=label))
 
@@ -271,13 +273,21 @@ class MainWindow(QMainWindow):
         theme = theme_mod.THEMES.get(theme_key, theme_mod.THEMES["red"])
         accent = theme["accent"]
         palette = theme["palette"]
-        self.sidebar.apply_theme(accent, accent, palette.get("hover", "#202024"), palette.get("subtext", "#9a9aa2"))
+        self.sidebar.apply_theme(
+            accent,
+            accent,
+            palette.get("hover", "#202024"),
+            palette.get("subtext", "#9a9aa2"),
+            on_accent=theme["on_accent"],
+            fill_top=theme["fill_top"],
+            fill_bot=theme["fill_bot"],
+        )
         self.sidebar.set_icon_color(palette.get("icon", "#ffffff"))
         self.sidebar.refresh_icons()
         self.app_logo.set_accent(accent)
-        self._overview.set_accent(accent)
+        self._overview.set_accent(accent, theme)
         self._overview.set_text_color(palette.get("text", "#ececef"))
-        self._tools.settings.set_accent(accent)
+        self._tools.settings.set_accent(accent, theme["on_accent"])
 
         family = theme_mod.font_family(prefs.get("font", "system"))
         font = QFont(family) if family else QFont()
@@ -353,6 +363,7 @@ class MainWindow(QMainWindow):
         for code, action in self.language_actions.items():
             action.setText(tr(f"lang_name_{code}"))
         self.sidebar.retranslate()
+        self.sidebar_activity.retranslate()
         self.log_panel.retranslate()
         self.statusBar().retranslate()
         for page in self._pages.values():
