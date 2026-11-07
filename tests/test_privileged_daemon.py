@@ -197,6 +197,28 @@ class TestDBusPolicy:
         assert "Environment=PYTHONUNBUFFERED=1" in content
         assert "/var/log/blip-eraser" in content
 
+    def test_systemd_unit_syscall_filter_is_minimal(self):
+        """El filtro de syscalls no debe reabrir grupos peligrosos.
+
+        El daemon solo borra ficheros y atiende D-Bus: no necesita módulos,
+        E/S cruda, depuración, reloj ni syscalls obsoletas. Un test de trazado
+        (strace) confirmó que ninguna de ellas se usa.
+        """
+        service_file = (
+            Path(__file__).parent.parent
+            / "packaging"
+            / "systemd"
+            / "blip-eraser-privileged.service"
+        )
+        lines = [
+            ln.strip()
+            for ln in service_file.read_text(encoding="utf-8").splitlines()
+            if ln.strip().startswith("SystemCallFilter=")
+        ]
+        assert lines == ["SystemCallFilter=@system-service"]
+        content = service_file.read_text(encoding="utf-8")
+        assert "SystemCallErrorNumber=EPERM" in content
+
 
 class TestAtomicRemoval:
     """Tests específicos para la eliminación atómica (TOCTOU protection)."""

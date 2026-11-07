@@ -11,6 +11,17 @@ Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔒 Daemon: filtro de syscalls mínimo
+
+- **Antes**: `SystemCallFilter` sumaba `@clock @cpu-emulation @debug @module
+  @obsolete @raw-io` a `@system-service` (y repetía este último).
+- **Ahora**: solo `@system-service`. El daemon borra ficheros y atiende D-Bus;
+  un trazado con `strace` de su batería de tests no usó ninguna syscall de los
+  grupos retirados (todas caen dentro de `@system-service`).
+- Test que impide volver a ampliar el filtro. **Reversión**: restaurar la línea
+  anterior de la unidad y `sudo systemctl daemon-reload; sudo systemctl restart
+  blip-eraser-privileged`.
+
 ### 🚀 v1.1.0: desinstalación fiable, tweaks protegidos y CI
 
 - **Desinstalar**: los paquetes se eliminan con `pkexec pacman -Rns`; el daemon
