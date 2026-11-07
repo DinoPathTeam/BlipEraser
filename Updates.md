@@ -5,11 +5,29 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.0.6` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.1.0` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🚀 v1.1.0: desinstalación fiable, tweaks protegidos y CI
+
+- **Desinstalar**: los paquetes se eliminan con `pkexec pacman -Rns`; el daemon
+  solo limpia caché y logs, y atiende las llamadas D-Bus en hilos (un prompt de
+  polkit ya no lo congela).
+- **Tweaks** (TRIM, zram, zswap, espejos): opcionales y desactivados por
+  defecto; se bloquean con explicación si el sistema ya gestiona zram o los
+  espejos; al arrancar se reconcilian sin pisar la elección del usuario.
+- **Seguridad**: registros de auditoría protegidos, reglas de elevación y
+  guardia de puntos de montaje, polkit restringido a `wheel`; el instalador
+  copia también las reglas polkit.
+- **Descargas** respeta `XDG_DOWNLOAD_DIR`.
+- **CI**: ruff, shellcheck y tests de GUI offscreen; Dependabot semanal para
+  las acciones de GitHub.
+- **Documentación**: README ES/EN reescritos y guías de instalación con venv.
+- Los paquetes publicados (v1.0.6) no incluyen nada de esto hasta publicar la
+  release.
 
 ### 🧵 Daemon: un prompt de polkit ya no lo congela
 
