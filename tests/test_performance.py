@@ -13,7 +13,6 @@ from blip_eraser.utils.performance import (
     get_tweak_info,
     _pkg_installed,
     _systemctl_is_enabled,
-    _install_pkg_via_pkexec,
     tweak_trim_check_state,
     tweak_trim_apply,
     tweak_zram_check_state,
@@ -57,64 +56,6 @@ class TestUtils:
         monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
         import subprocess
         assert _systemctl_is_enabled("fstrim.timer") is False
-
-    def test_install_pkg_uses_pacman_S_only(self, monkeypatch):
-        """Instalar NO debe desinstalar antes: solo `pacman -S` (regresión P1)."""
-        calls = []
-
-        def mock_run(cmd, **kwargs):
-            calls.append(cmd)
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-
-        monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
-        assert _install_pkg_via_pkexec("reflector") is True
-        assert calls == [["pkexec", "pacman", "-S", "--needed", "--noconfirm", "reflector"]]
-
-
-class TestRootFileBackup:
-    """D4: copia .blip-bak antes de escribir, restaura al desactivar."""
-
-    def test_write_calls_backup_first(self, monkeypatch):
-        from pathlib import Path as _Path
-
-        import blip_eraser.utils.performance as perf
-
-        order = []
-        monkeypatch.setattr(
-            perf, "_backup_root_file", lambda p: order.append(("backup", str(p)))
-        )
-
-        def fake_run(cmd, **kwargs):
-            order.append(("write", cmd[0]))
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-
-        monkeypatch.setattr(perf.subprocess, "run", fake_run)
-        assert perf._write_root_file(_Path("/etc/x.conf"), "data") is True
-        assert order[0][0] == "backup"
-        assert order[0][1].endswith("/etc/x.conf")
-
-    def test_remove_restores_backup(self, monkeypatch):
-        from pathlib import Path as _Path
-
-        import blip_eraser.utils.performance as perf
-
-        cmds = []
-
-        def fake_run(cmd, **kwargs):
-            cmds.append(cmd)
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-
-        monkeypatch.setattr(perf, "_run_cmd", fake_run)
-        assert perf._remove_root_file(_Path("/etc/x.conf")) is True
-        shell = " ".join(cmds[0])
-        assert "mv -f" in shell
-        assert "x.conf.blip-bak" in shell
 
 
 class TestTweakRegistry:
@@ -205,42 +146,25 @@ class TestTweakZram:
         assert tweak_zram_check_state() is False
 
     def test_apply_enable_installs_dep_and_config(self, monkeypatch):
-        # Mock: zram-generator no instalado
         monkeypatch.setattr("blip_eraser.utils.performance._pkg_installed", lambda p: False)
-        
-        # Mock: _install_pkg_via_pkexec éxito
-        def mock_install(pkg):
-            assert pkg == "zram-generator"
-            return True
-        monkeypatch.setattr("blip_eraser.utils.performance._install_pkg_via_pkexec", mock_install)
-        
-        # Mock: _write_root_file éxito
-        def mock_write(path, content):
-            assert "zram-generator.conf" in str(path)
-            assert "zram-size" in content
-            assert "zstd" in content
-            return True
-        monkeypatch.setattr("blip_eraser.utils.performance._write_root_file", mock_write)
-        
-        # Mock: systemctl daemon-reload y enable
-        def mock_run(cmd, **kwargs):
-            mock = MagicMock()
-            mock.returncode = 0
-            return mock
-        monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
-        
+        monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", lambda *a, **k: MagicMock(returncode=0))
+
         result = tweak_zram_apply(True)
         assert result.success is True
         assert result.installed_deps is True
         assert "activada" in result.message.lower()
 
-    def test_apply_enable_install_fails(self, monkeypatch):
+    def test_apply_enable_failure_reports_error(self, monkeypatch):
+        import subprocess
+
+        def boom(cmd, **kwargs):
+            raise subprocess.CalledProcessError(1, cmd, stderr="no se pudo instalar")
         monkeypatch.setattr("blip_eraser.utils.performance._pkg_installed", lambda p: False)
-        monkeypatch.setattr("blip_eraser.utils.performance._install_pkg_via_pkexec", lambda p: False)
-        
+        monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", boom)
+
         result = tweak_zram_apply(True)
         assert result.success is False
-        assert "instalar" in result.message.lower()
+        assert "no se pudo instalar" in result.message
 
     def test_apply_disable(self, monkeypatch):
         def mock_run(cmd, **kwargs):
@@ -248,7 +172,6 @@ class TestTweakZram:
             mock.returncode = 0
             return mock
         monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
-        monkeypatch.setattr("blip_eraser.utils.performance._remove_root_file", lambda p: True)
         
         result = tweak_zram_apply(False)
         assert result.success is True
@@ -274,9 +197,7 @@ class TestTweakReflector:
 
     def test_apply_enable_installs_dep_and_config(self, monkeypatch):
         monkeypatch.setattr("blip_eraser.utils.performance._pkg_installed", lambda p: False)
-        monkeypatch.setattr("blip_eraser.utils.performance._install_pkg_via_pkexec", lambda p: True)
         monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", lambda *a, **k: MagicMock(returncode=0))
-        monkeypatch.setattr("blip_eraser.utils.performance._write_root_file", lambda p, c: True)
         
         result = tweak_reflector_apply(True)
         assert result.success is True
@@ -289,7 +210,6 @@ class TestTweakReflector:
             mock.returncode = 0
             return mock
         monkeypatch.setattr("blip_eraser.utils.performance._run_cmd", mock_run)
-        monkeypatch.setattr("blip_eraser.utils.performance._remove_root_file", lambda p: True)
         
         result = tweak_reflector_apply(False)
         assert result.success is True
@@ -372,7 +292,6 @@ class TestSystemManagedProtections:
         monkeypatch.setattr(perf, "_zram_device_present", lambda: True)
         monkeypatch.setattr(perf, "_blip_zram_config_exists", lambda: False)
         calls = []
-        monkeypatch.setattr(perf, "_write_root_file", lambda *a, **k: calls.append(a) or True)
         monkeypatch.setattr(perf, "_run_cmd", lambda *a, **k: calls.append(a))
         res = perf.apply_tweak("perf_compress_ram", True)
         assert not res.success and calls == []
@@ -408,7 +327,6 @@ class TestSystemManagedProtections:
         from blip_eraser.utils import performance as perf
         monkeypatch.setattr(perf, "_read_mirrorlist", lambda: self.CACHY_MIRRORLIST)
         calls = []
-        monkeypatch.setattr(perf, "_write_root_file", lambda *a, **k: calls.append(a) or True)
         monkeypatch.setattr(perf, "_run_cmd", lambda *a, **k: calls.append(a))
         res = perf.apply_tweak("perf_mirror_sort", True)
         assert not res.success and calls == []
@@ -467,35 +385,32 @@ class TestZswapTweak:
         monkeypatch.setattr(perf, "_blip_zswap_config_exists", lambda: True)
         monkeypatch.setattr(perf, "_swap_devices", lambda: ["/dev/zram0"])
         calls = []
-        monkeypatch.setattr(perf, "_remove_root_file", lambda p: calls.append(("rm", p)) or True)
-        monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: calls.append(("run", c)) or MagicMock(returncode=0))
+        monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: calls.append(c) or MagicMock(returncode=0))
         res = perf.apply_tweak("perf_zswap", False)
         assert res.success
-        assert ("rm", perf.ZSWAP_CONFIG_PATH) in calls
+        assert len(calls) == 1 and str(perf.ZSWAP_CONFIG_PATH) in calls[0][3]
 
     def test_enable_refused_with_zram_and_writes_nothing(self, perf, monkeypatch):
         monkeypatch.setattr(perf, "_swap_devices", lambda: ["/dev/zram0"])
         calls = []
-        monkeypatch.setattr(perf, "_write_root_file", lambda *a, **k: calls.append(a) or True)
         monkeypatch.setattr(perf, "_run_cmd", lambda *a, **k: calls.append(a))
         res = perf.apply_tweak("perf_zswap", True)
         assert not res.success and calls == []
 
     def test_enable_writes_tmpfiles_and_applies_now(self, perf, monkeypatch):
-        written, ran = [], []
-        monkeypatch.setattr(perf, "_write_root_file", lambda p, c: written.append((p, c)) or True)
+        ran = []
         monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: ran.append(c) or MagicMock(returncode=0))
         res = perf.apply_tweak("perf_zswap", True)
         assert res.success and not res.needs_reboot
-        path, content = written[0]
-        assert path == perf.ZSWAP_CONFIG_PATH
-        assert str(path).startswith("/etc/tmpfiles.d/")
-        assert "/sys/module/zswap/parameters/enabled" in content
-        assert any("systemd-tmpfiles" in c for c in ran)
+        assert len(ran) == 1  # una sola autorización
+        script = ran[0][3]
+        assert str(perf.ZSWAP_CONFIG_PATH) in script
+        assert str(perf.ZSWAP_CONFIG_PATH).startswith("/etc/tmpfiles.d/")
+        assert "/sys/module/zswap/parameters/enabled" in script
+        assert "systemd-tmpfiles --create" in script
 
     def test_enable_does_not_touch_bootloader(self, perf, monkeypatch):
         ran = []
-        monkeypatch.setattr(perf, "_write_root_file", lambda p, c: True)
         monkeypatch.setattr(perf, "_run_cmd", lambda c, **k: ran.append(c) or MagicMock(returncode=0))
         perf.apply_tweak("perf_zswap", True)
         flat = " ".join(" ".join(c) for c in ran)

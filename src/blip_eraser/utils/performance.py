@@ -67,73 +67,47 @@ def _systemctl_is_active(unit: str) -> bool:
         return False
 
 
-def _install_pkg_via_pkexec(pkg: str) -> bool:
-    """Instala paquete via pkexec pacman. Retorna True si éxito."""
-    try:
-        _run_cmd(["pkexec", "pacman", "-S", "--needed", "--noconfirm", pkg], check=True)
-        write_diagnostic(f"AUDIT action=install_pkg pkg={pkg} result=success")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
-        write_diagnostic(f"AUDIT action=install_pkg pkg={pkg} result=failed error={e}")
-        return False
+def _q(value: object) -> str:
+    """Cita un valor para el shell (los paths y contenidos van siempre citados)."""
+    return shlex.quote(str(value))
 
 
-def _write_root_file(path: Path, content: str) -> bool:
-    """Escribe archivo root via pkexec tee (D4: con copia .blip-bak previa)."""
-    try:
-        _backup_root_file(path)
-        # Usar tee con pkexec para escribir archivo root
-        subprocess.run(
-            ["pkexec", "tee", str(path)],
-            input=content,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        write_diagnostic(f"AUDIT action=write_root_file path={path} result=success")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
-        write_diagnostic(f"AUDIT action=write_root_file path={path} result=failed error={e}")
-        return False
+def _sh_install_pkg(pkg: str) -> str:
+    return f"pacman -S --needed --noconfirm {_q(pkg)}"
 
 
-def _backup_root_file(path: Path) -> None:
-    """Copia de seguridad `<path>.blip-bak` si existe y aún no hay copia (D4)."""
-    try:
-        backup = path.with_name(path.name + ".blip-bak")
-        if backup.exists():
-            return  # No pisar una copia previa (primera escritura manda).
-        proc = subprocess.run(
-            ["pkexec", "sh", "-c", f"test -f {shlex.quote(str(path))}"],
-            capture_output=True, timeout=15,
-        )
-        if proc.returncode != 0:
-            return  # Nada que respaldar (archivo nuevo).
-        subprocess.run(
-            ["pkexec", "cp", "-p", str(path), str(backup)],
-            capture_output=True, text=True, check=True, timeout=30,
-        )
-        write_diagnostic(f"AUDIT action=backup_root_file path={path} result=success")
-    except (subprocess.SubprocessError, OSError) as e:
-        write_diagnostic(f"AUDIT action=backup_root_file path={path} result=failed error={e}")
+def _sh_write_file(path: Path, content: str) -> str:
+    """Escribe un archivo root; copia `.blip-bak` previa si existe (D4).
+
+    La copia solo se hace la primera vez (la primera escritura manda).
+    """
+    p, bak = _q(path), _q(f"{path}.blip-bak")
+    return (
+        f"if [ -f {p} ] && [ ! -e {bak} ]; then cp -p {p} {bak}; fi\n"
+        f"printf %s {_q(content)} > {p}"
+    )
 
 
-def _remove_root_file(path: Path) -> bool:
-    """Borra archivo root via pkexec rm (D4: restaura .blip-bak si existe)."""
-    try:
-        backup = path.with_name(path.name + ".blip-bak")
-        _run_cmd(
-            ["pkexec", "sh", "-c",
-             f"if test -f {shlex.quote(str(backup))}; then "
-             f"mv -f {shlex.quote(str(backup))} {shlex.quote(str(path))}; else "
-             f"rm -f {shlex.quote(str(path))}; fi"],
-            check=True,
-        )
-        write_diagnostic(f"AUDIT action=remove_root_file path={path} result=success")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
-        write_diagnostic(f"AUDIT action=remove_root_file path={path} result=failed error={e}")
-        return False
+def _sh_remove_file(path: Path) -> str:
+    """Quita un archivo root; restaura `.blip-bak` si existe (D4)."""
+    p, bak = _q(path), _q(f"{path}.blip-bak")
+    return f"if [ -f {bak} ]; then mv -f {bak} {p}; else rm -f {p}; fi"
+
+
+def _run_privileged(steps: list[str]) -> subprocess.CompletedProcess:
+    """Ejecuta todos los pasos con UN solo `pkexec sh -c` (una autorización).
+
+    `set -e`: el primer paso que falle aborta el resto. Todo valor interpolado
+    en los pasos debe pasar por `_q`.
+    """
+    script = "set -e\n" + "\n".join(steps)
+    return _run_cmd(["pkexec", "sh", "-c", script], check=True)
+
+
+def _failure_text(exc: Exception) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        return (exc.stderr or "").strip() or f"código {exc.returncode}"
+    return str(exc)
 
 
 # ─── Tweak: TRIM periódico (fstrim.timer) ──────────────────────────────────
@@ -200,38 +174,37 @@ def tweak_zram_check_state() -> bool:
 
 
 def tweak_zram_apply(enable: bool) -> TweakResult:
-    """Habilita/deshabilita zram-generator."""
-    installed_deps = False
-    
+    """Habilita/deshabilita zram-generator (una sola autorización)."""
+    needs_pkg = enable and not _pkg_installed("zram-generator")
     if enable:
-        # Instalar zram-generator si no está
-        if not _pkg_installed("zram-generator"):
-            if not _install_pkg_via_pkexec("zram-generator"):
-                return TweakResult(success=False, message="No se pudo instalar zram-generator")
-            installed_deps = True
-        
-        # Escribir config
-        if not _write_root_file(ZRAM_CONFIG_PATH, ZRAM_CONFIG_CONTENT):
-            return TweakResult(success=False, message="No se pudo escribir config zram-generator", installed_deps=installed_deps)
-        
-        # Recargar daemon y habilitar
-        try:
-            _run_cmd(["pkexec", "systemctl", "daemon-reload"], check=True)
-            _run_cmd(["pkexec", "systemctl", "enable", "--now", ZRAM_UNIT], check=True)
-            write_diagnostic("AUDIT action=tweak_zram enable result=success")
-            return TweakResult(success=True, message="Compresión RAM (zram) activada", installed_deps=installed_deps)
-        except subprocess.CalledProcessError as e:
-            return TweakResult(success=False, message=f"Error activando zram: {e.stderr.strip()}", installed_deps=installed_deps)
+        steps = [_sh_install_pkg("zram-generator")] if needs_pkg else []
+        steps += [
+            _sh_write_file(ZRAM_CONFIG_PATH, ZRAM_CONFIG_CONTENT),
+            "systemctl daemon-reload",
+            f"systemctl enable --now {_q(ZRAM_UNIT)}",
+        ]
     else:
-        # Deshabilitar y limpiar
-        try:
-            _run_cmd(["pkexec", "systemctl", "disable", "--now", ZRAM_UNIT], check=True)
-            _remove_root_file(ZRAM_CONFIG_PATH)
-            _run_cmd(["pkexec", "systemctl", "daemon-reload"], check=True)
-            write_diagnostic("AUDIT action=tweak_zram disable result=success")
-            return TweakResult(success=True, message="Compresión RAM (zram) desactivada", installed_deps=installed_deps)
-        except subprocess.CalledProcessError as e:
-            return TweakResult(success=False, message=f"Error desactivando zram: {e.stderr.strip()}", installed_deps=installed_deps)
+        steps = [
+            f"systemctl disable --now {_q(ZRAM_UNIT)}",
+            _sh_remove_file(ZRAM_CONFIG_PATH),
+            "systemctl daemon-reload",
+        ]
+    try:
+        _run_privileged(steps)
+    except (subprocess.CalledProcessError, OSError) as e:
+        write_diagnostic(f"AUDIT action=tweak_zram enable={enable} result=failed error={_failure_text(e)}")
+        verb = "activando" if enable else "desactivando"
+        return TweakResult(
+            success=False,
+            message=f"Error {verb} zram: {_failure_text(e)}",
+            installed_deps=needs_pkg and _pkg_installed("zram-generator"),
+        )
+    write_diagnostic(f"AUDIT action=tweak_zram {'enable' if enable else 'disable'} result=success")
+    return TweakResult(
+        success=True,
+        message="Compresión RAM (zram) activada" if enable else "Compresión RAM (zram) desactivada",
+        installed_deps=needs_pkg,
+    )
 
 
 # ─── Tweak: zswap (caché de compresión del kernel) ────────────────────────
@@ -301,22 +274,25 @@ def tweak_zswap_check_state() -> bool:
 def tweak_zswap_apply(enable: bool) -> TweakResult:
     """Activa/desactiva zswap de forma persistente (tmpfiles.d) y al instante."""
     if enable:
-        if not _write_root_file(ZSWAP_CONFIG_PATH, ZSWAP_CONFIG_CONTENT):
-            return TweakResult(success=False, message="No se pudo escribir la configuración de zswap")
-        try:
-            _run_cmd(["pkexec", "systemd-tmpfiles", "--create", str(ZSWAP_CONFIG_PATH)], check=True)
-        except subprocess.CalledProcessError as e:
-            _remove_root_file(ZSWAP_CONFIG_PATH)  # revertir: no dejar config a medias
-            return TweakResult(success=False, message=f"Error activando zswap: {(e.stderr or '').strip()}")
-        write_diagnostic("AUDIT action=tweak_zswap enable result=success")
-        return TweakResult(success=True, message="zswap activado")
+        # Si tmpfiles falla, el propio script deshace la config (sin 2.º pkexec).
+        steps = [
+            _sh_write_file(ZSWAP_CONFIG_PATH, ZSWAP_CONFIG_CONTENT),
+            f"systemd-tmpfiles --create {_q(ZSWAP_CONFIG_PATH)} || "
+            f"{{ {_sh_remove_file(ZSWAP_CONFIG_PATH)}; exit 1; }}",
+        ]
+    else:
+        steps = [
+            _sh_remove_file(ZSWAP_CONFIG_PATH),
+            "echo 0 > /sys/module/zswap/parameters/enabled",
+        ]
     try:
-        _remove_root_file(ZSWAP_CONFIG_PATH)
-        _run_cmd(["pkexec", "sh", "-c", "echo 0 > /sys/module/zswap/parameters/enabled"], check=True)
-    except subprocess.CalledProcessError as e:
-        return TweakResult(success=False, message=f"Error desactivando zswap: {(e.stderr or '').strip()}")
-    write_diagnostic("AUDIT action=tweak_zswap disable result=success")
-    return TweakResult(success=True, message="zswap desactivado")
+        _run_privileged(steps)
+    except (subprocess.CalledProcessError, OSError) as e:
+        write_diagnostic(f"AUDIT action=tweak_zswap enable={enable} result=failed error={_failure_text(e)}")
+        verb = "activando" if enable else "desactivando"
+        return TweakResult(success=False, message=f"Error {verb} zswap: {_failure_text(e)}")
+    write_diagnostic(f"AUDIT action=tweak_zswap {'enable' if enable else 'disable'} result=success")
+    return TweakResult(success=True, message="zswap activado" if enable else "zswap desactivado")
 
 
 # ─── Tweak: Ordenar espejos (reflector) ────────────────────────────────────
@@ -358,47 +334,38 @@ def tweak_reflector_check_state() -> bool:
 
 
 def tweak_reflector_apply(enable: bool) -> TweakResult:
-    """Habilita/deshabilita reflector.timer."""
-    installed_deps = False
-    
+    """Habilita/deshabilita reflector.timer (una sola autorización)."""
+    needs_pkg = enable and not _pkg_installed("reflector")
     if enable:
-        # Instalar reflector si no está
-        if not _pkg_installed("reflector"):
-            if not _install_pkg_via_pkexec("reflector"):
-                return TweakResult(success=False, message="No se pudo instalar reflector")
-            installed_deps = True
-        
-        # Crear directorio config
-        try:
-            _run_cmd(["pkexec", "mkdir", "-p", str(REFLECTOR_CONFIG_DIR)], check=True)
-        except subprocess.CalledProcessError:
-            pass  # puede que ya exista
-        
-        # Escribir config
-        if not _write_root_file(REFLECTOR_CONFIG_PATH, REFLECTOR_CONFIG_CONTENT):
-            return TweakResult(success=False, message="No se pudo escribir config reflector", installed_deps=installed_deps)
-        
-        # Habilitar timer
-        try:
-            _run_cmd(["pkexec", "systemctl", "enable", "--now", REFLECTOR_UNIT], check=True)
-            write_diagnostic("AUDIT action=tweak_reflector enable result=success")
-            return TweakResult(success=True, message="Espejos optimizados (reflector) activado", installed_deps=installed_deps)
-        except subprocess.CalledProcessError as e:
-            return TweakResult(success=False, message=f"Error activando reflector: {e.stderr.strip()}", installed_deps=installed_deps)
+        steps = [_sh_install_pkg("reflector")] if needs_pkg else []
+        steps += [
+            f"mkdir -p {_q(REFLECTOR_CONFIG_DIR)}",
+            _sh_write_file(REFLECTOR_CONFIG_PATH, REFLECTOR_CONFIG_CONTENT),
+            f"systemctl enable --now {_q(REFLECTOR_UNIT)}",
+        ]
     else:
-        # Deshabilitar y limpiar
-        try:
-            _run_cmd(["pkexec", "systemctl", "disable", "--now", REFLECTOR_UNIT], check=True)
-            _remove_root_file(REFLECTOR_CONFIG_PATH)
-            # Intentar borrar directorio si quedó vacío
-            try:
-                _run_cmd(["pkexec", "rmdir", str(REFLECTOR_CONFIG_DIR)], check=False)
-            except Exception:
-                pass
-            write_diagnostic("AUDIT action=tweak_reflector disable result=success")
-            return TweakResult(success=True, message="Espejos optimizados (reflector) desactivado", installed_deps=installed_deps)
-        except subprocess.CalledProcessError as e:
-            return TweakResult(success=False, message=f"Error desactivando reflector: {e.stderr.strip()}", installed_deps=installed_deps)
+        steps = [
+            f"systemctl disable --now {_q(REFLECTOR_UNIT)}",
+            _sh_remove_file(REFLECTOR_CONFIG_PATH),
+            # Borra el directorio solo si quedó vacío.
+            f"rmdir {_q(REFLECTOR_CONFIG_DIR)} 2>/dev/null || true",
+        ]
+    try:
+        _run_privileged(steps)
+    except (subprocess.CalledProcessError, OSError) as e:
+        write_diagnostic(f"AUDIT action=tweak_reflector enable={enable} result=failed error={_failure_text(e)}")
+        verb = "activando" if enable else "desactivando"
+        return TweakResult(
+            success=False,
+            message=f"Error {verb} reflector: {_failure_text(e)}",
+            installed_deps=needs_pkg and _pkg_installed("reflector"),
+        )
+    write_diagnostic(f"AUDIT action=tweak_reflector {'enable' if enable else 'disable'} result=success")
+    return TweakResult(
+        success=True,
+        message="Espejos optimizados (reflector) activado" if enable else "Espejos optimizados (reflector) desactivado",
+        installed_deps=needs_pkg,
+    )
 
 
 # ─── Registro de tweaks ────────────────────────────────────────────────────
