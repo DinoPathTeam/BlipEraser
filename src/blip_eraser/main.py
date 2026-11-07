@@ -217,6 +217,13 @@ def main() -> int:
                     text += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
                 QMessageBox.information(window, "Dependencias instaladas", text)
 
+            # Lanzada desde la bandeja ("Limpieza rápida"): abre el flujo de
+            # limpieza con su confirmación habitual, ya con la ventana lista.
+            if "--cleanup" in sys.argv[1:]:
+                from PyQt6.QtCore import QTimer
+
+                QTimer.singleShot(0, window._overview._cleanup_now)
+
         # Disparar escaneo PRIMERO, encadenar refresh_appearance() al final
         window._overview.start_initial_scan(on_finished=_post_scan)
 

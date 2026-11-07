@@ -11,6 +11,31 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔔 Bandeja del sistema (`blip-eraser-tray`)
+
+- **Qué es**: proceso aparte (`blip-eraser-tray` o `python -m blip_eraser.tray`)
+  con un icono de bandeja; no abre la ventana principal. Instancia única
+  (`QLockFile`); sale con un mensaje si el escritorio no tiene bandeja.
+- **Consumo en reposo nulo**: al abrir el menú, un hilo calcula CPU/RAM/disco
+  (`system_stats`) y el espacio recuperable (`scan_cleanup`); el menú muestra
+  "Calculando…" hasta que llegan.
+- **Avisos** (`tray/logic.py`, pura y testeada): UNA comprobación 10 s después
+  de iniciar, con la caché de 24 h de `check_for_updates`. Versión nueva: una
+  vez por versión (`tray_notified_version`). Espacio recuperable ≥ 5 GiB: como
+  mucho cada 24 h (`tray_junk_notified_at`); una marca corrupta o futura no
+  silencia para siempre. `tray_notifications: false` lo apaga todo.
+- **La bandeja no borra nada**: "Limpieza rápida…" y el aviso de basura abren la
+  app con `--cleanup`, que dispara el flujo de limpieza de la Vista general con
+  su confirmación habitual (`main.py`). Clics repetidos en 8 s se ignoran.
+- **Autoarranque opt-in** desde el propio menú: crea/borra
+  `~/.config/autostart/blip-eraser-tray.desktop` (respeta `XDG_CONFIG_HOME`).
+- **Empaquetado**: script `blip-eraser-tray` en `pyproject.toml`,
+  `packaging/blip-eraser-tray.desktop` instalado por el PKGBUILD y por
+  `install-daemon.sh`. El Flatpak no la incluye (necesitaría permiso para
+  StatusNotifierWatcher).
+- Claves i18n nuevas `tray_*` (ES/EN). Tests: `test_tray_logic.py`,
+  `test_tray_gui.py`.
+
 ### 🚀 v1.1.1: fluidez del escaneo, endurecimiento y aviso de versión
 
 - **Fluidez**: el escaneo (botón y autoescaneo) ya no deja la app colgada. La

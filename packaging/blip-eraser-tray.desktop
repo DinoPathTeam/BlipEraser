@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=BlipEraser (tray)
+Name[es]=BlipEraser (bandeja)
+Comment=BlipEraser tray icon with quick system status and cleanup
+Comment[es]=Icono de bandeja de BlipEraser con estado del sistema y limpieza rápida
+Exec=blip-eraser-tray
+Icon=blip-eraser
+Terminal=false
+Type=Application
+Categories=System;
+Keywords=tray;cleaner;pacman;arch;
+Keywords[es]=bandeja;limpiar;pacman;arch;
+StartupNotify=false

@@ -119,6 +119,10 @@ sudo systemctl daemon-reload
 The script is the reference; prefer it over copying these lines by hand.
 </details>
 
+### Tray icon (optional)
+
+`blip-eraser-tray` runs a separate, lightweight tray icon (it does not open the main window). Nothing is computed while it idles: opening its menu shows CPU/RAM/disk and the recoverable space, calculated on demand. "Quick cleanup…" opens BlipEraser straight into the usual cleanup confirmation; the tray itself never deletes anything. Once at start it uses the same 24-hour update cache to notify about a new version, and warns (at most once a day) when 5 GiB or more can be recovered. The menu has toggles to start with your session and to silence notifications (`"tray_notifications": false` in `prefs.json`). Native install only: the Flatpak does not ship it.
+
 ### Flatpak
 
 Each [release](https://github.com/DinoPathTeam/BlipEraser/releases/latest) includes a `.flatpak` bundle. Install the host daemon first (`./scripts/install-daemon.sh`), then `flatpak install --user BlipEraser-v<version>-x86_64.flatpak`.
