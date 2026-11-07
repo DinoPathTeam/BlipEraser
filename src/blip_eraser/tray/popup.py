@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 
 from PyQt6.QtCore import QEvent, QPoint, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -20,7 +21,6 @@ from PyQt6.QtWidgets import (
 )
 
 from blip_eraser import __version__
-from blip_eraser.tray import logic
 from blip_eraser.utils import theme as theme_mod
 from blip_eraser.utils.config import load_prefs
 from blip_eraser.utils.file_utils import human_size
@@ -54,6 +54,7 @@ class TrayPopup(QWidget):
     scan_requested = pyqtSignal()
     clean_requested = pyqtSignal()
     open_requested = pyqtSignal()
+    dragged_to = pyqtSignal(int, int)  # posición final tras arrastrar (no Wayland)
 
     def __init__(self) -> None:
         # NO es Qt.Popup: en Wayland un popup con "grab" exige una ventana padre
@@ -69,6 +70,8 @@ class TrayPopup(QWidget):
         self.setFixedWidth(POPUP_WIDTH)
         self._closed_at = 0.0
         self._was_active = False
+        self._drag_offset: QPoint | None = None
+        self._dragged = False
         self._busy = False
         self._recoverable: int | None = None
         self._theme_key = ""
@@ -193,7 +196,42 @@ class TrayPopup(QWidget):
     def hideEvent(self, event) -> None:  # noqa: N802 - API de Qt
         self._closed_at = time.monotonic()
         self._was_active = False
+        if self._dragged:
+            self._dragged = False
+            # En Wayland la posición de la ventana no es legible ni respetada:
+            # solo se recuerda donde la plataforma la controla (X11/XWayland).
+            if QGuiApplication.platformName() != "wayland":
+                self.dragged_to.emit(self.x(), self.y())
         super().hideEvent(event)
+
+    def _try_system_move(self) -> bool:
+        handle = self.windowHandle()
+        return bool(handle is not None and handle.startSystemMove())
+
+    # -- arrastrar la ventanita desde cualquier zona que no sea un botón ----
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        if event.button() == Qt.MouseButton.LeftButton:
+            # El propio compositor mueve la ventana (funciona también en Wayland).
+            if self._try_system_move():
+                self._dragged = True
+                event.accept()
+                return
+            self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        if self._drag_offset is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            self._dragged = True
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 - API de Qt
+        self._drag_offset = None
+        super().mouseReleaseEvent(event)
 
     def changeEvent(self, event) -> None:  # noqa: N802 - API de Qt
         if event.type() == QEvent.Type.ActivationChange and self.isVisible():
@@ -210,14 +248,11 @@ class TrayPopup(QWidget):
             return
         super().keyPressEvent(event)
 
-    def show_at(self, anchor: QPoint, screen_rect: tuple[int, int, int, int]) -> None:
+    def show_at(self, pos: tuple[int, int]) -> None:
         self.apply_theme()
         self.retranslate()
         self.adjustSize()
-        x, y = logic.popup_position(
-            (anchor.x(), anchor.y()), (self.width(), self.height()), screen_rect
-        )
-        self.move(x, y)
+        self.move(*pos)
         self.show()
         self.raise_()
         self.activateWindow()

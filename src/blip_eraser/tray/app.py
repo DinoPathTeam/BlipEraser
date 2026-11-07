@@ -33,6 +33,7 @@ from blip_eraser.utils.log import write_diagnostic
 STARTUP_CHECK_DELAY_MS = 10_000
 OPEN_DEBOUNCE_SECONDS = 8.0
 CPU_SAMPLE_GAP_SECONDS = 0.25
+WAIT_LOCK_FLAG = "--wait-lock"  # el relanzado espera a que la instancia vieja suelte el bloqueo
 RELEASES_URL = "https://github.com/DinoPathTeam/BlipEraser/releases/latest"
 
 
@@ -129,6 +130,7 @@ def build_controller(app: Any = None) -> Any:
             self.popup.scan_requested.connect(self.refresh_stats)
             self.popup.clean_requested.connect(self.clean)
             self.popup.open_requested.connect(self._open_from_popup)
+            self.popup.dragged_to.connect(self._save_dragged_position)
 
             # Clic derecho: ajustes de la bandeja. El clic izquierdo abre la ventanita.
             self.menu = QMenu()
@@ -141,12 +143,14 @@ def build_controller(app: Any = None) -> Any:
             self.notify_action.setChecked(
                 load_prefs().get("tray_notifications", True) is not False
             )
+            self.restart_action = QAction(tr("tray_restart"), self.menu)
             self.quit_action = QAction(tr("tray_quit"), self.menu)
             self.menu.addAction(self.open_action)
             self.menu.addSeparator()
             self.menu.addAction(self.autostart_action)
             self.menu.addAction(self.notify_action)
             self.menu.addSeparator()
+            self.menu.addAction(self.restart_action)
             self.menu.addAction(self.quit_action)
             self.tray.setContextMenu(self.menu)
 
@@ -155,6 +159,7 @@ def build_controller(app: Any = None) -> Any:
             self.notify_action.toggled.connect(
                 lambda on: save_prefs({"tray_notifications": bool(on)})
             )
+            self.restart_action.triggered.connect(lambda: QTimer.singleShot(0, self.restart))
             self.quit_action.triggered.connect(lambda: QTimer.singleShot(0, self._quit))
             self.tray.activated.connect(self._on_activated)
             self.tray.messageClicked.connect(self._on_message_clicked)
@@ -172,10 +177,19 @@ def build_controller(app: Any = None) -> Any:
             screen = QGuiApplication.screenAt(anchor) or QGuiApplication.primaryScreen()
             area = screen.availableGeometry()
             apply_app_appearance()
-            self.popup.show_at(
-                anchor, (area.x(), area.y(), area.width(), area.height())
+            self.popup.apply_theme()
+            self.popup.adjustSize()
+            pos = logic.resolve_position(
+                load_prefs(),
+                (anchor.x(), anchor.y()),
+                (self.popup.width(), self.popup.height()),
+                (area.x(), area.y(), area.width(), area.height()),
             )
+            self.popup.show_at(pos)
             self.refresh_stats()
+
+        def _save_dragged_position(self, x: int, y: int) -> None:
+            save_prefs({logic.PREF_POSITION: logic.POS_CUSTOM, logic.PREF_CUSTOM: [x, y]})
 
         def _open_from_popup(self) -> None:
             self.popup.hide()
@@ -320,6 +334,16 @@ def build_controller(app: Any = None) -> Any:
                 self.show_popup()
             self._notice_kind = None
 
+        def restart(self) -> None:
+            """Relanza la bandeja (p. ej. para aplicar una posición fija en Wayland)."""
+            from PyQt6.QtCore import QProcess
+
+            cmd = logic.tray_command() + [WAIT_LOCK_FLAG]
+            if QProcess.startDetached(cmd[0], cmd[1:]):
+                self._quit()
+            else:
+                write_diagnostic(f"tray: no se pudo reiniciar {logic.shell_preview(cmd)}")
+
         def _quit(self) -> None:
             self.popup.hide()
             self.tray.hide()
@@ -336,6 +360,13 @@ def main() -> int:
         print("PyQt6 no está instalado.", file=sys.stderr)
         return 1
 
+    import os
+
+    # Wayland no deja que una app elija dónde se abre su ventana: con una
+    # posición fija/arrastrada se usa XWayland si existe (y Wayland si falla).
+    if logic.should_force_xcb(dict(os.environ), load_prefs()):
+        os.environ["QT_QPA_PLATFORM"] = "xcb;wayland"
+
     from PyQt6.QtCore import QDir, QLockFile
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 
@@ -351,7 +382,7 @@ def main() -> int:
 
     lock = QLockFile(QDir.tempPath() + "/blip-eraser-tray.lock")
     lock.setStaleLockTime(0)
-    if not lock.tryLock(100):
+    if not lock.tryLock(6000 if WAIT_LOCK_FLAG in sys.argv[1:] else 100):
         return 0  # ya hay una bandeja activa
 
     controller = build_controller(app)

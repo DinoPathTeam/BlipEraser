@@ -130,3 +130,78 @@ class TestPopupPosition:
     def test_respects_screen_offset(self):
         x, y = logic.popup_position((2000, 100), self.SIZE, (1920, 0, 1920, 1080))
         assert x >= 1920 and y >= 0
+
+
+class TestFixedPositions:
+    SCREEN = (0, 0, 1920, 1080)
+    SIZE = (300, 233)
+
+    def test_nine_positions_are_distinct_and_inside(self):
+        seen = set()
+        for key in logic.FIXED_POSITIONS:
+            x, y = logic.fixed_position(key, self.SIZE, self.SCREEN)
+            assert 0 <= x <= 1920 - 300 and 0 <= y <= 1080 - 233
+            seen.add((x, y))
+        assert len(seen) == 9
+
+    def test_corners_edges_and_center(self):
+        fp = lambda k: logic.fixed_position(k, self.SIZE, self.SCREEN)  # noqa: E731
+        assert fp("top-left") == (16, 16)
+        assert fp("bottom-right") == (1920 - 300 - 16, 1080 - 233 - 16)
+        assert fp("center") == ((1920 - 300) // 2, (1080 - 233) // 2)
+        assert fp("top")[1] == 16 and fp("bottom")[1] == 1080 - 233 - 16
+        assert fp("left")[0] == 16 and fp("right")[0] == 1920 - 300 - 16
+
+    def test_second_monitor_offset(self):
+        x, y = logic.fixed_position("top-left", self.SIZE, (1920, 0, 1920, 1080))
+        assert x == 1920 + 16 and y == 16
+
+    def test_window_bigger_than_screen_does_not_escape(self):
+        assert logic.fixed_position("center", (3000, 2000), self.SCREEN) == (0, 0)
+
+
+class TestResolvePosition:
+    SCREEN = (0, 0, 1920, 1080)
+    SIZE = (300, 233)
+    ANCHOR = (1800, 1060)
+
+    def test_auto_follows_the_icon(self):
+        got = logic.resolve_position({}, self.ANCHOR, self.SIZE, self.SCREEN)
+        assert got == logic.popup_position(self.ANCHOR, self.SIZE, self.SCREEN)
+
+    def test_fixed_ignores_the_icon(self):
+        prefs = {logic.PREF_POSITION: "top-left"}
+        assert logic.resolve_position(prefs, self.ANCHOR, self.SIZE, self.SCREEN) == (16, 16)
+
+    def test_custom_uses_saved_position_clamped_to_the_screen(self):
+        prefs = {logic.PREF_POSITION: "custom", logic.PREF_CUSTOM: [500, 300]}
+        assert logic.resolve_position(prefs, self.ANCHOR, self.SIZE, self.SCREEN) == (500, 300)
+        prefs[logic.PREF_CUSTOM] = [9000, -50]  # monitor que ya no existe
+        assert logic.resolve_position(prefs, self.ANCHOR, self.SIZE, self.SCREEN) == (1620, 0)
+
+    @pytest.mark.parametrize("bad", [None, "x", [1], [1, 2, 3], ["a", 2], [True, 2]])
+    def test_corrupt_custom_or_unknown_key_falls_back_to_icon(self, bad):
+        auto = logic.popup_position(self.ANCHOR, self.SIZE, self.SCREEN)
+        prefs = {logic.PREF_POSITION: "custom", logic.PREF_CUSTOM: bad}
+        assert logic.resolve_position(prefs, self.ANCHOR, self.SIZE, self.SCREEN) == auto
+        prefs = {logic.PREF_POSITION: "diagonal"}
+        assert logic.resolve_position(prefs, self.ANCHOR, self.SIZE, self.SCREEN) == auto
+
+
+class TestForceXcb:
+    WL = {"WAYLAND_DISPLAY": "wayland-0", "DISPLAY": ":0"}
+
+    def test_only_when_a_fixed_or_custom_position_is_chosen(self):
+        assert not logic.should_force_xcb(self.WL, {})
+        assert not logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "auto"})
+        assert logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "top"})
+        assert logic.should_force_xcb(self.WL, {logic.PREF_POSITION: "custom"})
+
+    def test_needs_wayland_session_with_xwayland(self):
+        prefs = {logic.PREF_POSITION: "top"}
+        assert not logic.should_force_xcb({"DISPLAY": ":0"}, prefs)  # ya es X11
+        assert not logic.should_force_xcb({"WAYLAND_DISPLAY": "wayland-0"}, prefs)  # sin XWayland
+
+    def test_respects_an_explicit_platform(self):
+        env = {**self.WL, "QT_QPA_PLATFORM": "wayland"}
+        assert not logic.should_force_xcb(env, {logic.PREF_POSITION: "top"})

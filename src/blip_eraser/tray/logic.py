@@ -173,3 +173,95 @@ def popup_position(
     x = max(sx + POPUP_MARGIN, min(x, sx + sw - w - POPUP_MARGIN))
     y = max(sy + POPUP_MARGIN, min(y, sy + sh - h - POPUP_MARGIN))
     return x, y
+
+
+# ---------------------------------------------------------------------------
+# Posición elegida por el usuario
+# ---------------------------------------------------------------------------
+POS_AUTO = "auto"  # junto al icono de bandeja (por defecto)
+POS_CUSTOM = "custom"  # arrastrada por el usuario (solo con plataforma que lo permita)
+# Rejilla 3x3: (clave, columna, fila). Las 9 posiciones fijas del selector.
+GRID_POSITIONS: tuple[tuple[str, int, int], ...] = (
+    ("top-left", 0, 0), ("top", 1, 0), ("top-right", 2, 0),
+    ("left", 0, 1), ("center", 1, 1), ("right", 2, 1),
+    ("bottom-left", 0, 2), ("bottom", 1, 2), ("bottom-right", 2, 2),
+)
+FIXED_POSITIONS = tuple(key for key, _c, _r in GRID_POSITIONS)
+PREF_POSITION = "tray_popup_position"
+PREF_CUSTOM = "tray_popup_custom"
+FIXED_MARGIN = 16
+
+
+def fixed_position(
+    key: str,
+    size: tuple[int, int],
+    screen: tuple[int, int, int, int],
+    margin: int = FIXED_MARGIN,
+) -> tuple[int, int]:
+    """Esquina superior izquierda de la ventanita en una de las 9 posiciones.
+
+    Usa el área disponible de la pantalla (sin paneles). `key` desconocida =
+    abajo a la derecha, la zona habitual de la bandeja.
+    """
+    col, row = next(((c, r) for k, c, r in GRID_POSITIONS if k == key), (2, 2))
+    w, h = size
+    sx, sy, sw, sh = screen
+    x = (sx + margin, sx + (sw - w) // 2, sx + sw - w - margin)[col]
+    y = (sy + margin, sy + (sh - h) // 2, sy + sh - h - margin)[row]
+    return (
+        max(sx, min(x, sx + sw - w)),
+        max(sy, min(y, sy + sh - h)),
+    )
+
+
+def _valid_custom(value: object) -> tuple[int, int] | None:
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and all(isinstance(v, int) and not isinstance(v, bool) for v in value)
+    ):
+        return int(value[0]), int(value[1])
+    return None
+
+
+def resolve_position(
+    prefs: dict,
+    anchor: tuple[int, int],
+    size: tuple[int, int],
+    screen: tuple[int, int, int, int],
+) -> tuple[int, int]:
+    """Dónde abrir la ventanita según la preferencia del usuario.
+
+    - posición fija elegida en la app → esa esquina/borde/centro;
+    - `custom` → la última posición arrastrada, recortada a la pantalla;
+    - `auto` o valor desconocido/corrupto → junto al icono.
+    """
+    key = prefs.get(PREF_POSITION, POS_AUTO)
+    if key in FIXED_POSITIONS:
+        return fixed_position(key, size, screen)
+    if key == POS_CUSTOM:
+        custom = _valid_custom(prefs.get(PREF_CUSTOM))
+        if custom is not None:
+            sx, sy, sw, sh = screen
+            w, h = size
+            return (
+                max(sx, min(custom[0], sx + sw - w)),
+                max(sy, min(custom[1], sy + sh - h)),
+            )
+    return popup_position(anchor, size, screen)
+
+
+def should_force_xcb(env: dict, prefs: dict) -> bool:
+    """True si conviene arrancar la bandeja vía XWayland para poder colocarla.
+
+    En Wayland una aplicación no puede decidir dónde se abre su ventana; con
+    X11/XWayland sí. Solo se fuerza cuando el usuario eligió una posición fija o
+    personalizada, hay sesión Wayland con XWayland disponible y no fijó él mismo
+    `QT_QPA_PLATFORM`. (Con `auto` se queda en Wayland nativo: nítido con
+    escalado fraccionario.)
+    """
+    if env.get("QT_QPA_PLATFORM"):
+        return False
+    if prefs.get(PREF_POSITION, POS_AUTO) in (POS_AUTO, None):
+        return False
+    return bool(env.get("WAYLAND_DISPLAY")) and bool(env.get("DISPLAY"))

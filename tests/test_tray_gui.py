@@ -324,3 +324,118 @@ def test_escape_closes_the_popup(qapp, ctl):
     ctl.popup.show()
     QTest.keyClick(ctl.popup, Qt.Key.Key_Escape)
     assert not ctl.popup.isVisible()
+
+
+# --- posición: arrastrar, preferencia y ajustes de la app --------------------------
+def _screen_rect():
+    from PyQt6.QtGui import QGuiApplication
+
+    a = QGuiApplication.primaryScreen().availableGeometry()
+    return a.x(), a.y(), a.width(), a.height()
+
+
+def test_show_popup_honours_the_fixed_position_from_settings(qapp, ctl, monkeypatch):
+    _fake_stats(monkeypatch)
+    config_mod.save_prefs({logic.PREF_POSITION: "top-left"})
+    ctl.show_popup()
+    sx, sy, _w, _h = _screen_rect()
+    assert (ctl.popup.x(), ctl.popup.y()) == (sx + 16, sy + 16)
+    _pump(qapp, lambda: not ctl._gathering)
+
+
+def test_show_popup_uses_saved_dragged_position(qapp, ctl, monkeypatch):
+    _fake_stats(monkeypatch)
+    sx, sy, _w, _h = _screen_rect()
+    config_mod.save_prefs({logic.PREF_POSITION: "custom", logic.PREF_CUSTOM: [sx + 120, sy + 90]})
+    ctl.show_popup()
+    assert (ctl.popup.x(), ctl.popup.y()) == (sx + 120, sy + 90)
+    _pump(qapp, lambda: not ctl._gathering)
+
+
+def test_dragging_moves_the_window_and_hiding_saves_the_position(qapp, ctl, monkeypatch):
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+
+    monkeypatch.setattr(ctl.popup, "_try_system_move", lambda: False)  # camino manual (sin compositor)
+    ctl.popup.move(100, 100)
+    ctl.popup.show()
+    # Zona libre: la cabecera (no un botón).
+    start = QPoint(150, 10)
+    QTest.mousePress(ctl.popup, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+    QTest.mouseMove(ctl.popup, QPoint(250, 60))
+    QTest.mouseRelease(ctl.popup, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(250, 60))
+    moved = (ctl.popup.x(), ctl.popup.y())
+    assert moved != (100, 100)
+    ctl.popup.hide()
+    prefs = config_mod.load_prefs()
+    assert prefs[logic.PREF_POSITION] == "custom"
+    assert prefs[logic.PREF_CUSTOM] == list(moved)
+
+
+def test_hiding_without_dragging_does_not_touch_the_position(qapp, ctl):
+    ctl.popup.show()
+    ctl.popup.hide()
+    assert logic.PREF_POSITION not in config_mod._read_raw()
+
+
+def test_restart_launches_a_new_tray_that_waits_for_the_lock(ctl, monkeypatch):
+    from PyQt6.QtCore import QProcess
+
+    launched = []
+    monkeypatch.setattr(
+        QProcess, "startDetached", staticmethod(lambda prog, args: launched.append(args) or True)
+    )
+    quits = []
+    monkeypatch.setattr(ctl, "_quit", lambda: quits.append(1))
+    ctl.restart()
+    assert launched == [["-m", "blip_eraser.tray", "--wait-lock"]] and quits == [1]
+
+
+def test_restart_that_fails_keeps_the_current_tray_alive(ctl, monkeypatch):
+    from PyQt6.QtCore import QProcess
+
+    monkeypatch.setattr(QProcess, "startDetached", staticmethod(lambda *a: False))
+    quits = []
+    monkeypatch.setattr(ctl, "_quit", lambda: quits.append(1))
+    ctl.restart()
+    assert quits == []
+
+
+def test_settings_page_saves_the_chosen_position(qapp, ctl):
+    from blip_eraser.pages.settings_page import SettingsPage
+
+    page = SettingsPage()
+    page._pos_buttons["bottom-left"].click()
+    assert config_mod.load_prefs()[logic.PREF_POSITION] == "bottom-left"
+    assert page._pos_buttons["bottom-left"].isChecked()
+    page._pos_buttons["auto"].click()
+    assert config_mod.load_prefs()[logic.PREF_POSITION] == "auto"
+    assert not page._pos_buttons["bottom-left"].isChecked()
+
+
+def test_settings_page_reflects_a_dragged_position(qapp, ctl):
+    from blip_eraser.pages.settings_page import SettingsPage
+
+    config_mod.save_prefs({logic.PREF_POSITION: "custom", logic.PREF_CUSTOM: [1, 2]})
+    page = SettingsPage()
+    page.show()
+    qapp.processEvents()
+    assert not any(b.isChecked() for b in page._pos_buttons.values())
+    assert page.tray_custom_label.isVisible()
+    config_mod.save_prefs({logic.PREF_POSITION: "top"})
+    page._sync_tray_position()
+    assert page._pos_buttons["top"].isChecked() and not page.tray_custom_label.isVisible()
+    page.close()
+
+
+def test_compositor_drag_also_counts_as_dragged(qapp, ctl, monkeypatch):
+    from PyQt6.QtCore import QPoint, Qt
+    from PyQt6.QtTest import QTest
+
+    monkeypatch.setattr(ctl.popup, "_try_system_move", lambda: True)
+    ctl.popup.move(200, 150)
+    ctl.popup.show()
+    QTest.mousePress(ctl.popup, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, QPoint(150, 10))
+    assert ctl.popup._dragged
+    ctl.popup.hide()
+    assert config_mod.load_prefs()[logic.PREF_POSITION] == "custom"

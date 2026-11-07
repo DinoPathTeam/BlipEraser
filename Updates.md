@@ -25,6 +25,18 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   grabbing popup"); se cierra al perder el foco o con Esc. Se coloca junto al icono (`logic.popup_position`, siempre dentro de la
   pantalla; en Wayland el compositor decide la posición de las ventanas, así que
   allí puede aparecer en otro sitio) y un clic que acaba de cerrarla no la reabre.
+- **Posición**: se puede **arrastrar** desde cualquier zona libre (con
+  `startSystemMove`, que también funciona en Wayland; si no, arrastre manual).
+  En Ajustes de la app padre hay un selector 3x3 (esquinas, bordes y centro) +
+  "Junto al icono" (`tray_popup_position`). Tras arrastrar en X11/XWayland se
+  guarda la posición (`custom` + `tray_popup_custom`, recortada a la pantalla
+  al abrir). En Wayland el compositor no deja a una app elegir dónde se abre
+  su ventana, así que con una posición fija/personalizada la bandeja arranca
+  por XWayland (`QT_QPA_PLATFORM=xcb;wayland`, con Wayland como respaldo) solo
+  si existe y el usuario no fijó la plataforma; con "Junto al icono" sigue en
+  Wayland nativo. Tras cambiar entre automático y fijo en Wayland hay que usar
+  "Reiniciar bandeja" (clic derecho), que relanza esperando el bloqueo
+  (`--wait-lock`).
 - **Clic derecho = ajustes**: abrir, iniciar con la sesión, avisos y salir.
 - **Consumo en reposo nulo**: CPU/RAM/disco y `scan_cleanup` se calculan en un
   hilo solo al abrir la ventanita o pulsar Escanear.

@@ -277,6 +277,7 @@ class MainWindow(QMainWindow):
         self.app_logo.set_accent(accent)
         self._overview.set_accent(accent)
         self._overview.set_text_color(palette.get("text", "#ececef"))
+        self._tools.settings.set_accent(accent)
 
         family = theme_mod.font_family(prefs.get("font", "system"))
         font = QFont(family) if family else QFont()
