@@ -41,7 +41,12 @@ modules:
       # backend meson, luego pycairo y PyGObject desde sdist, luego PyQt6.
       # Sin PyGObject la app cae a pkexec-host; con él usa el daemon.
       - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation meson-python pyproject-metadata
-      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation pycairo PyGObject
+      # pycairo primero y por separado: el meson.build de PyGObject localiza los
+      # encabezados con find_spec("cairo") en el Python del build, que no ve
+      # /app. La 25.08 ya no trae pycairo/pygobject en el runtime, así que sin
+      # este PYTHONPATH falla con "py3cairo.h: No such file or directory".
+      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation pycairo
+      - PYTHONPATH="$(echo /app/lib/python3.*/site-packages)" pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation PyGObject
       - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" PyQt6
     sources:
       - type: file

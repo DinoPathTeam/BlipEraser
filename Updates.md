@@ -20,6 +20,9 @@ Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
 - **Ruedas**: se añade `pyqt6_sip` para `cp313` (no es abi3); pip instala la
   que coincide con el intérprete. `krb5` se compila con `-std=gnu17` por si el
   compilador del runtime usa C23 por defecto.
+- **PyGObject**: `pycairo` se instala antes y por separado, y PyGObject se
+  compila con `PYTHONPATH` apuntando a `/app` (su `meson.build` busca los
+  encabezados con `find_spec("cairo")`; la 25.08 ya no trae pycairo).
 - Pendiente de comprobar en un build real (`flatpak-builder`): no se ha podido
   construir en el entorno de desarrollo.
 
