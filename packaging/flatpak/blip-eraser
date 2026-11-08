@@ -1,5 +1,10 @@
 #!/bin/sh
 # Lanzador Flatpak de BlipEraser — PYTHONPATH directo, sin pip.
-# fd-sdk 24.08 = Python 3.12 (fijado por runtime-version del manifest).
-export PYTHONPATH=/app/blip-eraser-pkg:/app/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}
+# La versión de Python depende del runtime (24.08 = 3.12, 25.08 = 3.13): se
+# añade el site-packages que exista en /app/lib, sin fijar la versión.
+PYTHONPATH=/app/blip-eraser-pkg${PYTHONPATH:+:$PYTHONPATH}
+for d in /app/lib/python3.*/site-packages; do
+    [ -d "$d" ] && PYTHONPATH="$PYTHONPATH:$d"
+done
+export PYTHONPATH
 exec python3 -m blip_eraser "$@"

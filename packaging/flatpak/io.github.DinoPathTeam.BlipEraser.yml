@@ -1,6 +1,6 @@
 app-id: io.github.DinoPathTeam.BlipEraser
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 command: blip-eraser
 finish-args:
@@ -21,6 +21,11 @@ modules:
     # QtNetwork del wheel enlaza libgssapi_krb5 (ausente en el runtime):
     # sin esto QtMultimedia ni siquiera importa y el splash cae al logo.
     buildsystem: simple
+    build-options:
+      env:
+        # krb5 1.21.3 es C antiguo: con GCC >= 15 (C23 por defecto) puede no
+        # compilar. Fijar gnu17 no afecta a compiladores anteriores.
+        CFLAGS: -O2 -g -std=gnu17
     build-commands:
       - cd src && ./configure --prefix=/app --without-ldap --without-keyutils --disable-pkinit
       - cd src && make -j$(nproc)
@@ -36,7 +41,12 @@ modules:
       # backend meson, luego pycairo y PyGObject desde sdist, luego PyQt6.
       # Sin PyGObject la app cae a pkexec-host; con él usa el daemon.
       - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation meson-python pyproject-metadata
-      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation pycairo PyGObject
+      # pycairo primero y por separado: el meson.build de PyGObject localiza los
+      # encabezados con find_spec("cairo") en el Python del build, que no ve
+      # /app. La 25.08 ya no trae pycairo/pygobject en el runtime, así que sin
+      # este PYTHONPATH falla con "py3cairo.h: No such file or directory".
+      - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation pycairo
+      - PYTHONPATH="$(echo /app/lib/python3.*/site-packages)" pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" --no-deps --no-build-isolation PyGObject
       - pip3 install --verbose --prefix=/app --no-index --find-links="${PWD}" PyQt6
     sources:
       - type: file
@@ -51,9 +61,14 @@ modules:
       - type: file
         url: https://files.pythonhosted.org/packages/69/ef/e34054e814c874f5230326ffc791f602a13b2f5590ca9599ba45b5fc4bc0/pyqt6_qt6-6.11.2-py3-none-manylinux_2_34_x86_64.whl
         sha256: da7d747ad917f044d841ff834f17d2c50a0cc5d0e3b16479d8662544207d0567
+      # pyqt6_sip no es abi3: una rueda por versión de Python. pip elige la que
+      # coincide con el intérprete del runtime (25.08 = 3.13; 3.12 por si acaso).
       - type: file
         url: https://files.pythonhosted.org/packages/63/4c/3d4217383269153a3026e825dd109968561638d20394671e4dc8e13c6a95/pyqt6_sip-13.12.0-cp312-cp312-manylinux1_x86_64.manylinux_2_5_x86_64.whl
         sha256: 3476132fc5c85d7136eb14cb7d9e1909e9f5ee94a85d892e4ac244990ba541b3
+      - type: file
+        url: https://files.pythonhosted.org/packages/34/9a/3f8127196bb2e303914c92670590633a7b3141aca640dc0122c326366c3d/pyqt6_sip-13.12.0-cp313-cp313-manylinux1_x86_64.manylinux_2_5_x86_64.whl
+        sha256: 5b5610a21401dbf97eaa82a2d35e727d3269ef370f299a892ff154f4b6f338ca
       - type: file
         url: https://files.pythonhosted.org/packages/26/7c/ab4637b028d9ee12280ab9342f28310e613d5ca30c4d72d2aebeaa6a4969/pycairo-1.29.1.tar.gz
         sha256: 4fbd26b4af24c9787d84cf5448e34eb8dca064b732479aaecd03109520eebd5f
