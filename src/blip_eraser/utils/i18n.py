@@ -75,6 +75,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "funcionarán porque faltan estas herramientas:\n\n{lines}"
         ),
         "dep_line_template": "• {binary}: {why}.\n    {remediation}",
+        # Dependencias del daemon privilegiado (Fase 2): diálogo de arranque
+        "daemon_deps_title": "Dependencias del daemon privilegiado",
+        "daemon_deps_not_installed": "no instalada",
+        "daemon_deps_not_active": "no activa",
+        "daemon_deps_prompt": (
+            "El daemon privilegiado (Fase 2) requiere las siguientes "
+            "dependencias:\n\n{lines}\n\n¿Desea instalarlas ahora? Se pedirá "
+            "contraseña de administrador (pkexec)."
+        ),
+        "daemon_deps_install": "Instalar",
+        "daemon_deps_cancel": "Cancelar",
+        "daemon_deps_error_title": "Error",
+        "daemon_deps_error_body": "Error instalando {name}: {detail}",
+        "daemon_deps_done_title": "Dependencias instaladas",
+        "daemon_deps_done_body": "Se instalaron las siguientes dependencias:\n{lines}",
+        "daemon_deps_restart": (
+            "Se recomienda reiniciar el sistema para que AppArmor funcione "
+            "correctamente."
+        ),
         # Textos localizados de dependencias (banner y diálogo Nivel 2)
         "dep_pacman_why": (
             "necesario para listar y desinstalar paquetes del sistema "
@@ -529,6 +548,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "work because these tools are missing:\n\n{lines}"
         ),
         "dep_line_template": "• {binary}: {why}.\n    {remediation}",
+        # Privileged daemon dependencies (Phase 2): startup dialog
+        "daemon_deps_title": "Privileged daemon dependencies",
+        "daemon_deps_not_installed": "not installed",
+        "daemon_deps_not_active": "not active",
+        "daemon_deps_prompt": (
+            "The privileged daemon (Phase 2) requires the following "
+            "dependencies:\n\n{lines}\n\nDo you want to install them now? An "
+            "administrator password will be requested (pkexec)."
+        ),
+        "daemon_deps_install": "Install",
+        "daemon_deps_cancel": "Cancel",
+        "daemon_deps_error_title": "Error",
+        "daemon_deps_error_body": "Error installing {name}: {detail}",
+        "daemon_deps_done_title": "Dependencies installed",
+        "daemon_deps_done_body": "The following dependencies were installed:\n{lines}",
+        "daemon_deps_restart": (
+            "A system restart is recommended so that AppArmor works correctly."
+        ),
         # Localized dependency text (banner and Level 2 dialog)
         "dep_pacman_why": (
             "needed to list and uninstall system packages "

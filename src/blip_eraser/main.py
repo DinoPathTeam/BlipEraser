@@ -80,6 +80,16 @@ def _warn_missing_dependencies(window, lines: list[str]) -> None:
     )
 
 
+def _show_installed_summary(window, installed: list[str], restart_required: bool) -> None:
+    """Resumen tras instalar dependencias del daemon (con aviso de reinicio)."""
+    from PyQt6.QtWidgets import QMessageBox
+
+    text = tr("daemon_deps_done_body").format(lines="\n".join(f"• {d}" for d in installed))
+    if restart_required:
+        text += "\n\n" + tr("daemon_deps_restart")
+    QMessageBox.information(window, tr("daemon_deps_done_title"), text)
+
+
 def _offer_daemon_deps(window, missing: list) -> tuple[bool, list[str]]:
     """Ofrece instalar las dependencias del daemon que faltan (Fase 2).
 
@@ -98,21 +108,15 @@ def _offer_daemon_deps(window, missing: list) -> tuple[bool, list[str]]:
 
     lines = []
     for dep in missing:
-        status = "no instalada" if not dep.check_cmd else "no activa"
+        status = tr("daemon_deps_not_installed" if not dep.check_cmd else "daemon_deps_not_active")
         lines.append(f"• {dep.name}: {status}")
 
-    msg = (
-        f"El daemon privilegiado (Fase 2) requiere las siguientes dependencias:\n\n"
-        f"{chr(10).join(lines)}\n\n"
-        f"¿Desea instalarlas ahora? Se pedirá contraseña de administrador (pkexec)."
-    )
-
     box = QMessageBox(window)
-    box.setWindowTitle("Dependencias del daemon privilegiado")
-    box.setText(msg)
+    box.setWindowTitle(tr("daemon_deps_title"))
+    box.setText(tr("daemon_deps_prompt").format(lines="\n".join(lines)))
     box.setIcon(QMessageBox.Icon.Question)
-    yes_btn = box.addButton("Instalar", QMessageBox.ButtonRole.AcceptRole)
-    box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+    yes_btn = box.addButton(tr("daemon_deps_install"), QMessageBox.ButtonRole.AcceptRole)
+    box.addButton(tr("daemon_deps_cancel"), QMessageBox.ButtonRole.RejectRole)
     box.exec()
 
     if box.clickedButton() is not yes_btn:
@@ -129,7 +133,11 @@ def _offer_daemon_deps(window, missing: list) -> tuple[bool, list[str]]:
                 restart_required = True
         else:
             # Mostrar error pero continuar
-            QMessageBox.warning(window, "Error", f"Error instalando {dep.name}: {detail}")
+            QMessageBox.warning(
+                window,
+                tr("daemon_deps_error_title"),
+                tr("daemon_deps_error_body").format(name=dep.name, detail=detail),
+            )
 
     invalidate_daemon_deps_cache()  # el estado cambió: la próxima lectura es real
     return restart_required, installed
@@ -220,14 +228,7 @@ def main() -> int:
                 window, worker.missing_daemon_deps
             )
             if installed:
-                from PyQt6.QtWidgets import QMessageBox
-
-                text = "Se instalaron las siguientes dependencias:\n" + "\n".join(
-                    f"• {d}" for d in installed
-                )
-                if restart_required:
-                    text += "\n\nSe recomienda reiniciar el sistema para que AppArmor funcione correctamente."
-                QMessageBox.information(window, "Dependencias instaladas", text)
+                _show_installed_summary(window, installed, restart_required)
 
         # Disparar escaneo PRIMERO, encadenar refresh_appearance() al final
         window._overview.start_initial_scan(on_finished=_post_scan)
