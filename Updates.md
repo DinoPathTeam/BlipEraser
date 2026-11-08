@@ -11,6 +11,17 @@ Versión del código: `1.2.1` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧩 install-daemon.sh: sin acceso duplicado para quien usa el Flatpak
+
+- **Síntoma**: tras instalar el daemon y usar solo el Flatpak, el menú tenía dos
+  entradas de BlipEraser; la del host (`Exec=blip-eraser`) no abría nada porque
+  el comando no existe fuera del Flatpak.
+- **Cambio**: el paso 4 del script (accesos `.desktop` + icono) se omite si
+  `blip-eraser` no está en el PATH. Se instala igualmente con `DESTDIR`
+  (empaquetado/pruebas) o con `sudo INSTALL_DESKTOP=1 ./scripts/install-daemon.sh`.
+- Quien ya tenga el acceso huérfano puede quitarlo a mano:
+  `/usr/share/applications/blip-eraser.desktop` (y `blip-eraser-tray.desktop`).
+
 ### 🚀 v1.2.1: Flatpak sobre el runtime 25.08 y limpieza
 
 - **Flatpak**: el runtime pasa de la 24.08 (fuera de soporte) a la 25.08, con
