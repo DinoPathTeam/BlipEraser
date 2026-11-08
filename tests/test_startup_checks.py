@@ -109,7 +109,7 @@ def test_offer_daemon_deps_declined_installs_nothing(monkeypatch):
         def setIcon(self, *_): ...
 
         def addButton(self, label, role):
-            return self._yes if label == "Instalar" else object()
+            return self._yes if label == tr("daemon_deps_install") else object()
 
         def exec(self): ...
 

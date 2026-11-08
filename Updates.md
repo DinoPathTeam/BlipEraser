@@ -11,6 +11,15 @@ Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🌐 Diálogo de dependencias del daemon traducido (ES/EN)
+
+- El aviso de arranque que ofrece instalar las dependencias del daemon
+  privilegiado (título, texto, botones, error y resumen final) estaba fijo en
+  español. Ahora usa las claves `daemon_deps_*` en ES y EN.
+- `_show_installed_summary()` separa el resumen final para poder probarlo.
+- Los mensajes de detalle del instalador (`phase2_installer`) siguen en español:
+  solo aparecen dentro de «Error instalando …» y en el registro.
+
 ### 📦 Flatpak: runtime 25.08 (24.08 ya está fuera de soporte)
 
 - `runtime-version` pasa de 24.08 a 25.08 (soporte hasta sep-2027).
