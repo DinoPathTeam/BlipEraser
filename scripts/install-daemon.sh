@@ -16,7 +16,7 @@ LIBDIR="$DEST/usr/lib/blip-eraser"
 
 if [[ -z "$DEST" && "$(id -u)" -ne 0 ]]; then
     echo "[INFO] Se necesita root: re-ejecutando con sudo…"
-    exec sudo "$0" "$@"
+    exec sudo INSTALL_DESKTOP="${INSTALL_DESKTOP:-0}" "$0" "$@"
 fi
 
 echo "[1/8] Código del daemon -> $LIBDIR/blip_eraser"
@@ -52,13 +52,22 @@ install -Dm 644 "$REPO/packaging/polkit/com.dinopath.blip-eraser.policy" "$POLKI
 install -Dm 644 "$REPO/packaging/polkit/49-blip-eraser.rules" "$POLKIT_RULES"
 
 echo "[4/8] Acceso directo (.desktop) + icono"
-install -Dm 644 "$REPO/packaging/blip-eraser.desktop" "$DEST/usr/share/applications/blip-eraser.desktop"
-install -Dm 644 "$REPO/packaging/blip-eraser-tray.desktop" "$DEST/usr/share/applications/blip-eraser-tray.desktop"
-install -Dm 644 "$REPO/packaging/icons/hicolor/512x512/apps/blip-eraser.png" \
-    "$DEST/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
-if [[ -z "$DEST" ]]; then
-    update-desktop-database /usr/share/applications 2>/dev/null || true
-    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+# Estos accesos lanzan `blip-eraser` / `blip-eraser-tray` del PATH: solo tienen
+# sentido si la app está instalada en el host. Con el Flatpak (que exporta su
+# propio acceso) dejarían una entrada duplicada que no abre nada. Se omiten salvo
+# DESTDIR (empaquetado/pruebas), si `blip-eraser` existe, o INSTALL_DESKTOP=1.
+if [[ -n "$DEST" ]] || command -v blip-eraser >/dev/null 2>&1 || [[ "${INSTALL_DESKTOP:-0}" == "1" ]]; then
+    install -Dm 644 "$REPO/packaging/blip-eraser.desktop" "$DEST/usr/share/applications/blip-eraser.desktop"
+    install -Dm 644 "$REPO/packaging/blip-eraser-tray.desktop" "$DEST/usr/share/applications/blip-eraser-tray.desktop"
+    install -Dm 644 "$REPO/packaging/icons/hicolor/512x512/apps/blip-eraser.png" \
+        "$DEST/usr/share/icons/hicolor/512x512/apps/blip-eraser.png"
+    if [[ -z "$DEST" ]]; then
+        update-desktop-database /usr/share/applications 2>/dev/null || true
+        gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+    fi
+else
+    echo "[INFO] 'blip-eraser' no está en el PATH (¿solo Flatpak?): se omite el acceso"
+    echo "       directo del host. Para instalarlo igualmente: sudo INSTALL_DESKTOP=1 $0"
 fi
 
 echo "[5/8] AppArmor (enforce, Fase 3)"
