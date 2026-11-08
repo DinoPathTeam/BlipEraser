@@ -87,17 +87,58 @@ def decide_notices(
 # ---------------------------------------------------------------------------
 # Comandos y autoarranque
 # ---------------------------------------------------------------------------
+FLATPAK_APP_ID = "io.github.DinoPathTeam.BlipEraser"
+FLATPAK_TRAY_COMMAND = "blip-eraser-tray"
+
+
+def _in_flatpak() -> bool:
+    from blip_eraser.utils.host_cmd import is_flatpak
+
+    return is_flatpak()
+
+
+def flatpak_run_command(command: str | None = None) -> list[str]:
+    """`flatpak run [--command=X] <app-id>`: como se arranca el Flatpak desde el host."""
+    cmd = ["flatpak", "run"]
+    if command:
+        cmd.append(f"--command={command}")
+    cmd.append(FLATPAK_APP_ID)
+    return cmd
+
+
+def _detached_on_host(command: list[str]) -> list[str]:
+    # `setsid -f`: la instancia nueva no depende del sandbox que la lanza.
+    return ["flatpak-spawn", "--host", "setsid", "-f", *command]
+
+
 def app_command() -> list[str]:
-    """Comando para abrir la app principal con el mismo intérprete."""
+    """Comando para abrir la app principal (otra instancia del Flatpak, o el mismo intérprete)."""
+    if _in_flatpak():
+        return _detached_on_host(flatpak_run_command())
     return [sys.executable, "-m", "blip_eraser"]
 
 
 def tray_command() -> list[str]:
     """Comando para arrancar la propia bandeja."""
+    if _in_flatpak():
+        return _detached_on_host(flatpak_run_command(FLATPAK_TRAY_COMMAND))
     return [sys.executable, "-m", "blip_eraser.tray"]
 
 
+def autostart_command() -> list[str]:
+    """Exec= del autoarranque: lo ejecuta el host, no el sandbox."""
+    if _in_flatpak():
+        return flatpak_run_command(FLATPAK_TRAY_COMMAND)
+    return tray_command()
+
+
 def autostart_path() -> Path:
+    if _in_flatpak():
+        # Dentro del sandbox XDG_CONFIG_HOME apunta a ~/.var/app/…: el autoarranque
+        # de sesión se lee del ~/.config real del host.
+        from blip_eraser.utils.host_cmd import host_home
+
+        return host_home() / ".config" / "autostart" / AUTOSTART_FILENAME
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(base) / "autostart" / AUTOSTART_FILENAME
 
@@ -124,14 +165,14 @@ def set_autostart(enabled: bool, command: list[str] | None = None) -> bool:
             path.unlink(missing_ok=True)
             return True
         path.parent.mkdir(parents=True, exist_ok=True)
-        exec_line = _desktop_exec(command or tray_command())
+        exec_line = _desktop_exec(command or autostart_command())
         path.write_text(
             "[Desktop Entry]\n"
             "Type=Application\n"
             "Name=BlipEraser (tray)\n"
             "Comment=BlipEraser tray icon\n"
             f"Exec={exec_line}\n"
-            "Icon=blip-eraser\n"
+            f"Icon={FLATPAK_APP_ID if _in_flatpak() else 'blip-eraser'}\n"
             "Terminal=false\n"
             "X-GNOME-Autostart-enabled=true\n",
             encoding="utf-8",

@@ -11,6 +11,21 @@ Versión del código: `1.2.1` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🔔 Bandeja residente en el Flatpak
+
+- **Síntoma**: con el Flatpak, la bandeja se cerraba junto con la app principal.
+- **Causa**: la app no lanzaba la bandeja dentro del sandbox (un proceso hijo muere
+  con él) y el Flatpak no incluía el lanzador `blip-eraser-tray` ni los permisos de
+  la bandeja.
+- **Cambio**: en Flatpak la bandeja arranca como instancia independiente en el host
+  (`flatpak-spawn --host setsid -f flatpak run --command=blip-eraser-tray …`); el
+  lanzador `blip-eraser-tray` y los permisos (`StatusNotifierWatcher`,
+  `StatusNotifierItem-2-1`, notificaciones) se añaden al manifiesto; abrir la app
+  desde la bandeja y el autoarranque (`~/.config/autostart` del host) también usan
+  `flatpak run`.
+- **Instancia única**: ahora con `flock` en `$XDG_RUNTIME_DIR/app/<app-id>/` (compartido
+  entre sandboxes) en lugar de `QLockFile`, que comprueba PIDs y no sirve entre sandboxes.
+
 ### 🧩 install-daemon.sh: sin acceso duplicado para quien usa el Flatpak
 
 - **Síntoma**: tras instalar el daemon y usar solo el Flatpak, el menú tenía dos

@@ -389,7 +389,6 @@ def main() -> int:
     if logic.should_force_xcb(dict(os.environ)):
         os.environ["QT_QPA_PLATFORM"] = "xcb;wayland"
 
-    from PyQt6.QtCore import QLockFile
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon
 
     sys.setswitchinterval(0.001)
@@ -402,9 +401,8 @@ def main() -> int:
         print(tr("tray_unavailable"), file=sys.stderr)
         return 1
 
-    lock = QLockFile(launcher.lock_path())
-    lock.setStaleLockTime(0)
-    if not lock.tryLock(6000 if WAIT_LOCK_FLAG in sys.argv[1:] else 100):
+    lock = launcher.TrayLock()
+    if not lock.try_lock(6000 if WAIT_LOCK_FLAG in sys.argv[1:] else 100):
         return 0  # ya hay una bandeja activa
 
     controller = build_controller(app)
