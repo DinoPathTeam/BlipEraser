@@ -11,6 +11,14 @@ Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🌐 Diálogo de dependencias del daemon traducido (ES/EN)
+
+- El aviso de arranque que ofrece instalar las dependencias del daemon
+  privilegiado (título, texto, botones, error y resumen final) estaba fijo en
+  español. Ahora usa las claves `daemon_deps_*` en ES y EN.
+- `_show_installed_summary()` separa el resumen final para poder probarlo.
+- Los mensajes de detalle del instalador (`phase2_installer`) siguen en español:
+  solo aparecen dentro de «Error instalando …» y en el registro.
 ### 🧹 Limpieza: claves i18n y módulo sin uso
 
 - **Eliminado** `utils/environment_setup.py` (`EnvironmentValidator`): nadie lo
