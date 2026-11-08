@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("PyQt6.QtCore")
 
-from PyQt6.QtCore import QLockFile, QProcess  # noqa: E402
+from PyQt6.QtCore import QProcess  # noqa: E402
 
 from blip_eraser.tray import launcher  # noqa: E402
 
@@ -14,7 +14,6 @@ from blip_eraser.tray import launcher  # noqa: E402
 @pytest.fixture(autouse=True)
 def _tmp_lock(tmp_path, monkeypatch):
     monkeypatch.setattr(launcher, "lock_path", lambda: str(tmp_path / "tray.lock"))
-    monkeypatch.setattr(launcher, "FLATPAK_INFO", None, raising=False)
     import blip_eraser.utils.host_cmd as host_cmd
 
     monkeypatch.setattr(host_cmd, "FLATPAK_INFO", tmp_path / "no-flatpak-info")
@@ -41,8 +40,8 @@ def test_launches_the_tray_when_none_is_running(spawned):
 
 
 def test_does_not_launch_a_second_tray(spawned):
-    lock = QLockFile(launcher.lock_path())
-    assert lock.tryLock(0)  # simula la bandeja activa
+    lock = launcher.TrayLock()
+    assert lock.try_lock(0)  # simula la bandeja activa
     try:
         assert launcher.tray_is_running()
         assert launcher.ensure_tray_running({}) is False
@@ -57,14 +56,48 @@ def test_respects_the_users_choice(spawned):
     assert spawned == []
 
 
-def test_never_inside_flatpak(spawned, tmp_path, monkeypatch):
+def _fake_flatpak(tmp_path, monkeypatch):
     import blip_eraser.utils.host_cmd as host_cmd
 
     info = tmp_path / "flatpak-info"
     info.write_text("x")
     monkeypatch.setattr(host_cmd, "FLATPAK_INFO", info)
-    assert launcher.ensure_tray_running({}) is False
+
+
+def test_inside_flatpak_the_tray_starts_as_an_independent_host_instance(spawned, tmp_path, monkeypatch):
+    _fake_flatpak(tmp_path, monkeypatch)
+    assert launcher.ensure_tray_running({}) is True
+    prog, args = spawned[0]
+    assert prog == "flatpak-spawn"
+    assert args == [
+        "--host", "setsid", "-f", "flatpak", "run",
+        "--command=blip-eraser-tray", "io.github.DinoPathTeam.BlipEraser",
+    ]  # fmt: skip
+
+
+def test_inside_flatpak_it_respects_the_users_choice(spawned, tmp_path, monkeypatch):
+    _fake_flatpak(tmp_path, monkeypatch)
+    assert launcher.ensure_tray_running({launcher.PREF_KEEP_RUNNING: False}) is False
     assert spawned == []
+
+
+def test_inside_flatpak_the_lock_is_shared_between_instances(tmp_path, monkeypatch):
+    _fake_flatpak(tmp_path, monkeypatch)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.undo()  # quita el lock_path de prueba del fixture autouse
+    _fake_flatpak(tmp_path, monkeypatch)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    expected = tmp_path / "app" / "io.github.DinoPathTeam.BlipEraser" / launcher.LOCK_NAME
+    assert launcher.lock_path() == str(expected)
+
+
+def test_lock_is_exclusive_and_released(tmp_path):
+    a, b = launcher.TrayLock(), launcher.TrayLock()
+    assert a.try_lock(0)
+    assert not b.try_lock(0)
+    a.unlock()
+    assert b.try_lock(0)
+    b.unlock()
 
 
 def test_failed_launch_reports_false(monkeypatch):

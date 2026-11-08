@@ -16,6 +16,10 @@ finish-args:
   - --system-talk-name=com.dinopath.BlipEraser.Privileged
   # Limpieza del sistema = necesita ver los paths reales del host
   - --filesystem=host
+  # Bandeja del sistema (proceso aparte `blip-eraser-tray`): icono y avisos
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --own-name=org.kde.StatusNotifierItem-2-1
+  - --talk-name=org.freedesktop.Notifications
 modules:
   - name: krb5
     # QtNetwork del wheel enlaza libgssapi_krb5 (ausente en el runtime):
@@ -85,6 +89,7 @@ modules:
       - find /app/blip-eraser-pkg -name __pycache__ -type d -prune -exec rm -rf {} +
       # Lanzador
       - install -Dm755 packaging/flatpak/blip-eraser /app/bin/blip-eraser
+      - install -Dm755 packaging/flatpak/blip-eraser-tray /app/bin/blip-eraser-tray
       # Integración escritorio (nombres = app-id, exige Flatpak)
       - install -Dm644 packaging/blip-eraser.desktop /app/share/applications/io.github.DinoPathTeam.BlipEraser.desktop
       - sed -i 's/^Icon=.*/Icon=io.github.DinoPathTeam.BlipEraser/' /app/share/applications/io.github.DinoPathTeam.BlipEraser.desktop

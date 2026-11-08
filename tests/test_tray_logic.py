@@ -234,3 +234,18 @@ class TestAutoWithoutKnownIcon:
     def test_known_icon_still_wins_over_the_guess(self):
         got = logic.resolve_position({}, (100, 1030), self.SIZE, self.SCREEN, "top-right")
         assert got == logic.popup_position((100, 1030), self.SIZE, self.SCREEN)
+
+
+def test_flatpak_commands_run_on_the_host(tmp_path, monkeypatch):
+    import blip_eraser.utils.host_cmd as host_cmd
+    from blip_eraser.tray import logic
+
+    info = tmp_path / "flatpak-info"
+    info.write_text("x")
+    monkeypatch.setattr(host_cmd, "FLATPAK_INFO", info)
+    monkeypatch.setattr(host_cmd, "_host_home", str(tmp_path / "home"))
+    app = "io.github.DinoPathTeam.BlipEraser"
+    assert logic.tray_command()[:5] == ["flatpak-spawn", "--host", "setsid", "-f", "flatpak"]
+    assert logic.app_command()[-1] == app
+    assert logic.autostart_command() == ["flatpak", "run", "--command=blip-eraser-tray", app]
+    assert logic.autostart_path() == tmp_path / "home" / ".config" / "autostart" / "blip-eraser-tray.desktop"
