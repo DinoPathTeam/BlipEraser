@@ -5,11 +5,19 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.2.1` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.2.2` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🚀 v1.2.2: bandeja residente en el Flatpak
+
+- **Bandeja**: con el Flatpak ya queda en segundo plano al cerrar la app principal
+  (antes se cerraba con ella). Se lanza como instancia independiente en el host y
+  usa un bloqueo `flock` compartido entre sandboxes. Detalles abajo.
+- **install-daemon.sh**: ya no deja un acceso `.desktop` huérfano en el menú si
+  solo se usa el Flatpak.
 
 ### 🔔 Bandeja residente en el Flatpak
 
