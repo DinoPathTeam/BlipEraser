@@ -25,47 +25,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "es": {
         # Ventana principal
         "window_title": "BlipEraser — Desinstalador de Arch Linux",
-        "tab_packages": "Paquetes (pacman)",
-        "tab_manual_scan": "Escaneo manual",
         # Pestaña pacman
-        "pacman_tab_info": (
-            "Paquetes instalados explícitamente (pacman -Qe). Selecciona uno o "
-            "varios y pulsa 'Desinstalar seleccionados'."
-        ),
-        "col_package": "Paquete",
-        "col_version": "Versión",
         "refresh_button": "Actualizar lista",
-        "uninstall_button": "Desinstalar seleccionados",
         "uninstall_button_count": "Desinstalar seleccionados ({n})",
-        "error_title": "Error",
-        "pacman_not_found": (
-            "No se encontró el comando 'pacman'. ¿Estás en una distro basada en Arch?"
-        ),
-        "pacman_list_failed": "Fallo al listar paquetes:\n{error}",
         "nothing_selected_title": "Nada seleccionado",
         "pacman_nothing_selected": "Selecciona al menos un paquete.",
-        "uninstall_confirm_title": "Confirmar desinstalación",
-        "uninstall_confirm_body": (
-            "Vas a desinstalar:\n\n{packages}\n\n"
-            "Esto usará 'pkexec pacman -Rns'. ¿Continuar?"
-        ),
-        "uninstall_failed": "Fallo al desinstalar:\n{error}",
         "done_title": "Listo",
-        "packages_uninstalled_ok": "Paquetes desinstalados correctamente.",
         # Pestaña escaneo manual
-        "manual_tab_info": (
-            "Carpetas de nivel superior encontradas en ubicaciones típicas "
-            "(AppImages, juegos manuales, etc.). Revisa antes de borrar."
-        ),
-        "col_path": "Ruta",
         "col_size": "Tamaño",
-        "scan_button": "Escanear carpetas",
         "delete_button": "Eliminar seleccionados",
         "manual_nothing_selected": "Selecciona al menos una carpeta o archivo.",
         "delete_confirm_title": "Confirmar eliminación",
-        "delete_confirm_body": (
-            "Vas a eliminar PERMANENTEMENTE:\n\n{paths}\n\n¿Continuar?"
-        ),
         "some_errors_title": "Algunos errores",
         "items_deleted_ok": "Elementos eliminados correctamente.",
         # Verificación de dependencias (MainWindow)
@@ -120,21 +90,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "¿En qué idioma prefieres usar BlipEraser?"
         ),
         # Pantalla de arranque (splash)
-        "splash_check_updates": "Comprobando actualizaciones",
-        "splash_check_permissions": "Comprobando permisos",
         "splash_check_dependencies": "Comprobando dependencias",
         "splash_check_daemon": "Comprobando el servicio privilegiado",
-        "splash_scanning": (
-            "Escaneando el PC, por favor mantente en espera unos segundos"
-        ),
-        "splash_welcome": "Escaneo finalizado, ¡Bienvenido!",
         "splash_no_video": "Video no disponible: mostrando intro alternativa",
-        # Navegación lateral
-        "nav_packages": "Gestor de paquetes",
-        "nav_cleaner": "Limpiador del sistema",
-        "nav_personalize": "Personalización",
-        "nav_help": "Ayuda",
-        "nav_settings": "Ajustes",
         # Navegación lateral (v2)
         "nav_overview": "Vista general",
         "nav_uninstaller": "Desinstalador",
@@ -160,18 +118,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "cleanup_logs": "Registros",
         "log_scan_completed": "Escaneo completado: {count} apps, {space} usados",
         "system_info_title": "INFORMACIÓN DEL SISTEMA",
-        "recent_activity_title": "Actividad reciente",
-        "list_empty_subtext": "Sin actividad todavía",
         "installed_apps_title": "APLICACIONES INSTALADAS",
         "cleanup_recommended_title": "LIMPIEZA DEL SISTEMA RECOMENDADA",
         "gpu_label": "GPU",
         "apps_empty": "No se encontraron aplicaciones.",
         "uninstaller_confirm_title": "Confirmar desinstalación",
-        "uninstaller_confirm_body": (
-            "¿Desinstalar esta aplicación?\n\n{apps}\n\nSe hará con privilegios "
-            "de administrador cuando sea necesario."
-        ),
-        "log_erase_started": "Eliminación profunda del sistema iniciada",
         "uninstaller_info": (
             "Aplicaciones detectadas (paquetes de pacman y AppImages/carpetas "
             "sueltas). Selecciona lo que quieras eliminar."
@@ -289,11 +240,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "lang_restart_now": "Reiniciar ahora",
         "lang_restart_later": "Más tarde",
         "delete_progress_label": "Eliminando",
-        "tools_title": "Configuración",
-        "tools_hint": (
-            "Configuración y utilidades auxiliares: personalización, tema "
-            "y documentación."
-        ),
         # Encabezado, búsqueda y registro
         "search_placeholder": "Buscar paquetes y funciones…",
         "log_toggle": "Actividad de la app",
@@ -301,7 +247,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sidebar_activity_title": "Actividad",
         "sidebar_activity_empty": "Sin actividad todavía",
         "col_name": "Nombre",
-        "col_source": "Fuente",
         "col_detail": "Detalle",
         "col_type": "Tipo",
         "col_weight": "Peso",
@@ -310,9 +255,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Filtros de columna
         "filter_type_label": "Tipo:",
         "filter_type_all": "Todos",
-        "filter_type_app": "Aplicación",
-        "filter_type_dep": "Dependencia",
-        "filter_type_folder": "Carpeta suelta",
         "filter_weight_label": "Peso:",
         "filter_weight_all": "Todos",
         "filter_weight_heaviest": "Más pesados primero",
@@ -328,8 +270,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "filter_date_from": "Desde:",
         "filter_date_to": "Hasta:",
         "filter_date_format_hint": "Formato: DD/MM/AAAA o MM/DD/AAAA",
-        "filter_category_label": "Categoría:",
-        "filter_category_all": "Todas",
         "filter_clear": "Limpiar filtros",
         # Tipos de aplicación
         "kind_app": "Aplicación",
@@ -338,7 +278,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "save_button": "Guardar cambios",
         "uninstall_short": "Desinstalar",
         # Estado del sistema
-        "status_title": "Estado del sistema",
         "status_cpu": "CPU",
         "status_ram": "RAM",
         "status_disk": "Disco",
@@ -370,14 +309,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "tray_unavailable": "La bandeja del sistema no está disponible en este escritorio.",
         # Ajustes de apariencia
         "settings_theme_title": "Tema de color",
-        "settings_mode_title": "Modo de apariencia",
         "settings_font_title": "Fuente de la interfaz",
         "theme_red": "Rojo",
         "theme_blue": "Azul",
         "theme_green": "Verde",
         "theme_purple": "Morado",
-        "mode_dark": "Oscuro",
-        "mode_light": "Claro",
         "font_system": "Predeterminada del sistema",
         "theme_hint": (
             "Cambia el acento de color y el modo claro/oscuro de toda la "
@@ -385,7 +321,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         # Personalización
         "personalize_title": "Personalización",
-        "personalize_scan_paths": "Rutas de escaneo",
         "personalize_hint": (
             "BlipEraser escaneará estas ubicaciones en busca de aplicaciones "
             "instaladas manualmente (AppImages, carpetas sueltas, etc.)."
@@ -488,57 +423,24 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Registro (log)
         "log_started": "BlipEraser iniciado",
         "log_theme_changed": "Tema cambiado a {theme}",
-        "log_mode_changed": "Modo cambiado a {mode}",
-        "log_font_changed": "Fuente cambiada a {font}",
         "log_scan_finished": "Escaneo completado: {count} elemento(s)",
-        "log_deleted_items": "Eliminados: {count}",
         "log_uninstalled_packages": "Desinstalados: {packages}",
         "log_scan_paths_updated": "Rutas de escaneo actualizadas",
     },
     "en": {
         # Main window
         "window_title": "BlipEraser — Arch Linux Uninstaller",
-        "tab_packages": "Packages (pacman)",
-        "tab_manual_scan": "Manual scan",
         # pacman tab
-        "pacman_tab_info": (
-            "Explicitly installed packages (pacman -Qe). Select one or more "
-            "and press 'Uninstall selected'."
-        ),
-        "col_package": "Package",
-        "col_version": "Version",
         "refresh_button": "Refresh list",
-        "uninstall_button": "Uninstall selected",
         "uninstall_button_count": "Uninstall selected ({n})",
-        "error_title": "Error",
-        "pacman_not_found": (
-            "'pacman' command not found. Are you on an Arch-based distro?"
-        ),
-        "pacman_list_failed": "Failed to list packages:\n{error}",
         "nothing_selected_title": "Nothing selected",
         "pacman_nothing_selected": "Select at least one package.",
-        "uninstall_confirm_title": "Confirm uninstall",
-        "uninstall_confirm_body": (
-            "You are about to uninstall:\n\n{packages}\n\n"
-            "This uses 'pkexec pacman -Rns'. Continue?"
-        ),
-        "uninstall_failed": "Uninstall failed:\n{error}",
         "done_title": "Done",
-        "packages_uninstalled_ok": "Packages uninstalled successfully.",
         # Manual scan tab
-        "manual_tab_info": (
-            "Top-level folders found in typical locations (AppImages, manually "
-            "installed games, etc.). Review before deleting."
-        ),
-        "col_path": "Path",
         "col_size": "Size",
-        "scan_button": "Scan folders",
         "delete_button": "Delete selected",
         "manual_nothing_selected": "Select at least one folder or file.",
         "delete_confirm_title": "Confirm deletion",
-        "delete_confirm_body": (
-            "You are about to delete PERMANENTLY:\n\n{paths}\n\nContinue?"
-        ),
         "some_errors_title": "Some errors",
         "items_deleted_ok": "Items deleted successfully.",
         # Dependency checking (MainWindow)
@@ -592,21 +494,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "Which language would you prefer BlipEraser to use?"
         ),
         # Startup splash screen
-        "splash_check_updates": "Checking for updates",
-        "splash_check_permissions": "Checking permissions",
         "splash_check_dependencies": "Checking dependencies",
         "splash_check_daemon": "Checking the privileged service",
-        "splash_scanning": (
-            "Scanning your PC, please wait a few seconds"
-        ),
-        "splash_welcome": "Scan finished, welcome!",
         "splash_no_video": "Video unavailable: showing alternative intro",
-        # Sidebar navigation
-        "nav_packages": "Package Manager",
-        "nav_cleaner": "System Cleaner",
-        "nav_personalize": "Personalization",
-        "nav_help": "Help",
-        "nav_settings": "Settings",
         # Sidebar navigation (v2)
         "nav_overview": "Overview",
         "nav_uninstaller": "Uninstaller",
@@ -632,18 +522,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "cleanup_logs": "Logs",
         "log_scan_completed": "Scan completed: {count} apps, {space} used",
         "system_info_title": "SYSTEM INFORMATION",
-        "recent_activity_title": "Recent activity",
-        "list_empty_subtext": "No activity yet",
         "installed_apps_title": "INSTALLED APPLICATIONS",
         "cleanup_recommended_title": "SYSTEM CLEANUP RECOMMENDED",
         "gpu_label": "GPU",
         "apps_empty": "No applications found.",
         "uninstaller_confirm_title": "Confirm uninstall",
-        "uninstaller_confirm_body": (
-            "Uninstall this application?\n\n{apps}\n\nAdministrator "
-            "privileges will be requested when needed."
-        ),
-        "log_erase_started": "Deep system removal started",
         "uninstaller_info": (
             "Detected applications (pacman packages and loose AppImages/"
             "folders). Select the ones you want to remove."
@@ -760,11 +643,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "lang_restart_now": "Restart now",
         "lang_restart_later": "Later",
         "delete_progress_label": "Removing",
-        "tools_title": "Settings",
-        "tools_hint": (
-            "App configuration and utilities: personalization, appearance "
-            "and documentation."
-        ),
         # Header, search and log
         "search_placeholder": "Search packages and features…",
         "log_toggle": "App activity",
@@ -772,7 +650,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "sidebar_activity_title": "Activity",
         "sidebar_activity_empty": "No activity yet",
         "col_name": "Name",
-        "col_source": "Source",
         "col_detail": "Detail",
         "col_type": "Type",
         "col_weight": "Weight",
@@ -781,9 +658,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Column filters
         "filter_type_label": "Type:",
         "filter_type_all": "All",
-        "filter_type_app": "Application",
-        "filter_type_dep": "Dependency",
-        "filter_type_folder": "Loose folder",
         "filter_weight_label": "Weight:",
         "filter_weight_all": "All",
         "filter_weight_heaviest": "Heaviest first",
@@ -799,8 +673,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "filter_date_from": "From:",
         "filter_date_to": "To:",
         "filter_date_format_hint": "Format: DD/MM/YYYY or MM/DD/YYYY",
-        "filter_category_label": "Category:",
-        "filter_category_all": "All",
         "filter_clear": "Clear filters",
         # App types
         "kind_app": "Application",
@@ -809,7 +681,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "save_button": "Save changes",
         "uninstall_short": "Uninstall",
         # System status
-        "status_title": "System status",
         "status_cpu": "CPU",
         "status_ram": "RAM",
         "status_disk": "Disk",
@@ -841,14 +712,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "tray_unavailable": "The system tray is not available on this desktop.",
         # Appearance settings
         "settings_theme_title": "Color theme",
-        "settings_mode_title": "Appearance mode",
         "settings_font_title": "Interface font",
         "theme_red": "Red",
         "theme_blue": "Blue",
         "theme_green": "Green",
         "theme_purple": "Purple",
-        "mode_dark": "Dark",
-        "mode_light": "Light",
         "font_system": "System default",
         "theme_hint": (
             "Change the accent color and light/dark mode of the whole "
@@ -856,7 +724,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         # Personalization
         "personalize_title": "Personalization",
-        "personalize_scan_paths": "Scan paths",
         "personalize_hint": (
             "BlipEraser will scan these locations for manually installed "
             "applications (AppImages, loose folders, etc.)."
@@ -957,10 +824,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Logging
         "log_started": "BlipEraser started",
         "log_theme_changed": "Theme changed to {theme}",
-        "log_mode_changed": "Mode changed to {mode}",
-        "log_font_changed": "Font changed to {font}",
         "log_scan_finished": "Scan finished: {count} item(s)",
-        "log_deleted_items": "Deleted: {count}",
         "log_uninstalled_packages": "Uninstalled: {packages}",
         "log_scan_paths_updated": "Scan paths updated",
     },
