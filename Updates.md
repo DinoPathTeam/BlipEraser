@@ -5,11 +5,22 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.2.1` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
+
+### 🚀 v1.2.1: Flatpak sobre el runtime 25.08 y limpieza
+
+- **Flatpak**: el runtime pasa de la 24.08 (fuera de soporte) a la 25.08, con
+  soporte hasta septiembre de 2027. El lanzador ya no depende de la versión de
+  Python del runtime.
+- **Idioma**: el aviso de arranque que ofrece instalar las dependencias del
+  daemon privilegiado ya sale en español o inglés según el idioma elegido.
+- **Mantenimiento**: se elimina código sin uso (`environment_setup.py` y 46
+  claves de traducción).
+- Detalle de cada cambio en las entradas siguientes.
 
 ### 🌐 Diálogo de dependencias del daemon traducido (ES/EN)
 
