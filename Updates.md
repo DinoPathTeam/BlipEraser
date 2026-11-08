@@ -5,13 +5,29 @@ cualquier persona que trabaje sobre BlipEraser sepa **por qué** una
 característica, texto o clave i18n ya no existe, y para evitar errores de
 compilación o de traducción tras cada cambio.
 
-Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
+Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
 
 ---
 
 ## Últimos cambios
 
-### Sin versionar: fix — la app se cerraba sola al abrir el Desinstalador
+### 🚀 v1.2.0: rediseño completo, bandeja del sistema y temas renovados
+
+- **Rediseño de toda la interfaz** con tarjetas con sombra, encabezado con el
+  título de la sección, barra lateral con píldora en degradado y tablas sin
+  rejilla: Vista general, Desinstalador, Limpiador, Rendimiento y las tres
+  pestañas de Configuración, con los textos y datos reales de la app.
+- **Temas renovados** con paleta de degradados, contraste AA y las cifras de la
+  Vista general en tarjetas que siguen el acento de cada tema.
+- **Barra lateral**: resumen de la actividad reciente bajo la navegación.
+- **Bandeja del sistema** (`blip-eraser-tray`): ventanita temática con estado,
+  escanear, limpiar y abrir la app.
+- **Ayuda**: la sección «Uso» describe las 5 secciones reales.
+- **Corrección**: la app ya no se cierra sola al abrir el Desinstalador (la
+  ventana principal no tenía dueño y el recolector de Python podía destruirla).
+- Detalle de cada cambio en las entradas siguientes.
+
+### 🐛 Fix: la app se cerraba sola al abrir el Desinstalador
 
 - **Síntoma**: la ventana desaparecía al instante al entrar en la pestaña
   Desinstalador (salida limpia, código 0, sin traceback). El log mostraba un
@@ -83,7 +99,7 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   StatusNotifierWatcher).
 - Claves i18n nuevas `tray_*` (ES/EN). Tests: `test_tray_logic.py`,
   `test_tray_gui.py`.
-### Sin versionar: temas renovados y actividad reciente en la barra lateral
+### 🎨 Temas renovados y actividad reciente en la barra lateral
 
 - **Temas**: nueva paleta con más jerarquía entre fondo, panel y borde; relleno
   con degradado sutil en botones, selección, insignia y barra de progreso;
@@ -100,7 +116,7 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
   panel «Actividad de la app». Claves i18n nuevas: `sidebar_activity_title`,
   `sidebar_activity_empty`.
 
-### Sin versionar: rediseño (lote 4) — Configuración
+### 🎨 Rediseño (lote 4) — Configuración
 
 - **Tema de color**: dos tarjetas. Apariencia (muestras de color con su punto,
   chips de fuente, «Ver permisos de BlipEraser») y bandeja (cuadrícula de
@@ -112,7 +128,7 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 - **Ayuda**: cada sección en su tarjeta.
 - Casillas con marca propia en toda la app y barras de desplazamiento finas.
 
-### Sin versionar: rediseño (lote 3) — Ajustes de rendimiento
+### 🎨 Rediseño (lote 3) — Ajustes de rendimiento
 
 - Cada ajuste va en su tarjeta: interruptor con perilla (QSS no puede dibujarla:
   imágenes SVG por tema generadas en el directorio temporal), título, descripción,
@@ -122,7 +138,7 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 - Las vistas previas ahora siguen el tema al cambiarlo (antes quedaban con el
   color del arranque).
 
-### Sin versionar: rediseño (lote 2) — Desinstalador y Limpiador
+### 🎨 Rediseño (lote 2) — Desinstalador y Limpiador
 
 - **Tablas**: sin rejilla, con separador fino por fila, encabezados en
   mayúsculas pequeñas, Peso/Fecha/Tamaño alineados a la derecha y columnas
@@ -136,7 +152,7 @@ Versión del código: `1.1.1` (definida en `src/blip_eraser/__init__.py`).
 - **Vista general**: anillo con más aire, cifras en tarjetas con barra y brillo
   del tema (`StatTile`) y botón «Escanear ahora» más compacto.
 
-### Sin versionar: rediseño (lote 1) — estructura y Vista general
+### 🎨 Rediseño (lote 1) — estructura y Vista general
 
 - **Estructura**: logo y nombre arriba de la barra lateral, navegación solo de
   texto con píldora de degradado y actividad reciente debajo. El encabezado
