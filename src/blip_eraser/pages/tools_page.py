@@ -20,7 +20,7 @@ class ToolsPage(QWidget):
         self.help_page = HelpPage()
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(14, 10, 14, 8)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.personalize, tr("personalize_title"))

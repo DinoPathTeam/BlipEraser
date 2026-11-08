@@ -24,6 +24,8 @@ from blip_eraser.tray import logic as tray_logic
 from blip_eraser.utils.config import load_prefs, save_prefs
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils import theme as theme_mod
+from blip_eraser.widgets.card import Card
+from blip_eraser.widgets.choice_buttons import ChoiceButtons, dot_icon
 from blip_eraser.widgets.permissions_dialog import show_permissions_dialog
 
 
@@ -45,57 +47,85 @@ class SettingsPage(BasePage):
         self._sync_tray_position()
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
+        # Dos tarjetas: apariencia (tema + fuente + permisos) y bandeja.
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
+        # El título lo muestra la pestaña; se conserva el QLabel (oculto).
         title = QLabel(tr("settings_theme_title"))
         title.setObjectName("PageTitle")
-        layout.addWidget(title)
+        title.hide()
 
+        look_card = Card()
+        look = QVBoxLayout(look_card)
+        look.setContentsMargins(0, 0, 0, 0)
+        look.setSpacing(8)
+
+        self.theme_title = QLabel(tr("settings_theme_title").upper())
+        self.theme_title.setObjectName("PanelTitle")
+        look.addWidget(self.theme_title)
         self.theme_combo = QComboBox()
-        layout.addWidget(self.theme_combo)
+        self.theme_choices: ChoiceButtons | None = None
+        self._theme_host = QVBoxLayout()
+        self._theme_host.setContentsMargins(0, 0, 0, 0)
+        look.addLayout(self._theme_host)
+        look.addWidget(self.theme_combo)  # oculto por ChoiceButtons
         self.theme_hint = QLabel(tr("theme_hint"))
         self.theme_hint.setWordWrap(True)
         self.theme_hint.setObjectName("SubText")
-        layout.addWidget(self.theme_hint)
+        look.addWidget(self.theme_hint)
 
-        layout.addSpacing(12)
-        layout.addWidget(QLabel(tr("settings_font_title")))
+        look.addSpacing(6)
+        self.font_title = QLabel(tr("settings_font_title").upper())
+        self.font_title.setObjectName("PanelTitle")
+        look.addWidget(self.font_title)
         self.font_combo = QComboBox()
-        layout.addWidget(self.font_combo)
+        self.font_choices: ChoiceButtons | None = None
+        self._font_host = QVBoxLayout()
+        self._font_host.setContentsMargins(0, 0, 0, 0)
+        look.addLayout(self._font_host)
+        look.addWidget(self.font_combo)  # oculto por ChoiceButtons
 
-        layout.addSpacing(12)
-        self.tray_title = QLabel(tr("settings_tray_title"))
-        layout.addWidget(self.tray_title)
-        layout.addWidget(self._build_tray_position_picker())
+        look.addSpacing(6)
+        perm_row = QHBoxLayout()
+        self.permissions_btn = QPushButton(tr("help_security_permissions_button"))
+        self.permissions_btn.clicked.connect(lambda: show_permissions_dialog(self))
+        perm_row.addWidget(self.permissions_btn)
+        perm_row.addStretch(1)
+        look.addLayout(perm_row)
+        look.addStretch(1)
+        layout.addWidget(look_card, 17)
+
+        tray_card = Card()
+        tray = QVBoxLayout(tray_card)
+        tray.setContentsMargins(0, 0, 0, 0)
+        tray.setSpacing(8)
+        self.tray_title = QLabel(tr("settings_tray_title").upper())
+        self.tray_title.setObjectName("PanelTitle")
+        tray.addWidget(self.tray_title)
+        tray.addWidget(self._build_tray_position_picker())
         self.tray_hint = QLabel(tr("settings_tray_hint"))
         self.tray_hint.setWordWrap(True)
         self.tray_hint.setObjectName("SubText")
-        layout.addWidget(self.tray_hint)
+        tray.addWidget(self.tray_hint)
         self.tray_keep_check = QCheckBox(tr("settings_tray_keep"))
-        self.tray_keep_check.setChecked(
-            tray_launcher.keep_running_enabled(load_prefs())
-        )
+        self.tray_keep_check.setChecked(tray_launcher.keep_running_enabled(load_prefs()))
         self.tray_keep_check.toggled.connect(
             lambda on: save_prefs({tray_launcher.PREF_KEEP_RUNNING: bool(on)})
         )
-        layout.addWidget(self.tray_keep_check)
+        tray.addWidget(self.tray_keep_check)
         self.tray_custom_label = QLabel(tr("settings_tray_custom"))
         self.tray_custom_label.setObjectName("SubText")
         self.tray_custom_label.setWordWrap(True)
-        layout.addWidget(self.tray_custom_label)
-
-        layout.addSpacing(20)
-        self.permissions_btn = QPushButton(tr("help_security_permissions_button"))
-        self.permissions_btn.clicked.connect(
-            lambda: show_permissions_dialog(self)
-        )
-        layout.addWidget(self.permissions_btn)
-
-        layout.addStretch(1)
+        tray.addWidget(self.tray_custom_label)
+        tray.addStretch(1)
+        layout.addWidget(tray_card, 10)
 
     def _build_tray_position_picker(self) -> QWidget:
         """Rejilla 3x3 (esquinas, bordes, centro) + 'junto al icono'."""
         box = QWidget()
+        box.setObjectName("Plain")
         row = QHBoxLayout(box)
         row.setContentsMargins(0, 0, 0, 0)
         grid = QGridLayout()
@@ -174,6 +204,16 @@ class SettingsPage(BasePage):
                 self.font_combo.setCurrentIndex(i)
                 break
 
+        self.theme_choices = ChoiceButtons(
+            self.theme_combo,
+            "SwatchButton",
+            columns=4,
+            icon_for=lambda key: dot_icon(theme_mod.THEMES[key]["accent"]),
+        )
+        self._theme_host.addWidget(self.theme_choices)
+        self.font_choices = ChoiceButtons(self.font_combo, "ChipButton")
+        self._font_host.addWidget(self.font_choices)
+
         self.theme_combo.currentIndexChanged.connect(
             lambda idx: self.theme_changed.emit(self.theme_combo.itemData(idx))
         )
@@ -192,8 +232,15 @@ class SettingsPage(BasePage):
                     label = tr(font["label_key"]) if font.get("label_key") else font["family"]
                     self.font_combo.setItemText(i, label)
                     break
+        if self.theme_choices is not None:
+            self.theme_choices.retranslate()
+        if self.font_choices is not None:
+            self.font_choices.retranslate()
+        self.theme_title.setText(tr("settings_theme_title").upper())
+        self.font_title.setText(tr("settings_font_title").upper())
+        self.permissions_btn.setText(tr("help_security_permissions_button"))
         self.theme_hint.setText(tr("theme_hint"))
-        self.tray_title.setText(tr("settings_tray_title"))
+        self.tray_title.setText(tr("settings_tray_title").upper())
         self.tray_hint.setText(tr("settings_tray_hint"))
         self.tray_custom_label.setText(tr("settings_tray_custom"))
         self.tray_keep_check.setText(tr("settings_tray_keep"))

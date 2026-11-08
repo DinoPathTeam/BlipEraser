@@ -6,6 +6,7 @@ Edita la lista de rutas en memoria y la persiste con utils.config
 
 from PyQt6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -17,6 +18,7 @@ from blip_eraser.pages.base import BasePage
 from blip_eraser.utils.config import get_scan_paths, set_scan_paths
 from blip_eraser.utils.i18n import tr
 from blip_eraser.utils.log import log as log_buffer
+from blip_eraser.widgets.card import Card
 
 
 class PersonalizePage(BasePage):
@@ -27,18 +29,28 @@ class PersonalizePage(BasePage):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
 
+        # El título lo muestra la pestaña; se conserva el QLabel (oculto).
         title = QLabel(tr("personalize_title"))
         title.setObjectName("PageTitle")
-        layout.addWidget(title)
+        title.hide()
 
         self.hint = QLabel(tr("personalize_hint"))
+        self.hint.setObjectName("SubText")
         self.hint.setWordWrap(True)
         layout.addWidget(self.hint)
 
         self.list_widget = QListWidget()
+        self.list_widget.setObjectName("PathList")
+        self.list_widget.setFrameShape(QFrame.Shape.NoFrame)
         self._refresh_list()
-        layout.addWidget(self.list_widget, 1)
+        card = Card(padding=6)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.addWidget(self.list_widget)
+        layout.addWidget(card, 1)
 
         btn_row = QHBoxLayout()
         self.add_btn = QPushButton(tr("personalize_add_path"))
@@ -50,9 +62,10 @@ class PersonalizePage(BasePage):
         btn_row.addWidget(self.remove_btn)
 
         self.save_btn = QPushButton(tr("save_button"))
+        self.save_btn.setObjectName("PrimaryButton")
         self.save_btn.clicked.connect(self._save)
-        btn_row.addSpacing(12)
         btn_row.addWidget(self.save_btn)
+        btn_row.addStretch(1)
 
         layout.addLayout(btn_row)
 
