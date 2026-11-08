@@ -11,6 +11,27 @@ Versión del código: `1.2.0` (definida en `src/blip_eraser/__init__.py`).
 
 ## Últimos cambios
 
+### 🧹 Limpieza: claves i18n y módulo sin uso
+
+- **Eliminado** `utils/environment_setup.py` (`EnvironmentValidator`): nadie lo
+  importaba; el arranque usa `dependency_check` directamente.
+- **Eliminadas 46 claves i18n** (en ES y EN) que ningún código usaba: restos de
+  las pestañas y textos anteriores al rediseño (`tab_*`, `nav_packages`,
+  `nav_cleaner`, `nav_personalize`, `nav_help`, `nav_settings`, `col_package`,
+  `col_version`, `col_path`, `col_source`, `uninstall_button`, `error_title`,
+  `pacman_*`, `uninstall_*`, `splash_check_updates`, `splash_check_permissions`,
+  `splash_scanning`, `splash_welcome`, `recent_activity_title`, `tools_title`,
+  `tools_hint`, `filter_type_*`, `filter_category_*`, `status_title`,
+  `settings_mode_title`, `mode_dark`, `mode_light`, `personalize_scan_paths`,
+  `list_empty_subtext`, `log_erase_started`, `log_mode_changed`,
+  `log_font_changed`, `log_deleted_items`, `manual_tab_info`,
+  `packages_uninstalled_ok`, `delete_confirm_body`, `uninstaller_confirm_body`).
+- **Se conservan** las claves que se construyen dinámicamente
+  (`perf_block_<código>`, `dep_<binario>_why|incompatible`, `lang_name_<código>`)
+  y `window_title` / `filter_date_from`, que usan las pruebas.
+- Para saber si una clave sigue en uso hay que buscar también su construcción
+  con `tr(f"…{x}…")`, no solo la cadena literal.
+
 ### 📦 Flatpak: runtime 25.08 (24.08 ya está fuera de soporte)
 
 - `runtime-version` pasa de 24.08 a 25.08 (soporte hasta sep-2027).
