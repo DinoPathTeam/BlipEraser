@@ -1,6 +1,6 @@
 pkgbase = blip-eraser
 	pkgdesc = Desinstalador de apps y limpiador del sistema para Arch Linux (PyQt6)
-	pkgver = 1.2.0
+	pkgver = 1.2.1
 	pkgrel = 1
 	url = https://github.com/DinoPathTeam/BlipEraser
 	install = blip-eraser.install
@@ -17,7 +17,7 @@ pkgbase = blip-eraser
 	depends = systemd
 	optdepends = gst-libav: video de intro del splash (H.264)
 	optdepends = apparmor: confinamiento del daemon privilegiado
-	source = blip-eraser-1.2.0.tar.gz::https://github.com/DinoPathTeam/BlipEraser/releases/download/v1.2.0/BlipEraser-1.2.0.tar.gz
-	sha256sums = 6f29d58beb50a3daf821abc6b6efb639057767651208c653ab1272e1d092a6ec
+	source = blip-eraser-1.2.1.tar.gz::https://github.com/DinoPathTeam/BlipEraser/releases/download/v1.2.1/BlipEraser-1.2.1.tar.gz
+	sha256sums = 2cf97ae6341b8bd03a334a8f151a2919c973d8a661f1876321da329691711542
 
 pkgname = blip-eraser
